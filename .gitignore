@@ -1,0 +1,19 @@
+# Environment (contains secrets)
+.env
+.env.local
+.env.*.local
+
+# Data volumes
+data/
+pg-data/
+redis-data/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
