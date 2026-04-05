@@ -39,12 +39,12 @@ services:
     networks:
       - internal
 
-  # ── Database Migrations (runs once, then exits) ─────────────
+  # ── Database Migrations + Seed (runs once, then exits) ───────
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-web:latest
-    command: sh -c "cd /app/apps/web && npx prisma db push"
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:latest
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
