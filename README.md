@@ -12,28 +12,42 @@ Self-hosted customer support platform with AI-powered ticket analysis, multi-mai
 
 ## Quick Start
 
+> **Full step-by-step guide with screenshots:** [docs/INSTALL.md](docs/INSTALL.md)
+
+### 1. Install Docker & Git
+
+```bash
+# Ubuntu / Debian
+sudo apt update && sudo apt install -y ca-certificates curl gnupg git
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# Log out and log back in, then verify:
+docker compose version
+```
+
+### 2. Download & Configure
+
 ```bash
 git clone https://github.com/kr1s57/ticketbrainyApp.git
 cd ticketbrainyApp
-
-# 1. Create your environment file
 cp .env.example .env
-
-# 2. Generate all secrets automatically
-bash scripts/generate-secrets.sh
-
-# 3. Edit your domain and port
-nano .env   # Set APP_URL to your public URL
-
-# 4. Launch
-docker compose up -d
-
-# 5. Open your browser → http://localhost:3000 (or your APP_URL)
+bash scripts/generate-secrets.sh    # Generates all passwords automatically
+nano .env                           # Set APP_URL to your server IP or domain
 ```
 
-On first launch, you'll be prompted to **activate your instance** with your license email.
+### 3. Deploy
 
-Default admin login: `admin@ticketbrainy.local` / (password from SEED_ADMIN_PASSWORD in .env)
+```bash
+docker compose pull                 # Download images (~1.5 GB)
+docker compose up -d                # Start all services
+docker compose logs -f web          # Wait for "Ready" message, then Ctrl+C
+```
+
+### 4. Activate & Login
+
+1. Open `http://YOUR_SERVER_IP:3000` in your browser
+2. Enter your license email and click **Activate**
+3. Login with `admin@ticketbrainy.local` and the `SEED_ADMIN_PASSWORD` from step 2
 
 ## Documentation
 

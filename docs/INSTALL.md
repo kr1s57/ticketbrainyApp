@@ -1,195 +1,443 @@
 # TicketBrainy — Installation Guide
 
-Complete step-by-step guide to deploy TicketBrainy on your server.
+Complete step-by-step guide to deploy TicketBrainy on your server, from a fresh OS to a running instance.
 
 ---
 
 ## Table of Contents
 
-1. [Prerequisites](#1-prerequisites)
-2. [Download](#2-download)
-3. [Configuration](#3-configuration)
-4. [Deploy](#4-deploy)
-5. [Activate your license](#5-activate-your-license)
-6. [Configure Claude AI](#6-configure-claude-ai)
-7. [Reverse Proxy (HTTPS)](#7-reverse-proxy-https)
-8. [Keycloak SSO (optional)](#8-keycloak-sso-optional)
-9. [Email Setup](#9-email-setup)
-10. [Backup & Maintenance](#10-backup--maintenance)
-11. [Troubleshooting](#11-troubleshooting)
+1. [Server Requirements](#1-server-requirements)
+2. [Install Docker & Docker Compose](#2-install-docker--docker-compose)
+3. [Install Git](#3-install-git)
+4. [Download TicketBrainy](#4-download-ticketbrainy)
+5. [Configure Environment](#5-configure-environment)
+6. [Firewall Rules](#6-firewall-rules)
+7. [Deploy](#7-deploy)
+8. [Activate Your License](#8-activate-your-license)
+9. [First Login](#9-first-login)
+10. [Configure Claude AI (optional)](#10-configure-claude-ai-optional)
+11. [Reverse Proxy & HTTPS](#11-reverse-proxy--https)
+12. [Keycloak SSO (optional)](#12-keycloak-sso-optional)
+13. [Email Setup](#13-email-setup)
+14. [Backup & Maintenance](#14-backup--maintenance)
+15. [Update TicketBrainy](#15-update-ticketbrainy)
+16. [Troubleshooting](#16-troubleshooting)
 
 ---
 
-## 1. Prerequisites
+## 1. Server Requirements
 
 | Requirement | Minimum | Recommended |
 |------------|---------|-------------|
-| OS | Ubuntu 22.04+ / Debian 12+ | Ubuntu 24.04 LTS |
-| Docker | 24.0+ | Latest stable |
-| Docker Compose | v2.20+ | Latest (bundled with Docker) |
-| CPU | 2 cores | 4 cores |
-| RAM | 4 GB | 8 GB |
-| Disk | 10 GB | 50 GB (for attachments) |
-| Network | Outbound HTTPS to `license.ticketbrainy.com` | |
+| **OS** | Ubuntu 22.04 / Debian 12 / RHEL 9 / Rocky 9 | Ubuntu 24.04 LTS |
+| **CPU** | 2 cores | 4 cores |
+| **RAM** | 4 GB | 8 GB |
+| **Disk** | 10 GB free | 50 GB (for email attachments) |
+| **Network** | Static IP or FQDN | |
+| **Outbound access** | HTTPS to `license.ticketbrainy.com` and `ghcr.io` | |
+| **Inbound ports** | 3000 (app), 8180 (Keycloak, if used) | Behind a reverse proxy on 443 |
 
-### Install Docker (if not installed)
+---
+
+## 2. Install Docker & Docker Compose
+
+Docker Compose v2 is bundled with Docker Engine. You need **Docker Engine 24.0 or newer**.
+
+### Ubuntu / Debian
 
 ```bash
-# Ubuntu / Debian
-curl -fsSL https://get.docker.com | sh
+# Update system packages
+sudo apt update && sudo apt upgrade -y
+
+# Install prerequisites
+sudo apt install -y ca-certificates curl gnupg
+
+# Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Add the Docker repository
+# For Ubuntu:
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# For Debian, replace "ubuntu" with "debian" in the line above.
+
+# Install Docker Engine + Compose plugin
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Allow your user to run Docker without sudo
 sudo usermod -aG docker $USER
-# Log out and back in, then verify:
+```
+
+**Log out and log back in** for the group change to take effect.
+
+### RHEL / Rocky / AlmaLinux
+
+```bash
+# Install prerequisites
+sudo dnf install -y dnf-plugins-core
+
+# Add Docker repository
+sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+
+# Install Docker Engine + Compose plugin
+sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start and enable Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Allow your user to run Docker without sudo
+sudo usermod -aG docker $USER
+```
+
+**Log out and log back in** for the group change to take effect.
+
+### Verify installation
+
+```bash
+docker --version
+# Expected: Docker version 24.x or newer
+
 docker compose version
+# Expected: Docker Compose version v2.20.x or newer
+
+# Quick test (should print "Hello from Docker!")
+docker run --rm hello-world
+```
+
+If `docker compose version` fails, Docker Compose is not installed. Reinstall Docker following the steps above.
+
+---
+
+## 3. Install Git
+
+### Ubuntu / Debian
+
+```bash
+sudo apt install -y git
+```
+
+### RHEL / Rocky / AlmaLinux
+
+```bash
+sudo dnf install -y git
+```
+
+### Verify
+
+```bash
+git --version
+# Expected: git version 2.x.x
 ```
 
 ---
 
-## 2. Download
+## 4. Download TicketBrainy
 
 ```bash
 git clone https://github.com/kr1s57/ticketbrainyApp.git
 cd ticketbrainyApp
 ```
 
+Verify the files are there:
+
+```bash
+ls -la
+# You should see: docker-compose.yml  .env.example  docs/  keycloak/  scripts/  README.md
+```
+
 ---
 
-## 3. Configuration
+## 5. Configure Environment
 
-### 3.1 Create your environment file
+### 5.1 Create your environment file
 
 ```bash
 cp .env.example .env
 ```
 
-### 3.2 Generate all secrets
+### 5.2 Generate all secrets automatically
 
 ```bash
 bash scripts/generate-secrets.sh
 ```
 
-This automatically generates secure random values for all passwords and tokens:
+This generates secure random values for all passwords and tokens. You will see output like:
 
-| Variable | Description | Generation command |
-|----------|-------------|-------------------|
-| `DB_PASSWORD` | PostgreSQL password | `openssl rand -hex 16` |
-| `REDIS_PASSWORD` | Redis auth password | `openssl rand -base64 20` |
-| `NEXTAUTH_SECRET` | JWT signing secret | `openssl rand -base64 32` |
-| `ENCRYPTION_MASTER_KEY` | AES-256 encryption key for stored credentials | `openssl rand -hex 32` |
-| `INTERNAL_SERVICE_TOKEN` | Inter-service auth token | `openssl rand -base64 32` |
-| `SEED_ADMIN_PASSWORD` | Initial admin password (first login only) | `openssl rand -base64 12` |
-| `KEYCLOAK_CLIENT_SECRET` | Keycloak OIDC client secret | `openssl rand -hex 16` |
-| `KC_ADMIN_PASSWORD` | Keycloak admin console password | `openssl rand -base64 12` |
+```
+Generating secure secrets for TicketBrainy...
 
-**Save your `SEED_ADMIN_PASSWORD`** — you need it for first login.
+  DB_PASSWORD          = a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+  REDIS_PASSWORD       = xYz123AbCdEfGhIjKlMn
+  NEXTAUTH_SECRET      = k8Jf2mNpQrStUv...
+  ENCRYPTION_MASTER_KEY = 9f8e7d6c5b4a...
+  INTERNAL_SERVICE_TOKEN = pL3mN4oP5qR6...
+  SEED_ADMIN_PASSWORD  = MyR4nd0mP4ssw0rd
+  KEYCLOAK_CLIENT_SECRET = 1a2b3c4d5e6f7a8b
+  KC_ADMIN_PASSWORD    = Kc4dm1nP4ss
 
-### 3.3 Edit your settings
+IMPORTANT: Save SEED_ADMIN_PASSWORD — you need it for first login.
+```
 
-Open `.env` and configure:
+**Write down the `SEED_ADMIN_PASSWORD`** — this is your admin login password.
+
+### 5.3 Edit your settings
 
 ```bash
 nano .env
 ```
 
-**Required changes:**
+Change these values:
 
-```env
-# Your public URL (with https if behind reverse proxy)
-APP_URL=https://support.yourcompany.com
+| Variable | What to set | Example |
+|----------|------------|---------|
+| `APP_URL` | Your server's URL (http for now, https after proxy setup) | `http://192.168.1.50:3000` |
+| `APP_PORT` | Port to expose (default 3000) | `3000` |
+| `LAN_HOSTS` | Your server's LAN IP (for Keycloak login button) | `192.168.1.50,localhost` |
 
-# Port exposed on the host
-APP_PORT=3000
+Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X` in nano).
 
-# LAN IPs that show the local login form (comma-separated)
-LAN_HOSTS=192.168.1.100,localhost
+### 5.4 Verify your .env
+
+```bash
+# Check that secrets are filled in (no empty values after =)
+grep "^DB_PASSWORD=\|^REDIS_PASSWORD=\|^NEXTAUTH_SECRET=\|^SEED_ADMIN_PASSWORD=" .env
+```
+
+Each line should have a value after the `=`. If any is empty, re-run `bash scripts/generate-secrets.sh`.
+
+---
+
+## 6. Firewall Rules
+
+TicketBrainy needs these network rules:
+
+### Inbound (allow from your users)
+
+| Port | Service | Required |
+|------|---------|----------|
+| **3000** (or APP_PORT) | TicketBrainy web app | Yes |
+| **8180** (or KC_PORT) | Keycloak SSO | Only if using SSO |
+
+### Outbound (allow from server)
+
+| Destination | Port | Purpose | Required |
+|-------------|------|---------|----------|
+| `license.ticketbrainy.com` | 443 (HTTPS) | License activation & validation | Yes |
+| `ghcr.io` | 443 (HTTPS) | Docker image downloads | Yes (first install + updates) |
+| Your IMAP server | 993 (IMAPS) | Email retrieval | If using email |
+| Your SMTP server | 587 or 465 | Email sending | If using email |
+| `api.anthropic.com` | 443 (HTTPS) | Claude AI analysis | If using AI features |
+
+### UFW (Ubuntu)
+
+```bash
+sudo ufw allow 3000/tcp comment "TicketBrainy"
+sudo ufw allow 8180/tcp comment "Keycloak SSO"  # Only if using SSO
+```
+
+### firewalld (RHEL/Rocky)
+
+```bash
+sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --add-port=8180/tcp  # Only if using SSO
+sudo firewall-cmd --reload
 ```
 
 ---
 
-## 4. Deploy
+## 7. Deploy
+
+### 7.1 Pull the Docker images
 
 ```bash
-# Start all services
-docker compose up -d
-
-# Watch the logs (first boot takes ~60 seconds)
-docker compose logs -f web
+docker compose pull
 ```
 
-Wait until you see:
+This downloads all TicketBrainy images (~1.5 GB total). Wait for it to complete.
+
+If you see "denied" or "unauthorized" errors, the images may not be public yet — contact your reseller.
+
+### 7.2 Start all services
+
+```bash
+docker compose up -d
+```
+
+### 7.3 Watch the startup
+
+```bash
+docker compose logs -f
+```
+
+Wait until you see the web service ready:
 
 ```
 web-1  | > Next.js 16.x.x
 web-1  | > Ready in XXms
 ```
 
-### Verify all services are running
+Press `Ctrl+C` to stop following logs.
+
+### 7.4 Verify all services
 
 ```bash
 docker compose ps
 ```
 
-You should see all containers `Up` (except `migrate` which exits after completion).
+Expected output (all `Up`, except `migrate` which shows `Exited (0)`):
+
+```
+NAME                  STATUS
+ticketbrainyapp-db-1          Up (healthy)
+ticketbrainyapp-redis-1       Up (healthy)
+ticketbrainyapp-migrate-1     Exited (0)
+ticketbrainyapp-keycloak-1    Up
+ticketbrainyapp-web-1         Up
+ticketbrainyapp-ai-service-1  Up
+ticketbrainyapp-mail-service-1 Up
+ticketbrainyapp-telegram-bot-1 Up
+```
+
+If `migrate` shows `Exited (1)`, check the error:
+
+```bash
+docker compose logs migrate
+```
+
+### 7.5 Quick test
+
+```bash
+curl -s http://localhost:3000/healthz
+# Should respond (or redirect to /activate)
+```
+
+Or open in your browser: `http://YOUR_SERVER_IP:3000`
 
 ---
 
-## 5. Activate your license
+## 8. Activate Your License
 
 1. Open your browser: `http://YOUR_SERVER_IP:3000`
-2. You'll see the **Activation** page
-3. Enter your **license email** (the one registered with your reseller)
+2. You'll see the **TicketBrainy Activation** page
+3. Enter your **license email** (the email registered with your reseller)
 4. Click **Activate TicketBrainy**
-5. If activation succeeds, you'll be redirected to the login page
+5. Wait a few seconds — the system contacts the license server
+6. On success, you're redirected to the login page
 
-### First login
+### If activation fails
 
-- **Email:** `admin@ticketbrainy.local`
-- **Password:** The `SEED_ADMIN_PASSWORD` value from your `.env`
-
-After login, go to **Settings > Team** to change your admin password and create additional users.
-
-### Activation troubleshooting
-
-| Issue | Solution |
+| Error | Solution |
 |-------|----------|
-| "Connection failed" | Ensure outbound HTTPS to `license.ticketbrainy.com` is allowed |
-| "Activation failed" | Verify your email is registered — contact your reseller |
-| Page not loading | Check `docker compose logs web` for errors |
+| "Connection failed" | Check outbound HTTPS to `license.ticketbrainy.com` (see [Firewall Rules](#6-firewall-rules)) |
+| "Activation failed" | Your email is not registered — contact your reseller |
+| Page doesn't load | Run `docker compose logs web` and check for errors |
+| Timeout | Your server may not have internet access — check DNS and proxy settings |
 
 ---
 
-## 6. Configure Claude AI
+## 9. First Login
 
-TicketBrainy uses Claude AI for intelligent ticket analysis. This step requires an **Anthropic API account**.
+After activation, you're on the login page.
 
-### 6.1 Install Claude CLI in the running container
+| Field | Value |
+|-------|-------|
+| **Email** | `admin@ticketbrainy.local` |
+| **Password** | The `SEED_ADMIN_PASSWORD` from step 5.2 |
+
+### After first login
+
+1. Go to **Settings > Team**
+2. Click on your admin account
+3. **Change your password** to something you'll remember
+4. Optionally change the admin email to your real email
+
+### Create additional users
+
+1. **Settings > Team > Add Agent**
+2. Fill in name, email, password, and role
+3. The user can now log in
+
+**Core plan:** Maximum 3 active users. Upgrade to **Enterprise Pack** for unlimited users.
+
+---
+
+## 10. Configure Claude AI (optional)
+
+TicketBrainy uses Claude AI for intelligent ticket analysis (auto-triage, deep analysis, smart reply). This requires the **XpertTeamIA** or **SmartReply AI** plugin and an Anthropic API account.
+
+**Skip this step** if you don't need AI features — the rest of the application works without it.
+
+### 10.1 Get an Anthropic API key
+
+1. Go to [console.anthropic.com](https://console.anthropic.com)
+2. Create an account and add a payment method
+3. Go to **API Keys** and create a new key
+
+### 10.2 Authenticate Claude in the container
 
 ```bash
 # Enter the web container
 docker compose exec -it web sh
 
-# Authenticate Claude CLI
+# Run Claude login
 claude login
 
-# Follow the prompts to enter your API key
-# Then exit the container
+# When prompted, paste your API key
+# You should see: "Successfully authenticated"
+
+# Exit the container
 exit
 ```
 
-### 6.2 Verify AI is working
+### 10.3 Verify AI is working
 
-1. Go to any ticket in TicketBrainy
-2. Click **Analyze** (brain icon)
-3. The AI analysis should start streaming
+1. Open any ticket in TicketBrainy
+2. Click the **Analyze** button (brain icon)
+3. You should see the AI analysis streaming in real-time
 
-If AI features are not needed, skip this step — the rest of the application works without it.
+### 10.4 Troubleshooting AI
+
+```bash
+# Check if Claude CLI is installed
+docker compose exec web claude --version
+
+# Check AI service logs
+docker compose logs ai-service
+
+# Re-authenticate if needed
+docker compose exec -it web claude login
+```
 
 ---
 
-## 7. Reverse Proxy (HTTPS)
+## 11. Reverse Proxy & HTTPS
 
-TicketBrainy runs on HTTP internally. You **must** use a reverse proxy for HTTPS in production.
+TicketBrainy runs HTTP internally on port 3000. For production, you **must** set up a reverse proxy with HTTPS.
 
-### Nginx example
+### Option A: Nginx
+
+#### Install Nginx
+
+```bash
+# Ubuntu / Debian
+sudo apt install -y nginx
+
+# RHEL / Rocky
+sudo dnf install -y nginx
+sudo systemctl enable nginx
+```
+
+#### Configure Nginx
+
+```bash
+sudo nano /etc/nginx/sites-available/ticketbrainy
+```
+
+Paste:
 
 ```nginx
 server {
@@ -199,7 +447,7 @@ server {
     ssl_certificate     /etc/ssl/certs/your-cert.pem;
     ssl_certificate_key /etc/ssl/private/your-key.pem;
 
-    # Important for SSE (AI streaming)
+    # Disable proxy buffering (required for AI streaming / SSE)
     proxy_buffering off;
 
     location / {
@@ -212,12 +460,12 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
 
-        # Increase timeouts for AI streaming
+        # Timeouts for AI streaming
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
     }
 
-    # File uploads (max 10MB)
+    # File upload limit
     client_max_body_size 10M;
 }
 
@@ -229,9 +477,40 @@ server {
 }
 ```
 
-### Keycloak reverse proxy (if using SSO)
+Enable and restart:
 
-Add a second server block for Keycloak:
+```bash
+sudo ln -s /etc/nginx/sites-available/ticketbrainy /etc/nginx/sites-enabled/
+sudo nginx -t          # Test configuration
+sudo systemctl restart nginx
+```
+
+#### Update APP_URL
+
+```bash
+nano .env
+# Change: APP_URL=https://support.yourcompany.com
+```
+
+Restart TicketBrainy:
+
+```bash
+docker compose up -d
+```
+
+### Option B: Existing reverse proxy / WAF
+
+If you already have a reverse proxy (Apache, HAProxy, Sophos, Fortinet WAF, etc.):
+
+1. Point it to `http://YOUR_SERVER_IP:3000`
+2. Enable WebSocket passthrough (for real-time updates)
+3. **Disable response buffering** (required for AI streaming / SSE)
+4. Set `X-Forwarded-Proto: https` header
+5. Update `APP_URL` in `.env` to your HTTPS URL
+
+### Keycloak reverse proxy (only if using SSO)
+
+If you use Keycloak SSO, also proxy port 8180:
 
 ```nginx
 server {
@@ -252,7 +531,7 @@ server {
 }
 ```
 
-Then set in `.env`:
+Then update `.env`:
 
 ```env
 KEYCLOAK_URL=https://auth.yourcompany.com
@@ -260,16 +539,18 @@ KEYCLOAK_URL=https://auth.yourcompany.com
 
 ---
 
-## 8. Keycloak SSO (optional)
+## 12. Keycloak SSO (optional)
 
-Keycloak enables Single Sign-On via your existing identity provider (Active Directory, LDAP, etc.).
+Keycloak enables Single Sign-On. Your users can log in with their existing Active Directory, LDAP, or other identity provider credentials.
+
+**Skip this section** if you only need local authentication (email + password).
 
 ### Enable Keycloak
 
 1. Edit `.env`:
 
 ```env
-KEYCLOAK_URL=https://auth.yourcompany.com
+KEYCLOAK_URL=https://auth.yourcompany.com   # or http://YOUR_IP:8180 for testing
 KEYCLOAK_REALM=ticketbrainy
 KEYCLOAK_CLIENT_ID=ticketbrainy-web
 # KEYCLOAK_CLIENT_SECRET was already generated by generate-secrets.sh
@@ -281,45 +562,76 @@ KEYCLOAK_CLIENT_ID=ticketbrainy-web
 docker compose up -d
 ```
 
-3. The Keycloak admin console is at: `http://YOUR_SERVER:8180`
-   - Username: `admin`
-   - Password: `KC_ADMIN_PASSWORD` from your `.env`
+3. Access the Keycloak admin console: `http://YOUR_SERVER:8180`
+   - **Username:** `admin`
+   - **Password:** The `KC_ADMIN_PASSWORD` from your `.env`
 
-### Keycloak user management
+### Connect to Active Directory / LDAP
 
-- Users created in Keycloak are automatically synced to TicketBrainy on first login
-- New Keycloak users require admin activation in **Settings > Team** before they can access TicketBrainy
-- You can also manually sync all Keycloak users from **Settings > Team > Sync Keycloak Users**
+1. In Keycloak admin: **Realm settings > User Federation**
+2. Add your LDAP or Active Directory provider
+3. Configure the connection URL, bind DN, and user search base
+4. Click **Synchronize all users**
+
+### User management rules
+
+- Users who log in via Keycloak for the first time are created as **inactive** agents
+- An admin must activate them in **Settings > Team** before they can access TicketBrainy
+- You can sync all Keycloak users at once: **Settings > Team > Sync Keycloak Users**
+- **Core plan:** Max 3 active users (Keycloak + local combined). Upgrade to Enterprise Pack for unlimited.
 
 ---
 
-## 9. Email Setup
+## 13. Email Setup
 
 ### Add a mailbox
 
 1. Go to **Mailboxes** in the sidebar
 2. Click **Add Mailbox**
-3. Fill in:
-   - **Name:** Display name (e.g., "Support")
-   - **Email:** The email address (e.g., support@yourcompany.com)
-   - **IMAP Server:** Your email provider's IMAP server
-   - **IMAP Port:** Usually 993 (SSL)
-   - **SMTP Server:** Your email provider's SMTP server
-   - **SMTP Port:** Usually 587 (STARTTLS) or 465 (SSL)
-   - **Username/Password:** Your email credentials
+3. Fill in the fields:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Name** | Display name | `Support` |
+| **Email** | Email address to monitor | `support@yourcompany.com` |
+| **IMAP Server** | Your mail server (incoming) | `imap.yourprovider.com` |
+| **IMAP Port** | Usually 993 (SSL) | `993` |
+| **SMTP Server** | Your mail server (outgoing) | `smtp.yourprovider.com` |
+| **SMTP Port** | Usually 587 (STARTTLS) or 465 (SSL) | `587` |
+| **Username** | Email account username | `support@yourcompany.com` |
+| **Password** | Email account password | (your password) |
+
+4. Click **Save**
+5. TicketBrainy will start polling for emails every 30 seconds
+
+**Core plan:** Maximum 1 mailbox. Upgrade to **Enterprise Pack** for unlimited mailboxes.
 
 ### Microsoft 365 (OAuth)
 
 For M365 mailboxes, use OAuth instead of passwords:
 
-1. Register an app in [Azure Portal](https://portal.azure.com)
-2. Set the redirect URI to: `https://support.yourcompany.com/api/mailbox/oauth`
-3. In the mailbox settings, switch to **OAuth** and enter your Client ID and Client Secret
-4. Click **Connect** to authorize
+1. Go to [Azure Portal](https://portal.azure.com) > **App registrations > New registration**
+2. Name: `TicketBrainy`
+3. Redirect URI: `https://support.yourcompany.com/api/mailbox/oauth`
+4. Under **API permissions**, add:
+   - `IMAP.AccessAsUser.All`
+   - `SMTP.Send`
+   - `offline_access`
+5. Under **Certificates & secrets**, create a client secret
+6. In TicketBrainy mailbox settings, switch to **OAuth** tab
+7. Enter your **Client ID** and **Client Secret**
+8. Click **Connect** — you'll be redirected to Microsoft to authorize
+
+### Test email
+
+1. Send a test email to your mailbox address from an external account
+2. Wait 30 seconds (or the configured `IMAP_POLL_INTERVAL`)
+3. A new ticket should appear in TicketBrainy
+4. Reply to the ticket — the customer should receive your reply by email
 
 ---
 
-## 10. Backup & Maintenance
+## 14. Backup & Maintenance
 
 ### Database backup
 
@@ -327,26 +639,24 @@ For M365 mailboxes, use OAuth instead of passwords:
 # Create a backup
 docker compose exec db pg_dump -U ticketbrainy ticketbrainy > backup_$(date +%Y%m%d).sql
 
-# Restore a backup
+# Restore from backup
 docker compose exec -T db psql -U ticketbrainy ticketbrainy < backup_20260401.sql
 ```
 
-### Application data backup
+### Application data backup (uploads, attachments)
 
 ```bash
-# Back up uploads and attachments
-docker compose cp web:/data ./data-backup
+# Copy data out of the container
+docker compose cp web:/data ./data-backup-$(date +%Y%m%d)
 ```
 
-### Update TicketBrainy
+### Recommended backup schedule
 
-```bash
-# Pull latest images
-docker compose pull
-
-# Restart with new images (migrations run automatically)
-docker compose up -d
-```
+| What | How often | Command |
+|------|-----------|---------|
+| Database | Daily | `docker compose exec db pg_dump -U ticketbrainy ticketbrainy > backup.sql` |
+| Uploads/attachments | Weekly | `docker compose cp web:/data ./data-backup` |
+| `.env` file | After any change | `cp .env .env.backup` |
 
 ### View logs
 
@@ -358,42 +668,94 @@ docker compose logs -f
 docker compose logs -f web
 docker compose logs -f ai-service
 docker compose logs -f mail-service
+docker compose logs -f keycloak
+```
+
+### Restart a service
+
+```bash
+docker compose restart web
+docker compose restart mail-service
+```
+
+### Stop everything
+
+```bash
+docker compose down       # Stop all containers (data is preserved)
+docker compose up -d      # Start again
 ```
 
 ---
 
-## 11. Troubleshooting
+## 15. Update TicketBrainy
+
+```bash
+cd ticketbrainyApp
+
+# Pull latest images
+docker compose pull
+
+# Restart (migrations run automatically)
+docker compose up -d
+
+# Verify
+docker compose ps
+```
+
+Updates include new features, bug fixes, and security patches. Database migrations are applied automatically by the `migrate` container.
+
+---
+
+## 16. Troubleshooting
 
 ### Container won't start
 
 ```bash
-# Check which container failed
+# See which container failed
 docker compose ps
 
 # Read its logs
 docker compose logs <service-name>
+
+# Common fix: restart
+docker compose restart <service-name>
 ```
 
 ### "Database connection refused"
 
-The database needs ~10 seconds to initialize on first boot. Wait and retry:
+The database takes ~10 seconds to initialize on first boot.
 
 ```bash
+# Wait and restart
 docker compose restart web
 ```
 
 ### "Activation failed"
 
-- Ensure outbound HTTPS to `license.ticketbrainy.com` is not blocked by your firewall
-- Verify your email is registered with your reseller
+1. Check outbound HTTPS: `curl -I https://license.ticketbrainy.com`
+2. If blocked, configure your firewall or proxy (see [Firewall Rules](#6-firewall-rules))
+3. If the URL resolves but activation fails, your email may not be registered — contact your reseller
+
+### Web app shows blank page
+
+```bash
+# Check web logs
+docker compose logs web
+
+# Restart web
+docker compose restart web
+```
 
 ### AI analysis not working
 
 ```bash
-# Check Claude CLI auth
+# Check AI service
+docker compose logs ai-service
+
+# Verify Claude is authenticated
 docker compose exec web claude --version
 
-# Re-authenticate if needed
+# Re-authenticate
 docker compose exec -it web claude login
 ```
 
@@ -402,27 +764,34 @@ docker compose exec -it web claude login
 ```bash
 # Check mail service logs
 docker compose logs mail-service
-
-# Common issues:
-# - Wrong IMAP/SMTP credentials
-# - Port blocked by firewall
-# - Self-signed SSL on mail server (add to trust store)
 ```
+
+Common issues:
+- Wrong IMAP/SMTP credentials — verify in mailbox settings
+- Port blocked by firewall — ensure 993/587 outbound is open
+- Self-signed certificate — add your CA to the container trust store
 
 ### Reset admin password
 
+If you forgot the admin password:
+
 ```bash
-# Enter the web container and use Prisma to reset
-docker compose exec web npx prisma db execute --stdin <<'SQL'
-UPDATE "User" SET password = '$2a$12$LJ3m4ys3uz0dHjcPHFaKne0WFhPCMxVGPFqFzWEC/xXgTBkzFo9mq' WHERE email = 'admin@ticketbrainy.local';
-SQL
-# This sets the password to: Admin123!@#
-# Change it immediately after login!
+docker compose exec -T db psql -U ticketbrainy ticketbrainy -c "UPDATE \"User\" SET password = '\$2a\$12\$LJ3m4ys3uz0dHjcPHFaKne0WFhPCMxVGPFqFzWEC/xXgTBkzFo9mq' WHERE email = 'admin@ticketbrainy.local';"
 ```
 
-### Factory reset (delete all data)
+This resets the password to: `Admin123!@#` — change it immediately after login.
+
+### Factory reset (delete ALL data)
 
 ```bash
-docker compose down -v    # WARNING: Deletes all data permanently
-docker compose up -d      # Fresh start
+docker compose down -v    # WARNING: This permanently deletes all data
+docker compose up -d      # Fresh start — you'll need to re-activate
+```
+
+### Get support
+
+If the issue persists, collect the logs and contact your reseller:
+
+```bash
+docker compose logs > ticketbrainy-logs-$(date +%Y%m%d).txt 2>&1
 ```
