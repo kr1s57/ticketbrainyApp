@@ -90,6 +90,29 @@ services:
     networks:
       - internal
 
+  # ── Keycloak hardening sync (one-shot, idempotent) ─────────
+  # Re-applies our security defaults on every `up -d`. Survives
+  # Keycloak image upgrades and accidental admin-UI changes that
+  # would revert loginTheme, bruteForceProtected, password policy,
+  # OTP algorithm, etc. Logs: docker compose logs keycloak-init
+  keycloak-init:
+    image: curlimages/curl:8.10.1
+    restart: "no"
+    entrypoint: ["sh", "/opt/keycloak-init/apply-config.sh"]
+    environment:
+      KC_INTERNAL_URL: http://keycloak:8080
+      KC_REALM: ${KEYCLOAK_REALM:-ticketbrainy}
+      KC_ADMIN_USER: ${KC_ADMIN_USER:-admin}
+      KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      MAX_WAIT_SECONDS: 180
+    volumes:
+      - ./keycloak/apply-config.sh:/opt/keycloak-init/apply-config.sh:ro
+    depends_on:
+      keycloak:
+        condition: service_started
+    networks:
+      - internal
+
   # ── Web Application ─────────────────────────────────────────
   web:
     image: ghcr.io/kr1s57/ticketbrainy-web:latest

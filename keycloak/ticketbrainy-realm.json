@@ -17,10 +17,14 @@
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 5,
-  "passwordPolicy": "length(8) and notUsername",
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5)",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA256",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
   "accessTokenLifespan": 300,
   "ssoSessionIdleTimeout": 1800,
-  "ssoSessionMaxLifespan": 36000,
+  "ssoSessionMaxLifespan": 28800,
   "clients": [
     {
       "clientId": "ticketbrainy-web",

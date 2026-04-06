@@ -2,6 +2,72 @@
 
 All notable releases of TicketBrainy.
 
+## [1.3.200] — 2026-04-06
+
+### Security — Keycloak hardening sync + admin recovery toolkit
+
+This release ships an idempotent post-start configuration sync for Keycloak
+and a self-contained admin recovery toolkit. After every `docker compose up -d`
+the security defaults are re-enforced automatically, so accidental UI changes
+or future Keycloak image upgrades cannot quietly weaken the realm.
+
+### Added
+
+- **`keycloak-init` one-shot service** in `docker-compose.yml`. Runs after
+  Keycloak is up, applies our hardened defaults via the admin REST API, then
+  exits. Idempotent and safe to re-run.
+- **`keycloak/apply-config.sh`** — single source of truth for the realm
+  defaults. Edit it to change them.
+- **`scripts/keycloak-reset-admin.sh`** — admin recovery toolkit with three
+  modes:
+  - `--mode unlock` — clear brute-force lockout for the admin user
+  - `--mode api <NEW>` — rotate password while current credentials still work
+  - `--mode recovery <NEW>` — full bootstrap recovery when the password is lost
+  Auto-detects the keycloak container and Docker network — no configuration.
+- **`docs/KEYCLOAK-ADMIN-RECOVERY.md`** — complete operational runbook
+  covering hardening sync, login-theme reapplication after upgrade, all three
+  recovery modes, end-user lockouts, brute-force settings, and the
+  post-upgrade checklist.
+
+### Changed
+
+- **Realm template** (`keycloak/ticketbrainy-realm.json`) — strengthened for
+  fresh installs:
+  - `passwordPolicy`: `length(8) and notUsername`
+    → `length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5)`
+  - `otpPolicyAlgorithm`: `HmacSHA1` → `HmacSHA256`
+  - `ssoSessionMaxLifespan`: 36 000 s (10 h) → 28 800 s (8 h)
+- These same hardened settings are also re-applied on every `up -d` to existing
+  installs by the `keycloak-init` service — no manual migration needed.
+
+### Brute-force protection — what's enforced
+
+| Setting                  | Value | Meaning                          |
+|--------------------------|-------|----------------------------------|
+| `bruteForceProtected`    | true  | Master switch                    |
+| `failureFactor`          | 5     | Failed attempts before lockout   |
+| `maxFailureWaitSeconds`  | 900   | 15-minute lockout                |
+| `permanentLockout`       | false | Auto-unlock after wait           |
+| `passwordHistory`        | 5     | Block last 5 passwords on reuse  |
+
+### What this means for you
+
+After pulling the new images and `docker compose up -d`:
+
+1. The new `keycloak-init` container runs once, applies the hardened settings
+   to your existing realm, and exits with `OK — Keycloak realm 'ticketbrainy'
+   is hardened`. Check with `docker compose logs keycloak-init`.
+2. The custom branded login theme is **automatically re-applied after every
+   Keycloak upgrade** — no more manual API patching.
+3. If you ever lose the admin password, run
+   `./scripts/keycloak-reset-admin.sh --mode recovery 'NewStrongPassword!'`
+   from your install directory.
+
+See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for
+the full operational runbook.
+
+---
+
 ## [1.3.002] — 2026-04-06
 
 ### Security — Critical license server hardening
@@ -114,6 +180,23 @@ docker compose up -d                        # If behind your own proxy
 
 Database migrations run automatically on startup.
 
+### After updating to 1.3.200
+
+The new `keycloak-init` service runs automatically after `up -d`. Verify it
+succeeded:
+
+```bash
+docker compose logs keycloak-init
+# Expected last line:
+# [apply-config] OK — Keycloak realm 'ticketbrainy' is hardened
+```
+
+If you ever need to re-apply the hardening (e.g. after editing the script):
+
+```bash
+docker compose up -d --no-deps keycloak-init
+```
+
 ### After updating to 1.3.002
 
 Open `Settings → Plugins` in the admin UI and click **Sync** once.
@@ -126,10 +209,8 @@ will show as locked until the next automatic sync.
 ```bash
 # Check the installed version
 docker compose exec web cat apps/web/package.json | grep '"version"'
-# should show: "version": "1.3.002"
+# should show: "version": "1.3.200"
 
-# Check that rows have signed envelopes
-docker compose exec db psql -U ticketbrainy -d ticketbrainy -c \
-  'SELECT "pluginSlug", ("signedPayload" IS NOT NULL) AS signed FROM "PluginLicense";'
-# All active rows should show signed=t after clicking Sync
+# Check that the keycloak hardening sync ran
+docker compose logs keycloak-init | tail -5
 ```
