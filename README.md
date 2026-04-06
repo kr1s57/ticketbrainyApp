@@ -10,44 +10,58 @@ Self-hosted customer support platform with AI-powered ticket analysis, multi-mai
 - A domain name with HTTPS (via reverse proxy)
 - Outbound HTTPS access to `license.ticketbrainy.com`
 
-## Quick Start
+## Quick Start — Interactive Installer
 
-> **Full step-by-step guide with screenshots:** [docs/INSTALL.md](docs/INSTALL.md)
-
-### 1. Install Docker & Git
+The fastest way to deploy: use the built-in install script.
 
 ```bash
-# Ubuntu / Debian
+# 1. Install Docker & Git (if not already installed)
 sudo apt update && sudo apt install -y ca-certificates curl gnupg git
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
-# Log out and log back in, then verify:
-docker compose version
-```
+# Log out and log back in
 
-### 2. Download & Configure
-
-```bash
+# 2. Clone and run the installer
 git clone https://github.com/kr1s57/ticketbrainyApp.git
 cd ticketbrainyApp
-cp .env.example .env
-bash scripts/generate-secrets.sh    # Generates all passwords automatically
-nano .env                           # Set APP_URL to your server IP or domain
+bash install.sh
 ```
 
-### 3. Deploy
+The installer will guide you through:
+- Server IP and LAN access configuration
+- Deployment mode: behind existing reverse proxy **OR** built-in Caddy + Let's Encrypt
+- Keycloak SSO setup (optional)
+- Automatic secret generation
+- Docker image pull and deploy
+
+At the end, it prints your admin credentials and next steps.
+
+> **Full manual install guide:** [docs/INSTALL.md](docs/INSTALL.md)
+
+## Deployment Modes
+
+TicketBrainy supports two deployment modes:
+
+### Mode A: Behind your own reverse proxy / WAF
+You handle HTTPS, domain, and certificates externally (Nginx, HAProxy, Sophos, Cloudflare, etc.).
+The app runs on port 3000 internally.
 
 ```bash
-docker compose pull                 # Download images (~1.5 GB)
-docker compose up -d                # Start all services
-docker compose logs -f web          # Wait for "Ready" message, then Ctrl+C
+docker compose up -d
 ```
 
-### 4. Activate & Login
+### Mode B: Built-in Caddy + Let's Encrypt
+TicketBrainy ships with an optional Caddy reverse proxy that handles HTTPS automatically.
+Certificates are obtained and renewed from Let's Encrypt with zero configuration.
 
-1. Open `http://YOUR_SERVER_IP:3000` in your browser
-2. Enter your license email and click **Activate**
-3. Login with `admin@ticketbrainy.local` and the `SEED_ADMIN_PASSWORD` from step 2
+```bash
+docker compose --profile with-proxy up -d
+```
+
+Requires:
+- A public domain pointing to your server (A record)
+- Ports 80 and 443 open on your firewall
+- Email address for Let's Encrypt notifications
 
 ## Documentation
 

@@ -2,7 +2,42 @@
 
 Complete step-by-step guide to deploy TicketBrainy on your server, from a fresh OS to a running instance.
 
+**Two install paths available:**
+- **[Quick install](#quick-install-recommended)** — Interactive `install.sh` script (recommended)
+- **[Manual install](#manual-install)** — Step-by-step below
+
 ---
+
+## Quick Install (Recommended)
+
+The interactive installer handles everything: Docker check, secret generation, LAN configuration, optional Caddy + Let's Encrypt HTTPS, Keycloak SSO.
+
+```bash
+# 1. Install Docker & Git (see step 2 and 3 below if needed)
+
+# 2. Clone and run
+git clone https://github.com/kr1s57/ticketbrainyApp.git
+cd ticketbrainyApp
+bash install.sh
+```
+
+The script will ask you:
+1. Server LAN IP (auto-detected)
+2. Admin PC IP or LAN subnet (CIDR) for local login access
+3. License email
+4. Deployment mode:
+   - **A** — Behind an existing WAF / reverse proxy (you handle HTTPS)
+   - **B** — Built-in Caddy + Let's Encrypt (automatic HTTPS)
+5. If mode B: public domain name(s)
+6. Enable Keycloak SSO? (optional)
+
+At the end, it starts all services and displays your admin credentials.
+
+---
+
+## Manual Install
+
+Follow these steps if you prefer manual configuration or need to customize anything beyond the script's defaults.
 
 ## Table of Contents
 
@@ -199,13 +234,28 @@ Change these values:
 | `LAN_HOSTS` | Server IP + your workstation IP + localhost (comma-separated) | `192.168.1.50,192.168.1.10,localhost` |
 
 **Important about LAN_HOSTS:**
-This controls which IPs see the local login form (email + password) and the Keycloak SSO button.
-You must include:
-- The **server's own IP** (e.g., `192.168.1.50`)
-- The **IP of the machine you use to access the app** (e.g., `192.168.1.10`)
-- `localhost` for local access
+This controls which IPs see the local login form (email + password). Clients outside this list only see the Keycloak SSO button.
 
-If `LAN_HOSTS` is not configured correctly, the login page will only show the Keycloak SSO button (no email/password form).
+Supported formats (comma-separated):
+- **Exact IP:** `192.168.1.10` — a single workstation
+- **CIDR subnet:** `192.168.1.0/24` — a whole LAN segment
+- **Server IP:** the IP your users type in the URL (e.g., `192.168.1.50`)
+- **localhost:** for local access from the server itself
+
+Example configurations:
+
+```env
+# Single admin PC + server IP + localhost
+LAN_HOSTS=192.168.1.10,192.168.1.50,localhost
+
+# Whole LAN subnet
+LAN_HOSTS=192.168.1.0/24,localhost
+
+# Multiple subnets
+LAN_HOSTS=192.168.1.0/24,10.0.0.0/16,localhost
+```
+
+The check uses the client's real IP (via `X-Forwarded-For` header from your reverse proxy). If no proxy is set, it falls back to matching the host header you typed in your browser.
 
 Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X` in nano).
 
@@ -463,7 +513,60 @@ docker compose exec -it web claude login
 
 TicketBrainy runs HTTP internally on port 3000. For production, you **must** set up a reverse proxy with HTTPS.
 
-### Option A: Nginx
+**Three options available:**
+- **Option A** — Built-in Caddy + Let's Encrypt (recommended for self-hosters)
+- **Option B** — Nginx (if you already have one)
+- **Option C** — Your existing WAF / reverse proxy (Sophos, F5, Cloudflare, etc.)
+
+### Option A: Built-in Caddy (automatic HTTPS)
+
+TicketBrainy ships with an optional Caddy service that handles HTTPS automatically. Certificates from Let's Encrypt are obtained and renewed with zero configuration.
+
+**Prerequisites:**
+- A public domain pointing to your server IP (A record)
+- Ports **80** and **443** open on your firewall and forwarded to the server
+- Email address for Let's Encrypt notifications
+
+**Setup:**
+
+1. Edit `.env` and set the Caddy variables:
+
+```env
+APP_URL=https://support.yourcompany.com
+APP_DOMAIN=support.yourcompany.com
+LETSENCRYPT_EMAIL=admin@yourcompany.com
+
+# If using Keycloak SSO publicly, also set:
+KEYCLOAK_URL=https://auth.yourcompany.com
+KEYCLOAK_DOMAIN=auth.yourcompany.com
+```
+
+2. Start with the `with-proxy` profile:
+
+```bash
+docker compose --profile with-proxy up -d
+```
+
+Caddy will automatically:
+- Obtain HTTPS certificates from Let's Encrypt on first launch
+- Renew them every ~60 days before expiration
+- Redirect HTTP to HTTPS
+- Proxy requests to the web app and Keycloak
+
+**Verify HTTPS:**
+
+```bash
+curl -I https://support.yourcompany.com
+# Should return: HTTP/2 200 (or redirect to /login)
+```
+
+**View Caddy logs:**
+
+```bash
+docker compose --profile with-proxy logs caddy
+```
+
+### Option B: Nginx
 
 #### Install Nginx
 
@@ -543,7 +646,7 @@ Restart TicketBrainy:
 docker compose up -d
 ```
 
-### Option B: Existing reverse proxy / WAF
+### Option C: Existing reverse proxy / WAF
 
 If you already have a reverse proxy (Apache, HAProxy, Sophos, Fortinet WAF, etc.):
 

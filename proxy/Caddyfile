@@ -1,0 +1,37 @@
+# TicketBrainy Caddy Configuration
+# HTTPS is automatic via Let's Encrypt (certificates auto-renewed)
+# Domain names are read from environment variables
+
+{
+    email {$LETSENCRYPT_EMAIL}
+}
+
+# TicketBrainy main app
+{$APP_DOMAIN} {
+    reverse_proxy web:3000 {
+        # Required for AI streaming (Server-Sent Events)
+        flush_interval -1
+    }
+
+    # Upload size limit
+    request_body {
+        max_size 10MB
+    }
+
+    # Security headers (complements app-level CSP)
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+
+# Keycloak SSO (required for public SSO login)
+{$KEYCLOAK_DOMAIN} {
+    reverse_proxy keycloak:8080
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+    }
+}

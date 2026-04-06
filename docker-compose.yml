@@ -190,11 +190,37 @@ services:
     networks:
       - internal
 
+  # ── Reverse Proxy (optional, for direct internet exposure) ──
+  # Activated with: docker compose --profile with-proxy up -d
+  # Handles HTTPS automatically via Let's Encrypt (auto-renewed)
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["with-proxy"]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    networks:
+      - internal
+
 volumes:
   pg-data:
   redis-data:
   app-data:
   claude-config:
+  caddy-data:
+  caddy-config:
 
 networks:
   internal:
