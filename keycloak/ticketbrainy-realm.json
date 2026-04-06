@@ -59,7 +59,7 @@
   },
   "defaultRoles": ["user"],
   "smtpServer": {},
-  "loginTheme": "keycloak",
+  "loginTheme": "ticketbrainy",
   "accountTheme": "keycloak.v2",
   "internationalizationEnabled": true,
   "supportedLocales": ["en", "fr"],
