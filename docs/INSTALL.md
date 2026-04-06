@@ -196,7 +196,16 @@ Change these values:
 |----------|------------|---------|
 | `APP_URL` | Your server's URL (http for now, https after proxy setup) | `http://192.168.1.50:3000` |
 | `APP_PORT` | Port to expose (default 3000) | `3000` |
-| `LAN_HOSTS` | Your server's LAN IP (for Keycloak login button) | `192.168.1.50,localhost` |
+| `LAN_HOSTS` | Server IP + your workstation IP + localhost (comma-separated) | `192.168.1.50,192.168.1.10,localhost` |
+
+**Important about LAN_HOSTS:**
+This controls which IPs see the local login form (email + password) and the Keycloak SSO button.
+You must include:
+- The **server's own IP** (e.g., `192.168.1.50`)
+- The **IP of the machine you use to access the app** (e.g., `192.168.1.10`)
+- `localhost` for local access
+
+If `LAN_HOSTS` is not configured correctly, the login page will only show the Keycloak SSO button (no email/password form).
 
 Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X` in nano).
 
@@ -246,6 +255,20 @@ sudo firewall-cmd --permanent --add-port=3000/tcp
 sudo firewall-cmd --permanent --add-port=8180/tcp  # Only if using SSO
 sudo firewall-cmd --reload
 ```
+
+### 6.1 Verify outbound connectivity
+
+Before deploying, verify that your server can reach the license server:
+
+```bash
+curl -sk https://license.ticketbrainy.com/api/v1/license/fresh-deploy -X POST -H "Content-Type: application/json" -d '{"email":"test","hardware_id":"test","product":"ticketbrainy"}'
+```
+
+You should see a **JSON response** (e.g., `{"success":false,"error":"..."}` or similar).
+
+If you see **HTML** (`<!DOCTYPE...` or `404 Not Found`), the license server is not reachable or its API paths are blocked. Contact your reseller.
+
+If you see **connection timeout**, check your outbound firewall rules for HTTPS (port 443).
 
 ---
 
@@ -332,10 +355,21 @@ Or open in your browser: `http://YOUR_SERVER_IP:3000`
 
 | Error | Solution |
 |-------|----------|
-| "Connection failed" | Check outbound HTTPS to `license.ticketbrainy.com` (see [Firewall Rules](#6-firewall-rules)) |
+| "Connection failed" | The server cannot reach the license API. Run the connectivity test from [step 6.1](#61-verify-outbound-connectivity) |
 | "Activation failed" | Your email is not registered — contact your reseller |
 | Page doesn't load | Run `docker compose logs web` and check for errors |
-| Timeout | Your server may not have internet access — check DNS and proxy settings |
+| Timeout | Check DNS resolution: `docker compose exec web sh -c 'nslookup license.ticketbrainy.com'` |
+| HTML error instead of JSON | The license server API paths may be blocked. Contact your reseller |
+
+### Verify activation from command line
+
+If you want to verify the license server is reachable from inside the container:
+
+```bash
+docker compose exec web sh -c 'wget -q -O- "https://license.ticketbrainy.com/api/v1/license/fresh-deploy" 2>&1'
+```
+
+A `404 Not Found` (text, not HTML) means the server is reachable (404 is normal for GET — the endpoint expects POST). If you see HTML or a timeout, the connection is blocked.
 
 ---
 
@@ -347,6 +381,17 @@ After activation, you're on the login page.
 |-------|-------|
 | **Email** | `admin@ticketbrainy.local` |
 | **Password** | The `SEED_ADMIN_PASSWORD` from step 5.2 |
+
+### Login page shows only Keycloak (no email/password form)
+
+If you only see a "Sign in with Keycloak" button and no email/password fields:
+
+1. Edit `.env` and make sure `LAN_HOSTS` includes the **IP address you are connecting from** (your workstation IP, not just the server IP):
+   ```env
+   LAN_HOSTS=SERVER_IP,YOUR_WORKSTATION_IP,localhost
+   ```
+2. Restart: `docker compose restart web`
+3. Refresh the login page
 
 ### After first login
 
