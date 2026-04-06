@@ -2,6 +2,65 @@
 
 All notable releases of TicketBrainy.
 
+## [1.3.201] — 2026-04-06
+
+### Added — Mailbox inbound filter rules
+
+Every mailbox now has a configurable set of **exclusion rules** that are
+checked before any incoming IMAP message becomes a ticket. Use them to
+silently drop noisy automated notifications (deploy summaries, cron
+reports, monitoring heartbeats) or to block entire sender domains.
+
+Each rule has three fields:
+
+- **Field**: `Objet`, `Corps du message`, `Email expéditeur`, or
+  `Domaine expéditeur`
+- **Operator**: `contient`, `est égal à`, `commence par`, or
+  `correspond à (regex)`
+- **Value**: the text/pattern to match against
+
+A message that matches **any active rule** is marked as read on IMAP but
+**never creates a ticket and never touches the database** — the filter
+runs before deduplication so noisy senders cost essentially zero.
+
+Regex patterns are validated server-side at save time — invalid patterns
+are rejected with a clear error message instead of crashing the poll
+cycle later.
+
+**Where to configure**: Settings → Mailboxes → Edit a mailbox → scroll to
+the "Règles d'exclusion (filtre inbound)" section (only visible on
+already-saved mailboxes).
+
+### Added — Multi-select delete on ticket lists
+
+The ticket list selection toolbar (previously showing only the "Merge"
+button when 2+ tickets are selected) now also surfaces a destructive
+**"Supprimer la sélection"** button as soon as at least one ticket is
+checked. Confirmation prompt tells you how many tickets will be affected,
+then they are moved to the "Supprimés" folder where they can be restored.
+
+Under the hood it's a single transaction that soft-deletes every target
+and writes one activity entry per ticket — fast and idempotent even for
+large selections (capped at 500 per call).
+
+### Database migration
+
+This release adds a `MailboxExclusion` table with a foreign key cascade
+from `Mailbox`. No manual action required — the schema is applied
+automatically by the `migrate` init container on the first `up -d` after
+pulling.
+
+### Upgrade
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+The new features are available immediately after the containers restart.
+
+---
+
 ## [1.3.200] — 2026-04-06
 
 ### Dashboard & Statistics — full redesign with Recharts

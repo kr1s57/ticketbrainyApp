@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.3.200-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.3.201-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.3.200` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.3.201` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.3.200 highlights** — Full Dashboard + Statistics redesign powered by Recharts (grouped bar charts, radial gauges, line trends, status donuts, priority distributions) + idempotent Keycloak hardening sync that re-applies login theme, brute-force protection, strong password policy and OTP algorithm on every `up -d`. See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for the operational runbook.
+> **1.3.201 highlights** — Per-mailbox inbound filter rules (field/operator/value, silently drops noisy automated notifications before ticket creation) + multi-select delete on ticket lists. Ships on top of 1.3.200's full Dashboard + Statistics redesign and the Keycloak hardening sync. See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for the operational runbook.
 
 ## Requirements
 
