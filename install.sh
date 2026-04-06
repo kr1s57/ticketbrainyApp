@@ -14,14 +14,14 @@
 
 set -e
 
-# ── Colors ────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m'
+# ── Colors (using $'...' so escape codes are resolved at definition) ──
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
 
 print_header() {
   echo ""
@@ -148,7 +148,8 @@ USE_CADDY=false
 APP_DOMAIN=""
 KEYCLOAK_DOMAIN=""
 LETSENCRYPT_EMAIL=""
-APP_URL="http://${SERVER_IP}:3000"
+APP_PORT_VALUE=4000
+APP_URL="http://${SERVER_IP}:${APP_PORT_VALUE}"
 
 if [ "$DEPLOY_MODE" = "B" ]; then
   USE_CADDY=true
@@ -244,7 +245,7 @@ set_env() {
 }
 
 set_env "APP_URL" "$APP_URL"
-set_env "APP_PORT" "3000"
+set_env "APP_PORT" "$APP_PORT_VALUE"
 set_env "DB_PASSWORD" "$DB_PASSWORD"
 set_env "REDIS_PASSWORD" "$REDIS_PASSWORD"
 set_env "NEXTAUTH_SECRET" "$NEXTAUTH_SECRET"

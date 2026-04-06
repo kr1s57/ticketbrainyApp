@@ -12,7 +12,7 @@ if [ -f "$TEMPLATE" ]; then
   sed \
     -e "s|\${KC_CLIENT_SECRET}|${KC_CLIENT_SECRET}|g" \
     -e "s|\${APP_URL}|${APP_URL}|g" \
-    -e "s|\${APP_PORT}|${APP_PORT:-3000}|g" \
+    -e "s|\${APP_PORT}|${APP_PORT:-4000}|g" \
     -e "s|\${LAN_HOST}|${LAN_HOST:-localhost}|g" \
     "$TEMPLATE" > "$IMPORT_DIR/ticketbrainy-realm.json"
 

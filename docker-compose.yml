@@ -74,7 +74,7 @@ services:
       KC_SPI_THEME_STATIC_MAX_AGE: "-1"
       KC_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
-      APP_PORT: ${APP_PORT:-3000}
+      APP_PORT: ${APP_PORT:-4000}
       LAN_HOST: ${LAN_HOSTS:-localhost}
     volumes:
       - ./keycloak/ticketbrainy-realm.json:/opt/keycloak/data/realm-template/ticketbrainy-realm.json:ro
@@ -91,7 +91,7 @@ services:
     image: ghcr.io/kr1s57/ticketbrainy-web:latest
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-4000}:3000"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379

@@ -70,7 +70,7 @@ Follow these steps if you prefer manual configuration or need to customize anyth
 | **Disk** | 10 GB free | 50 GB (for email attachments) |
 | **Network** | Static IP or FQDN | |
 | **Outbound access** | HTTPS to `license.ticketbrainy.com` and `ghcr.io` | |
-| **Inbound ports** | 3000 (app), 8180 (Keycloak, if used) | Behind a reverse proxy on 443 |
+| **Inbound ports** | 4000 (app), 8180 (Keycloak, if used) | Behind a reverse proxy on 443 |
 
 ---
 
@@ -229,8 +229,8 @@ Change these values:
 
 | Variable | What to set | Example |
 |----------|------------|---------|
-| `APP_URL` | Your server's URL (http for now, https after proxy setup) | `http://192.168.1.50:3000` |
-| `APP_PORT` | Port to expose (default 3000) | `3000` |
+| `APP_URL` | Your server's URL (http for now, https after proxy setup) | `http://192.168.1.50:4000` |
+| `APP_PORT` | Port to expose (default 4000) | `4000` |
 | `LAN_HOSTS` | Server IP + your workstation IP + localhost (comma-separated) | `192.168.1.50,192.168.1.10,localhost` |
 
 **Important about LAN_HOSTS:**
@@ -278,7 +278,7 @@ TicketBrainy needs these network rules:
 
 | Port | Service | Required |
 |------|---------|----------|
-| **3000** (or APP_PORT) | TicketBrainy web app | Yes |
+| **4000** (or APP_PORT) | TicketBrainy web app | Yes |
 | **8180** (or KC_PORT) | Keycloak SSO | Only if using SSO |
 
 ### Outbound (allow from server)
@@ -294,14 +294,14 @@ TicketBrainy needs these network rules:
 ### UFW (Ubuntu)
 
 ```bash
-sudo ufw allow 3000/tcp comment "TicketBrainy"
+sudo ufw allow 4000/tcp comment "TicketBrainy"
 sudo ufw allow 8180/tcp comment "Keycloak SSO"  # Only if using SSO
 ```
 
 ### firewalld (RHEL/Rocky)
 
 ```bash
-sudo firewall-cmd --permanent --add-port=3000/tcp
+sudo firewall-cmd --permanent --add-port=4000/tcp
 sudo firewall-cmd --permanent --add-port=8180/tcp  # Only if using SSO
 sudo firewall-cmd --reload
 ```
@@ -384,17 +384,17 @@ docker compose logs migrate
 ### 7.5 Quick test
 
 ```bash
-curl -s http://localhost:3000/healthz
+curl -s http://localhost:4000/healthz
 # Should respond (or redirect to /activate)
 ```
 
-Or open in your browser: `http://YOUR_SERVER_IP:3000`
+Or open in your browser: `http://YOUR_SERVER_IP:4000`
 
 ---
 
 ## 8. Activate Your License
 
-1. Open your browser: `http://YOUR_SERVER_IP:3000`
+1. Open your browser: `http://YOUR_SERVER_IP:4000`
 2. You'll see the **TicketBrainy Activation** page
 3. Enter your **license email** (the email registered with your reseller)
 4. Click **Activate TicketBrainy**
@@ -511,7 +511,7 @@ docker compose exec -it web claude login
 
 ## 11. Reverse Proxy & HTTPS
 
-TicketBrainy runs HTTP internally on port 3000. For production, you **must** set up a reverse proxy with HTTPS.
+TicketBrainy runs HTTP internally on port 4000. For production, you **must** set up a reverse proxy with HTTPS.
 
 **Three options available:**
 - **Option A** — Built-in Caddy + Let's Encrypt (recommended for self-hosters)
@@ -599,7 +599,7 @@ server {
     proxy_buffering off;
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:4000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -650,7 +650,7 @@ docker compose up -d
 
 If you already have a reverse proxy (Apache, HAProxy, Sophos, Fortinet WAF, etc.):
 
-1. Point it to `http://YOUR_SERVER_IP:3000`
+1. Point it to `http://YOUR_SERVER_IP:4000`
 2. Enable WebSocket passthrough (for real-time updates)
 3. **Disable response buffering** (required for AI streaming / SSE)
 4. Set `X-Forwarded-Proto: https` header

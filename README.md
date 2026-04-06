@@ -37,6 +37,8 @@ The installer will guide you through:
 At the end, it prints your admin credentials and next steps.
 
 > **Full manual install guide:** [docs/INSTALL.md](docs/INSTALL.md)
+>
+> **Keycloak SSO step-by-step guide:** [docs/KEYCLOAK-GUIDE.md](docs/KEYCLOAK-GUIDE.md)
 
 ## Deployment Modes
 
@@ -44,7 +46,7 @@ TicketBrainy supports two deployment modes:
 
 ### Mode A: Behind your own reverse proxy / WAF
 You handle HTTPS, domain, and certificates externally (Nginx, HAProxy, Sophos, Cloudflare, etc.).
-The app runs on port 3000 internally.
+The app is exposed on host port **4000** by default (configurable via `APP_PORT` in `.env`). Internally the container listens on 3000.
 
 ```bash
 docker compose up -d
