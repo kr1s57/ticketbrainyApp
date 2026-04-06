@@ -6,7 +6,7 @@ Self-hosted customer support platform with AI-powered ticket analysis, multi-mai
 
 > **Latest version:** `1.3.200` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.3.200 hardens Keycloak by default** — `loginTheme`, `bruteForceProtected`, password policy and OTP algorithm are now re-applied automatically on every `up -d` via the new `keycloak-init` service. See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for the operational runbook.
+> **1.3.200 highlights** — Full Dashboard + Statistics redesign powered by Recharts (grouped bar charts, radial gauges, line trends, status donuts, priority distributions) + idempotent Keycloak hardening sync that re-applies login theme, brute-force protection, strong password policy and OTP algorithm on every `up -d`. See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for the operational runbook.
 
 ## Requirements
 

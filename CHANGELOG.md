@@ -4,12 +4,55 @@ All notable releases of TicketBrainy.
 
 ## [1.3.200] — 2026-04-06
 
+### Dashboard & Statistics — full redesign with Recharts
+
+Both the main **Dashboard** and the **Statistics** page have been rebuilt on
+top of Recharts (wrapped by the shadcn `ChartContainer`). Hand-rolled div
+bars and list-with-dots are gone; replaced by proper accessible charts that
+follow the active theme automatically.
+
+**What's new on the Statistics page**
+
+- **Volumes & Résolutions** section with a grouped bar chart (opened vs
+  resolved per day) and a radial resolution-rate gauge with target line.
+- **Performances Équipe** section with a ranked agent leaderboard
+  (progress-bar visualization) and a priority distribution with colored
+  semantic bars.
+- **Analyse de Tendance** section with a weekly 3-series line chart
+  (opened / in progress / resolved) and a status distribution donut with
+  legend.
+- Modernized KPI row with accent-tinted icons and background accents.
+
+**What's new on the Dashboard**
+
+- Full 7-day activity bar chart (opened vs resolved) — right next to
+  "My workload" — driven by a new data query.
+- Modernized KPI cards with accent icons.
+- Refined mailbox grid with hover-lift animation, connection dot, and
+  agent badge overflow.
+- Recent tickets list with French relative timestamps.
+
+**Technical notes**
+
+- All charts use semantic CSS tokens (`--chart-tb-*`) that cascade through
+  the 4 existing themes (light default, light pro, dark default, dark pro),
+  so no JS theme switch is needed.
+- Dates are pre-formatted server-side in `fr-FR`, avoiding any hydration
+  mismatch between SSR and client.
+- Chart components live at `apps/web/src/components/charts/` in the source
+  and are tree-shaken into the right pages at build time.
+
+No migration is required — the new UI is bundled into the updated
+`ghcr.io/kr1s57/ticketbrainy-web:v1.3.200` image and ships automatically
+when you pull and restart.
+
 ### Security — Keycloak hardening sync + admin recovery toolkit
 
-This release ships an idempotent post-start configuration sync for Keycloak
-and a self-contained admin recovery toolkit. After every `docker compose up -d`
-the security defaults are re-enforced automatically, so accidental UI changes
-or future Keycloak image upgrades cannot quietly weaken the realm.
+This release also ships an idempotent post-start configuration sync for
+Keycloak and a self-contained admin recovery toolkit. After every
+`docker compose up -d` the security defaults are re-enforced automatically,
+so accidental UI changes or future Keycloak image upgrades cannot quietly
+weaken the realm.
 
 ### Added
 
