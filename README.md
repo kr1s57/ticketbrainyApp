@@ -1,6 +1,10 @@
 # TicketBrainy
 
+![Version](https://img.shields.io/badge/version-1.3.001-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
+
+> **Latest version:** `1.3.001` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 
 ## Requirements
 
