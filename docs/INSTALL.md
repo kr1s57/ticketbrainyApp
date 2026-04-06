@@ -401,12 +401,18 @@ Or open in your browser: `http://YOUR_SERVER_IP:4000`
 5. Wait a few seconds — the system contacts the license server
 6. On success, you're redirected to the login page
 
+Since 1.3.002, every license response is cryptographically signed. The
+activation step fails fast if the license server returns an unsigned
+response — that is a security feature, not a bug.
+
 ### If activation fails
 
 | Error | Solution |
 |-------|----------|
 | "Connection failed" | The server cannot reach the license API. Run the connectivity test from [step 6.1](#61-verify-outbound-connectivity) |
 | "Activation failed" | Your email is not registered — contact your reseller |
+| "License server returned an unsigned response" | Your license server is running an older version that does not support signed envelopes. Contact your reseller to upgrade it. |
+| "Signature verification failed" | The license server signed with a key that this TicketBrainy build does not recognise. Make sure you are running TicketBrainy **1.3.002 or later** (`docker compose pull` then restart) and that the license server has not been tampered with. |
 | Page doesn't load | Run `docker compose logs web` and check for errors |
 | Timeout | Check DNS resolution: `docker compose exec web sh -c 'nslookup license.ticketbrainy.com'` |
 | HTML error instead of JSON | The license server API paths may be blocked. Contact your reseller |
@@ -420,6 +426,20 @@ docker compose exec web sh -c 'wget -q -O- "https://license.ticketbrainy.com/api
 ```
 
 A `404 Not Found` (text, not HTML) means the server is reachable (404 is normal for GET — the endpoint expects POST). If you see HTML or a timeout, the connection is blocked.
+
+### Verify the signed licence envelope (1.3.002+)
+
+After activation, every licence row in the local database should carry
+a signed envelope. Verify with:
+
+```bash
+docker compose exec db psql -U ticketbrainy -d ticketbrainy -c \
+  'SELECT "pluginSlug", status, "signingKeyId", ("signedPayload" IS NOT NULL) AS signed FROM "PluginLicense";'
+```
+
+Every `active` row should show `signingKeyId=v1` and `signed=t`. If any
+row has `signed=f`, open *Settings → Plugins* in the admin UI and click
+**Sync** once to re-fetch with signatures.
 
 ---
 
@@ -851,6 +871,32 @@ docker compose ps
 ```
 
 Updates include new features, bug fixes, and security patches. Database migrations are applied automatically by the `migrate` container.
+
+### Updating to 1.3.002 (signed license envelopes)
+
+1.3.002 is a **critical security update**. After `docker compose pull && docker compose up -d`, do this once:
+
+1. Open *Settings → Plugins* in the admin UI.
+2. Click **Sync**.
+
+This re-fetches all your licenses with cryptographic signatures so
+premium features stay enabled. Between the restart and your Sync click,
+premium pages will temporarily show as locked — this is expected.
+
+Verify the update:
+
+```bash
+# Check the installed version
+docker compose exec web cat apps/web/package.json | grep version
+# expected: "version": "1.3.002"
+
+# Check that rows have signed envelopes
+docker compose exec db psql -U ticketbrainy -d ticketbrainy -c \
+  'SELECT "pluginSlug", ("signedPayload" IS NOT NULL) AS signed FROM "PluginLicense";'
+# every row should show signed=t
+```
+
+If any row still shows `signed=f` after clicking Sync, see [*Troubleshooting*](#16-troubleshooting) below.
 
 ---
 
