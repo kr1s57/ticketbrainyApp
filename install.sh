@@ -304,30 +304,44 @@ print_success "Web service is running"
 # ── Summary ────────────────────────────────────────────────────────────
 print_header "Installation Complete"
 
-echo -e "${BOLD}Access URL:${NC}          ${APP_URL}"
+LOCAL_URL="http://${SERVER_IP}:${APP_PORT_VALUE}"
+
+echo -e "${BOLD}${CYAN}═══ Access URLs ═══${NC}"
+echo -e "  ${BOLD}LAN access:${NC}     ${GREEN}${LOCAL_URL}${NC}"
 if [ "$USE_CADDY" = true ]; then
-  echo -e "${BOLD}HTTPS:${NC}               Caddy will obtain Let's Encrypt certificates automatically"
+  echo -e "  ${BOLD}Public access:${NC}  ${GREEN}${APP_URL}${NC}  ${YELLOW}(once DNS + Let's Encrypt are ready)${NC}"
+  echo -e "  ${BOLD}HTTPS:${NC}          Caddy will obtain Let's Encrypt certificates automatically on first request"
   if [ -n "$KEYCLOAK_DOMAIN" ]; then
-    echo -e "${BOLD}Keycloak public URL:${NC} https://${KEYCLOAK_DOMAIN}"
+    echo -e "  ${BOLD}Keycloak public:${NC} ${GREEN}https://${KEYCLOAK_DOMAIN}${NC}"
   fi
 fi
 echo ""
-echo -e "${BOLD}${YELLOW}Admin credentials (save these!):${NC}"
+echo -e "${YELLOW}${BOLD}IMPORTANT:${NC} For your FIRST configuration, use the LAN URL above (${LOCAL_URL})"
+echo -e "           — the public URL won't work until DNS resolves and certs are issued."
+echo ""
+echo -e "${BOLD}${YELLOW}═══ Admin credentials (SAVE THESE!) ═══${NC}"
 echo -e "  Email:    ${CYAN}admin@ticketbrainy.local${NC}"
 echo -e "  Password: ${CYAN}${SEED_ADMIN_PASSWORD}${NC}"
 echo ""
 if [ "$ENABLE_KC" = "Y" ]; then
-  echo -e "${BOLD}${YELLOW}Keycloak admin console:${NC}"
-  echo -e "  URL:      http://${SERVER_IP}:8180 (or ${KEYCLOAK_URL}/admin)"
+  echo -e "${BOLD}${YELLOW}═══ Keycloak admin console ═══${NC}"
+  echo -e "  URL:      ${CYAN}http://${SERVER_IP}:8180${NC}"
+  if [ "$USE_CADDY" = true ] && [ -n "$KEYCLOAK_DOMAIN" ]; then
+    echo -e "  Public:   ${CYAN}https://${KEYCLOAK_DOMAIN}${NC}"
+  fi
   echo -e "  Username: admin"
   echo -e "  Password: ${CYAN}${KC_ADMIN_PASSWORD}${NC}"
   echo ""
 fi
-echo -e "${BOLD}Next steps:${NC}"
-echo "  1. Open ${APP_URL} in your browser"
-echo "  2. Enter your license email: ${LICENSE_EMAIL}"
-echo "  3. Login with the admin credentials above"
-echo "  4. Change your password in Settings > Team"
+echo -e "${BOLD}═══ Next steps ═══${NC}"
+echo "  1. Open ${BOLD}${LOCAL_URL}${NC} in your browser (LAN URL)"
+echo "  2. Login with: admin@ticketbrainy.local / ${SEED_ADMIN_PASSWORD}"
+echo "  3. You'll be redirected to /activate — enter your license email: ${LICENSE_EMAIL}"
+echo "  4. After activation, you'll land on the dashboard"
+echo "  5. Change your admin password in Settings > Team"
+if [ "$USE_CADDY" = true ]; then
+  echo "  6. Verify ${APP_DOMAIN} resolves to this server, then access the public URL"
+fi
 echo ""
 echo -e "${BOLD}Useful commands:${NC}"
 if [ "$USE_CADDY" = true ]; then
