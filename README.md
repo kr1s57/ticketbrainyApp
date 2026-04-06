@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.3.201-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.3.202-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.3.201` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.3.202` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.3.201 highlights** — Per-mailbox inbound filter rules (field/operator/value, silently drops noisy automated notifications before ticket creation) + multi-select delete on ticket lists. Ships on top of 1.3.200's full Dashboard + Statistics redesign and the Keycloak hardening sync. See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for the operational runbook.
+> **1.3.202 is a security patch** that strips raw source, build configs, and source maps from the `web` Docker image. No functional change — just `docker compose pull && up -d`. Ships on top of 1.3.201's per-mailbox inbound filter rules and multi-select delete, and 1.3.200's Dashboard + Statistics redesign + Keycloak hardening sync.
 
 ## Requirements
 

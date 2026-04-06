@@ -2,6 +2,48 @@
 
 All notable releases of TicketBrainy.
 
+## [1.3.202] — 2026-04-06
+
+### Security — Image hardening
+
+This patch strips build-time artifacts from the `web` Docker image so
+the customer-facing container no longer carries raw TypeScript source,
+build configuration, or source maps. Also scrubs a few leftover code
+comments and one user-facing error message that named internal
+infrastructure.
+
+**What the image no longer ships**
+
+- Raw `.ts` / `.tsx` source tree under `/app/apps/web/src/` — Next.js 16
+  + Turbopack was over-inclusive in its standalone file tracing and was
+  shipping the full application source into every image. This release
+  deletes the source tree from the standalone output at build time.
+- Server route source maps (`.next/server/**/*.map`)
+- Build-time config files (Dockerfile, tsconfig.json, components.json,
+  tailwind.config.ts, postcss.config.js, next.config.ts, prisma.config.ts)
+- Internal dev scripts (`scripts/check-feature-gates.mjs`)
+- Turbopack cache/log from the host build context
+
+**Other scrubs**
+
+- `allowedDevOrigins` is no longer in `next.config.ts` (it used to bake a
+  LAN-only workstation IP into the production bundle).
+- The activation screen hint and the fresh-deploy error message no
+  longer name the internal license server hostname — they now reference
+  the configured `VIGILANCE_KEY_URL` env var instead.
+
+No functional change for end users. Upgrade is a plain image pull.
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+Image size is unchanged (334 MB). The stripped files were < 1 % of the
+total — the fix addresses the content of the image, not its weight.
+
+---
+
 ## [1.3.201] — 2026-04-06
 
 ### Added — Mailbox inbound filter rules
