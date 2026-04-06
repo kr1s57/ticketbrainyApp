@@ -42,6 +42,10 @@ services:
   # ── Database Migrations + Seed (runs once, then exits) ───────
   migrate:
     image: ghcr.io/kr1s57/ticketbrainy-migrate:latest
+    # Apply schema then seed the admin user. Without this command override
+    # the image falls back to the base node CMD and exits without running
+    # migrations — which leaves the DB empty and login returns 401.
+    command: sh -c "cd /app/apps/web && npx prisma db push --schema=prisma/schema.prisma && npx tsx prisma/seed.ts"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
