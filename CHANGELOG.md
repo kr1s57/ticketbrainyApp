@@ -2,6 +2,96 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.03] — 2026-04-09
+
+### Fixed — Settings/Deployment sees Caddy + wizard auto-detects mode
+
+Three related fixes that surfaced on the fresh VPS deploy path once
+v1.10.02 unblocked the SSO bootstrap. The operator could successfully
+log in but `Settings → Deployment` reported "Caddy disabled, no
+domains, no Let's Encrypt certs" even while Caddy was running and
+serving real certs from the front.
+
+**Web container never received deployment env vars**
+
+`docker-compose.yml` referenced `APP_DOMAIN`, `APP_URL`, `APP_PORT`,
+`KEYCLOAK_DOMAIN`, `LETSENCRYPT_EMAIL` for Caddy variable substitution
+and for deriving `NEXTAUTH_URL`, but NEVER passed them into the web
+container's environment. `getLiveConfig()` in `deployment.actions.ts`
+reads directly from `process.env`, so on the web side every one of
+those values came back empty. The Settings → Deployment panel
+correctly rendered the resulting config as "Caddy disabled".
+
+Added all five vars to the web service environment block so the live
+config reflects what's actually running.
+
+**Caddy cert detection defeated by Caddy's 700 perms**
+
+`deployment-detector.ts` used `fs.readdirSync("/data/caddy/caddy/
+certificates")` which throws EACCES inside the web container. Caddy
+creates `acme/`, `certificates/` and `locks/` as `root:root mode 700`,
+while the web container runs as a non-root `nextjs` user. The
+sticky-bit `1777` on the parent `/data/caddy/caddy/` dir lets us
+STAT children but not READ them.
+
+The detection code swallowed the EACCES in try/catch and returned
+false → every Caddy deploy was reported as "Caddy inactive, no
+certs" on the Security page, greying out the entire HTTPS/Caddy/
+Let's Encrypt section.
+
+New heuristic: check for `/data/caddy/caddy/last_clean.json` via
+`existsSync`. Caddy writes this file on every cert maintenance cycle
+(the first one runs at container startup). `existsSync` calls
+`stat()` internally, which only needs execute on the parent dir
+(`1777` grants that) and NOT read on the file contents (which we
+don't need).
+
+**Activation wizard step 2 always defaulted to LAN-only**
+
+The `/activate` step 2 React component initialised state with
+`useState<NetworkExposure>("none")`. On a VPS deploy where install.sh
+just configured Caddy, the wizard showed "LAN-only" pre-selected and
+operators who clicked through quickly ended up persisting
+`networkExposure="none"` into `SecuritySettings`. From that point on
+the Security page said "LAN-only, Caddy disabled" — matching the DB
+but not reality.
+
+The server component now auto-detects the mode from install.sh's
+env vars and passes it as `initialMode` to the form:
+
+- `APP_DOMAIN` set → **vps-caddy** (install.sh only writes `APP_DOMAIN`
+  in Caddy mode)
+- `APP_URL` starts with `https://` and no `APP_DOMAIN` → **behind-waf**
+- otherwise → **none** (LAN)
+
+Step 2 opens with the best-guess option selected and a green banner:
+
+> Detected from your install.sh configuration: VPS with managed
+> Caddy. Click any other option above to override.
+
+The operator can still override before submitting.
+
+### Upgrade notes from v1.10.0 – v1.10.02
+
+Standard rolling upgrade:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+If your SecuritySettings row already has `networkExposure=none`
+from an earlier broken activation, fix it in-place from the UI:
+**Settings → Security → Deployment mode panel** → click the
+correct mode. No reinstall needed.
+
+### Release mechanics
+
+- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.03` + `:latest`
+- Only `web` has source changes; the other 4 are re-tagged from the
+  matching v1.10.02 builds for lockstep parity
+- 6 version source files bumped 1.10.02 → 1.10.03
+
 ## [1.10.02] — 2026-04-09
 
 ### Fixed — Bootstrap login flow + Keycloak public exposure

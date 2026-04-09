@@ -155,6 +155,16 @@ services:
       KC_BASE_URL: http://keycloak:8080
       CADDY_DATA_DIR: /data/caddy
       SECURITY_ALLOWLIST_BYPASS: ${SECURITY_ALLOWLIST_BYPASS:-}
+      # v1.10.03: pass deployment topology through to the web container so
+      # Settings → Deployment (getLiveConfig) and the activate wizard (mode
+      # auto-detection) can read the actual installed topology instead of
+      # showing everything empty/disabled. These were previously only used
+      # by docker-compose itself for Caddy variable substitution.
+      APP_URL: ${APP_URL:-}
+      APP_DOMAIN: ${APP_DOMAIN:-}
+      APP_PORT: ${APP_PORT:-4000}
+      KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
     volumes:
       - app-data:/data
       - claude-config:/home/nextjs/.claude
