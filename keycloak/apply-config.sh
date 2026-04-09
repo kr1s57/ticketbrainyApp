@@ -21,6 +21,24 @@ set -eu
 KC_INTERNAL_URL="${KC_INTERNAL_URL:-http://keycloak:8080}"
 KC_REALM="${KC_REALM:-ticketbrainy}"
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-120}"
+# v1.8.2 (+ v1.8.5 clarification): public URL for email action links.
+#
+# Keycloak has ONE global hostname config, but this install serves TWO
+# origins from the same instance: the public WAF vhost
+# (support.ticketbrainy.com, shared with the web UI via the Next.js
+# /realms proxy) for user flows, AND the direct LAN port (10.55.x:3028)
+# for the admin console on the master realm.
+#
+# Pinning KC_HOSTNAME to either one breaks the other (v1.8.2→v1.8.4
+# rabbit hole). The clean solution is request-based detection (no
+# KC_HOSTNAME pin) + pinning `frontendUrl` PER REALM via this script.
+# Only the ticketbrainy realm gets a frontendUrl — the master realm is
+# LAN-only so request-based detection is correct for it.
+#
+# With frontendUrl set, Keycloak ALWAYS uses it for email action links
+# and OIDC issuer on the ticketbrainy realm, independent of which
+# request (WAF vs LAN) triggered the email.
+KEYCLOAK_PUBLIC_URL="${KEYCLOAK_PUBLIC_URL:-}"
 
 if [ -z "${KC_ADMIN_USER:-}" ] || [ -z "${KC_ADMIN_PASSWORD:-}" ]; then
   echo "[apply-config] FATAL: KC_ADMIN_USER and KC_ADMIN_PASSWORD must be set" >&2
@@ -99,6 +117,16 @@ fi
 #   ssoSessionIdleTimeout=1800         ← 30 min idle
 #   ssoSessionMaxLifespan=28800        ← 8h max session (was 10h)
 
+# v1.8.2: inject the realm frontendUrl attribute so email action links
+# (password reset, verify-email, execute-actions) always point at the
+# public URL regardless of what hostname the admin API call arrived on.
+# Belt-and-braces with KC_HOSTNAME in docker-compose.
+if [ -n "$KEYCLOAK_PUBLIC_URL" ]; then
+  FRONTEND_URL_ATTR=",\"attributes\":{\"frontendUrl\":\"${KEYCLOAK_PUBLIC_URL}\"}"
+else
+  FRONTEND_URL_ATTR=""
+fi
+
 PAYLOAD='{
   "loginTheme": "ticketbrainy",
   "accountTheme": "keycloak.v2",
@@ -125,7 +153,7 @@ PAYLOAD='{
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 28800,
   "internationalizationEnabled": true,
-  "defaultLocale": "fr"
+  "defaultLocale": "fr"'"${FRONTEND_URL_ATTR}"'
 }'
 
 PUT_STATUS=$(curl -s -o /tmp/apply-config.out -w '%{http_code}' \
@@ -156,6 +184,88 @@ echo "[apply-config] verification: loginTheme=${LOGIN_THEME} bruteForceProtected
 if [ "$LOGIN_THEME" != "ticketbrainy" ] || [ "$BFP" != "true" ]; then
   echo "[apply-config] FATAL: verification failed" >&2
   exit 6
+fi
+
+# ---------------------------------------------------------------------------
+# Step 6 (v1.10.0) — ticketbrainy-admin-read OIDC client
+# ---------------------------------------------------------------------------
+# Read-only service account client used by the web service to query the
+# Keycloak Admin API for the Security Settings page (posture display).
+# Principle of least privilege: view-realm + view-users + view-events +
+# view-identity-providers only. No write roles.
+# ---------------------------------------------------------------------------
+echo "[apply-config] ensuring ticketbrainy-admin-read client exists..."
+
+EXISTING_CLIENT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+  "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-read" || echo "[]")
+
+EXISTING_CLIENT_UUID=$(echo "$EXISTING_CLIENT_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+
+if [ -z "$EXISTING_CLIENT_UUID" ]; then
+  echo "[apply-config] creating ticketbrainy-admin-read..."
+  CREATE_STATUS=$(curl -s -o /tmp/apply-config-client.out -w '%{http_code}' \
+    -X POST "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "clientId": "ticketbrainy-admin-read",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "protocol": "openid-connect"
+    }')
+
+  if [ "$CREATE_STATUS" != "201" ]; then
+    echo "[apply-config] FATAL: client creation returned HTTP ${CREATE_STATUS}" >&2
+    cat /tmp/apply-config-client.out >&2 || true
+    exit 7
+  fi
+
+  # Re-fetch to get the UUID
+  EXISTING_CLIENT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+    "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-read")
+  EXISTING_CLIENT_UUID=$(echo "$EXISTING_CLIENT_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+  echo "[apply-config] ticketbrainy-admin-read created (uuid=${EXISTING_CLIENT_UUID})"
+else
+  echo "[apply-config] ticketbrainy-admin-read already exists (uuid=${EXISTING_CLIENT_UUID})"
+fi
+
+# Assign realm-management roles to the service account user.
+# Pattern: find the service-account user for the client, then POST each
+# role to /users/{id}/role-mappings/clients/{realmMgmtClientId}
+SVC_USER_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+  "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_CLIENT_UUID}/service-account-user")
+SVC_USER_ID=$(echo "$SVC_USER_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+
+REALM_MGMT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+  "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=realm-management")
+REALM_MGMT_UUID=$(echo "$REALM_MGMT_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+
+for ROLE in view-realm view-users view-events view-identity-providers; do
+  # Fetch the role representation
+  ROLE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+    "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${REALM_MGMT_UUID}/roles/${ROLE}")
+  # POST it as an array to the user's client role mappings
+  curl -s -o /dev/null -w '' \
+    -X POST "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/users/${SVC_USER_ID}/role-mappings/clients/${REALM_MGMT_UUID}" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d "[${ROLE_JSON}]" || true
+done
+echo "[apply-config] ticketbrainy-admin-read roles assigned (view-realm/view-users/view-events/view-identity-providers)"
+
+# Log the client secret ONCE so the operator can copy it to .env
+SECRET_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+  "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_CLIENT_UUID}/client-secret")
+SECRET_VALUE=$(echo "$SECRET_JSON" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
+if [ -n "$SECRET_VALUE" ]; then
+  echo "[apply-config] =============================================="
+  echo "[apply-config] KC_ADMIN_READ_CLIENT_SECRET=${SECRET_VALUE}"
+  echo "[apply-config] (copy this to .env for the web service)"
+  echo "[apply-config] =============================================="
 fi
 
 echo "[apply-config] OK — Keycloak realm '${KC_REALM}' is hardened"

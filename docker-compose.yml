@@ -140,9 +140,23 @@ services:
       UPLOAD_STORAGE_PATH: /data/uploads
       INSTANCE_ID_PATH: /data/.instance-id
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      # v1.10.0: Security Settings page — read-only Keycloak admin client
+      # (the keycloak-init container creates it idempotently and prints the
+      # secret once in its logs). Leave empty on first boot, then copy the
+      # value from the logs into .env and recreate the web container.
+      KC_ADMIN_READ_CLIENT_ID: ${KC_ADMIN_READ_CLIENT_ID:-ticketbrainy-admin-read}
+      KC_ADMIN_READ_CLIENT_SECRET: ${KC_ADMIN_READ_CLIENT_SECRET:-}
+      KC_REALM: ${KEYCLOAK_REALM:-ticketbrainy}
+      KC_BASE_URL: http://keycloak:8080
+      CADDY_DATA_DIR: /data/caddy
+      SECURITY_ALLOWLIST_BYPASS: ${SECURITY_ALLOWLIST_BYPASS:-}
     volumes:
       - app-data:/data
       - claude-config:/home/nextjs/.claude
+      # v1.10.0: read Caddy certs for the Security page SSL panel. Empty
+      # volume on LAN/WAF deployments where Caddy is not used — adapters
+      # handle this gracefully and show "No certificates detected".
+      - caddy-data:/data/caddy:ro
     depends_on:
       db:
         condition: service_healthy

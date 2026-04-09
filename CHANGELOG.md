@@ -2,6 +2,145 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.0] — 2026-04-09
+
+### New — Security Settings page
+
+A new **Settings → Security** section gives operators a single place to
+inspect and configure the platform's security posture. It covers nine
+modules, grouped into read-only posture panels at the top and
+togglable enforcement modules below.
+
+**Read-only posture panels**
+
+1. **Deployment mode** — current mode (LAN / behind-WAF / VPS+Caddy /
+   VPS direct) plus live runtime signals that flag mismatches between
+   the declared mode and the detected topology (Caddy presence,
+   upstream proxy type via `CF-Ray` / `X-Forwarded-For`, etc.)
+2. **Authentication (Keycloak)** — realm name, brute-force config,
+   MFA policy, password policy, session timeouts, user count, and
+   24-hour login-failure count. Data comes from the Keycloak Admin
+   API via a dedicated read-only client `ticketbrainy-admin-read`
+   created idempotently on every boot by `keycloak-init`.
+3. **Rate limiting** — 6 known rules (`login:ip`, `login:user`,
+   `activate:ip`, `csat:ip`, `ai:user`, `upload:user`) with live
+   active-bucket counts read directly from Redis
+4. **SSL certificates** — lists Let's Encrypt certificates persisted
+   by Caddy with per-domain expiry (empty when Caddy is not used)
+
+**Togglable enforcement modules**
+
+5. **Audit logging** — records 17 security-sensitive event types
+   (login success/failure, user created/deleted, role changed,
+   mailbox OAuth, plugin enable/disable, license activation, upload
+   rejected, rate-limit hit, etc.) to a new `AuditLog` table. Runtime
+   toggle + configurable retention window (default 90 days) + daily
+   background purge job. Comes with a paginated feed, event-type
+   filter, and CSV export on the same Security page.
+6. **Upload rate-limit** — throttles `/api/attachments/upload` to 20
+   uploads per 5 minutes per user when enabled. Rejections are
+   logged as `RATE_LIMIT_HIT` audit events.
+7. **Magic-bytes validation** — rejects uploads whose content does
+   not match the claimed extension (e.g. a `.exe` renamed to
+   `.pdf`). Runs on the web upload path AND on incoming email
+   attachments (advisory-only on the mail side — attachments are
+   stored but flagged with a reason).
+8. **Login anomaly detection** — when enabled, tracks a per-user
+   failure counter in Redis with a 10-minute sliding window and
+   emits `AUTH_LOGIN_SUSPICIOUS` audit events after 5 failures.
+9. **Admin IP allowlist** — restricts `/settings/**` and
+   `/api/admin/**` to specific CIDR blocks (IPv4 or IPv6). Includes
+   triple self-lockout protection (client-side CIDR validation,
+   server-side current-IP-in-list check, and a
+   `SECURITY_ALLOWLIST_BYPASS=true` break-glass env var — see
+   `docs/DEPLOYMENT-MODES.md §break-glass` for the recovery
+   procedure).
+
+### New — Activation wizard, step 2
+
+`/activate` now has a second step where the operator chooses their
+deployment mode from the four options above. The choice is persisted
+in the database and drives the default toggle values for the Security
+page (e.g. VPS modes enable rate-limit and anomaly detection by
+default; LAN mode leaves them off). You can always change the mode
+later at **Settings → Security**.
+
+### New — `docs/DEPLOYMENT-MODES.md`
+
+Full reference guide for the four modes, with pre-requisites,
+recommended toggles per mode, the break-glass recovery procedure, and
+how to retrieve the Keycloak `ticketbrainy-admin-read` client secret
+from the init container logs.
+
+### Database — schema changes
+
+Two new tables and two new columns are added automatically by
+`migrate` on the next `docker compose up -d`:
+
+- `SecuritySettings` — singleton row holding every toggle state and
+  the admin IP allowlist. Seeded with safe defaults so upgrades from
+  v1.3.x–v1.9.x land in a known state.
+- `AuditLog` — indexed on `eventType+createdAt`, `userId+createdAt`,
+  `ip+createdAt`, and `createdAt` for fast filtering and pagination.
+- `Attachment.flagged` (boolean) and `Attachment.flagReason` (text)
+  — set by the magic-bytes validator on the upload path and by
+  `mail-service` on incoming email attachments. Used to surface a
+  flag badge in the UI (future release).
+
+### Config — new environment variables
+
+Add the following to your `.env` (see `.env.example` for the exact
+format and the new section "Security Settings v1.10.0"):
+
+```
+KC_ADMIN_READ_CLIENT_ID=ticketbrainy-admin-read
+KC_ADMIN_READ_CLIENT_SECRET=
+SECURITY_ALLOWLIST_BYPASS=
+```
+
+After the first `docker compose up -d` retrieve the Keycloak secret
+from the init container logs:
+
+```bash
+docker compose logs keycloak-init | grep KC_ADMIN_READ_CLIENT_SECRET
+```
+
+Paste it into `.env` as `KC_ADMIN_READ_CLIENT_SECRET=...` and then:
+
+```bash
+docker compose up -d --force-recreate web
+```
+
+The Security page will now show the full Keycloak posture panel
+instead of an amber error card.
+
+### Upgrade notes from v1.3.x
+
+**Upgrading from a v1.3.x install is a straightforward
+`docker compose pull && docker compose up -d`** — the `migrate`
+service applies the new schema, and the `keycloak-init` service
+creates the new admin-read client on first boot. After that, follow
+the new-env-vars procedure above to wire the Keycloak secret into
+`.env`.
+
+Everything between v1.3.202 and v1.10.0 was an internal rolling
+update — the `:latest` tag always reflected the current state. If
+you want to pin to a specific version, use `:v1.10.0` in
+`docker-compose.yml` instead of `:latest`.
+
+### Deferred to future releases
+
+- Antivirus scanning for attachments (ClamAV) — out of scope for
+  v1.10.0 to keep the shipping surface small
+- SPF / DKIM / DMARC validation on incoming email
+- Spam scoring on incoming email
+- Middleware-layer IP allowlist enforcement — currently implemented
+  at the server-action layer because Next.js 16 node middleware is
+  still experimental. The UI and enforcement are fully functional;
+  this is an internal architectural note only.
+
+---
+
 ## [1.3.202] — 2026-04-06
 
 ### Security — Image hardening
