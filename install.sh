@@ -263,6 +263,14 @@ if [ "$USE_CADDY" = true ]; then
   if [ -n "$KEYCLOAK_DOMAIN" ]; then
     set_env "KEYCLOAK_DOMAIN" "$KEYCLOAK_DOMAIN"
   fi
+  # v1.10.02: In Caddy mode, bind the Keycloak host port to 127.0.0.1
+  # so it's NOT exposed on the public internet. Caddy reaches Keycloak
+  # via the internal docker network (keycloak:8080), so the host port
+  # is only useful for local debugging (via SSH port forward). This
+  # stops bots from hammering http://<ip>:8180/admin/* and prevents
+  # the "HTTPS required" confusion operators used to hit when they
+  # accidentally opened the IP:8180 URL.
+  set_env "KC_BIND" "127.0.0.1"
 fi
 print_success ".env written"
 
@@ -321,7 +329,16 @@ KC_ADMIN_PASS=$(grep '^KC_ADMIN_PASSWORD=' .env | cut -d= -f2-)
 print_header "Installation Complete"
 
 LAN_URL="http://${SERVER_IP}:4000"
-KC_ADMIN_LAN_URL="http://${SERVER_IP}:8180"
+
+# v1.10.02: Keycloak admin console URL is mode-dependent.
+# - Direct mode: exposed on http://<server-ip>:8180 (same as before)
+# - Caddy mode:  only reachable via the HTTPS Keycloak domain (the
+#                host port is bound to 127.0.0.1 via KC_BIND in .env)
+if [ "$USE_CADDY" = true ] && [ -n "$KEYCLOAK_DOMAIN" ]; then
+  KC_ADMIN_URL="https://${KEYCLOAK_DOMAIN}"
+else
+  KC_ADMIN_URL="http://${SERVER_IP}:8180"
+fi
 
 echo -e "${BOLD}${CYAN}═════ Access URLs ═════${NC}"
 if [ "$USE_CADDY" = true ]; then
@@ -346,9 +363,11 @@ else
   echo -e "  ${BOLD}Activation wizard:${NC}   ${GREEN}${LAN_URL}/activate${NC}"
 fi
 echo ""
-echo -e "  ${BOLD}Keycloak admin:${NC}      ${GREEN}${KC_ADMIN_LAN_URL}${NC}"
-if [ "$ENABLE_KC" = "Y" ] && [ -n "$KEYCLOAK_URL_VALUE" ]; then
-  echo -e "  ${BOLD}Keycloak (SSO):${NC}      ${GREEN}${KEYCLOAK_URL_VALUE}${NC}"
+echo -e "  ${BOLD}Keycloak admin:${NC}      ${GREEN}${KC_ADMIN_URL}${NC}"
+if [ "$USE_CADDY" = true ]; then
+  echo -e "  ${YELLOW}   Do NOT open http://${SERVER_IP}:8180 — port bound to localhost only.${NC}"
+  echo -e "  ${YELLOW}   Use the HTTPS URL above. If DNS for ${KEYCLOAK_DOMAIN} is not set up${NC}"
+  echo -e "  ${YELLOW}   yet, configure an A record pointing at this server's IP.${NC}"
 fi
 echo ""
 
@@ -358,21 +377,34 @@ echo -e "  Password:   ${CYAN}${SEED_PASS}${NC}"
 echo ""
 
 echo -e "${BOLD}${YELLOW}═════ Keycloak admin console ═════${NC}"
-echo -e "  URL:        ${CYAN}${KC_ADMIN_LAN_URL}${NC}"
+echo -e "  URL:        ${CYAN}${KC_ADMIN_URL}${NC}"
 echo -e "  Username:   ${CYAN}admin${NC}"
 echo -e "  Password:   ${CYAN}${KC_ADMIN_PASS}${NC}"
 echo ""
 
-echo -e "${BOLD}═════ Next steps ═════${NC}"
+echo -e "${BOLD}═════ Next steps (first bootstrap) ═════${NC}"
 if [ "$USE_CADDY" = true ]; then
-  echo "  1. Open ${BOLD}${APP_URL}/activate${NC} in your browser (NOT the IP URL)"
+  BOOT_URL="${APP_URL}"
 else
-  echo "  1. Open ${BOLD}${LAN_URL}/activate${NC} in your browser"
+  BOOT_URL="${LAN_URL}"
 fi
-echo "  2. Enter your license email:  ${LICENSE_EMAIL}"
-echo "  3. Pick your deployment mode in the wizard (step 2)"
-echo "  4. Log in with  admin@ticketbrainy.local  /  (password above)"
-echo "  5. Change the admin password in Settings → Team"
+echo "  1. Open ${BOLD}${BOOT_URL}/activate${NC} and activate with your license email:"
+echo "       ${LICENSE_EMAIL}"
+echo ""
+echo "  2. Go to ${BOLD}${BOOT_URL}/login${NC}"
+echo "     Until you create a Keycloak admin, the page shows a"
+echo "     \"bootstrap mode\" banner and the local email+password form."
+echo "     Log in with:  ${BOLD}admin@ticketbrainy.local${NC} + the password above."
+echo ""
+echo "  3. Open ${BOLD}${KC_ADMIN_URL}${NC} and log in with admin / (KC password above)"
+echo "     — realm \"${BOLD}ticketbrainy${NC}\" — create your SSO user, set a password in"
+echo "     the ${BOLD}Credentials${NC} tab (unchecked 'Temporary')."
+echo ""
+echo "  4. Log out of TicketBrainy, click ${BOLD}\"Se connecter avec SSO\"${NC} — your first"
+echo "     SSO login auto-promotes to ADMIN. Bootstrap banner disappears,"
+echo "     local form is hidden from public IPs from then on."
+echo ""
+echo "  5. Change the seed admin password in Settings → Team (or disable the account)."
 echo ""
 echo "  To use Keycloak SSO instead of the local admin account:"
 echo "   a. Log in once with admin@ticketbrainy.local (above)"

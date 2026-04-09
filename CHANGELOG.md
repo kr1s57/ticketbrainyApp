@@ -2,6 +2,106 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.02] — 2026-04-09
+
+### Fixed — Bootstrap login flow + Keycloak public exposure
+
+Two fixes that complete the fresh-install story started in 1.10.01.
+That release fixed the SSO first-user auto-promotion server-side, but
+on a real Caddy VPS deploy the operator could never actually REACH
+the point where that code runs because of two chicken-and-egg issues.
+
+**Bootstrap mode on the login page (critical)**
+
+Until now, the `/login` page showed the local email+password form
+only to client IPs that matched `LAN_HOSTS`. On a VPS deploy, every
+operator is "public" from the server's perspective — no LAN exists —
+so the local seed account `admin@ticketbrainy.local` was effectively
+invisible from the outside, and the SSO button was the only option.
+But SSO has no admin users yet on a fresh install, so there's no way
+to log in at all.
+
+New behaviour: the login page now checks the database for any
+active Keycloak ADMIN user. If none exists, it enters "bootstrap
+mode": the local form is shown regardless of client IP, with a small
+amber banner explaining why. As soon as someone logs in via SSO and
+gets auto-promoted (the "first SSO admin" rule from v1.10.01), the
+bootstrap flag flips off and the local form is hidden from public
+IPs again.
+
+This cleanly solves the chicken-and-egg: bootstrap with the local
+account, create the Keycloak user, SSO in, the bootstrap door closes
+automatically.
+
+**Keycloak host port bound to localhost in Caddy mode**
+
+The `keycloak` service used `"${KC_PORT:-8180}:8080"` which binds
+to 0.0.0.0 — exposing the admin console on `http://<public-ip>:8180`.
+Keycloak 26 then rejects every non-localhost HTTP hit with
+"HTTPS required", which is a dead end but still looks like the right
+URL, confusing operators. Worse, Keycloak's admin console client has
+relative `redirectUris` which get resolved against the request URL,
+so a single HTTP hit on :8180 would sometimes poison the session
+with an HTTP redirect_uri that then fails against the HTTPS endpoint.
+
+Change:
+
+```yaml
+ports:
+  - "${KC_BIND:-0.0.0.0}:${KC_PORT:-8180}:8080"
+```
+
+`install.sh` in Caddy mode now writes `KC_BIND=127.0.0.1` to `.env`,
+so the port is only reachable from localhost on the server itself.
+Caddy still reaches Keycloak via the internal docker network
+(`keycloak:8080`), so `https://<kc-domain>/admin` remains the
+working entry point. LAN deployments (non-Caddy mode) are untouched
+— `KC_BIND` defaults to `0.0.0.0` so admins on the LAN can still
+hit `http://<server-ip>:8180` as before.
+
+**install.sh — final summary + bootstrap sequence**
+
+Updated the "Access URLs" and "Next steps" sections to:
+
+- Display the correct Keycloak admin URL per mode (Caddy: HTTPS
+  domain, Direct: IP:8180)
+- In Caddy mode, explicitly warn that `http://<ip>:8180` is bound to
+  localhost only, with a tip to configure DNS if not ready
+- Walk through the 5-step bootstrap sequence: activate license →
+  log in with `admin@ticketbrainy.local` (bootstrap mode) → create
+  user in Keycloak admin console → set password manually in the
+  Credentials tab → log out and SSO in (auto-promoted to ADMIN) →
+  change the seed admin password
+
+### Upgrade notes from v1.10.0 or v1.10.01
+
+The cleanest fix is to wipe and reinstall:
+
+```bash
+docker compose down -v
+cd ..
+rm -rf ticketbrainyApp
+git clone https://github.com/kr1s57/ticketbrainyApp.git
+cd ticketbrainyApp
+bash install.sh
+```
+
+If you cannot drop the database but are on v1.10.0/v1.10.01 and
+stuck, add this to your `.env` in Caddy mode and recreate Keycloak:
+
+```
+KC_BIND=127.0.0.1
+```
+
+Then `docker compose up -d --force-recreate keycloak`.
+
+### Release mechanics
+
+- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.02` + `:latest`,
+  digest parity verified (only `web` has source changes; the other
+  four are re-tagged from the matching v1.10.01 builds)
+- 6 version source files bumped 1.10.01 → 1.10.02
+
 ## [1.10.01] — 2026-04-09
 
 ### Fixed — Fresh install / SSO first-login UX
