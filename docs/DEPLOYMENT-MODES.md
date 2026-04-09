@@ -93,7 +93,88 @@ the implications.
 - ✅ Login anomaly detection
 - ⚠️ Admin IP allowlist — **strongly recommended**, configure before exposing the admin routes
 
-## Admin IP allowlist — what to put there
+## Two separate IP allowlists — don't confuse them
+
+TicketBrainy ships with **two distinct IP allowlists** for different
+services. Both are managed from the Settings → Security UI but they
+protect different things and are enforced at different layers.
+Getting this wrong leads to the "I set the allowlist but Keycloak
+is still reachable" confusion.
+
+| Allowlist | Enforced by | What it protects |
+|---|---|---|
+| **TicketBrainy admin** | Next.js server actions (TypeScript `enforceAdminAccess()`) | Security toggles (audit, rate-limit, magic bytes, etc.) — mutations on the SecuritySettings row |
+| **Keycloak admin** | Caddy `remote_ip` matcher (in-proxy, before Keycloak sees the request) | `/admin/*` and `/realms/master/*` on your Keycloak domain |
+
+**Both are optional** and **both default to "no restriction"** out of
+the box. They're complementary, not redundant — the TicketBrainy one
+protects app-level admin mutations, the Keycloak one protects the
+identity provider admin console. Enable them independently.
+
+## Keycloak admin IP allowlist (managed from the UI)
+
+If your Keycloak domain is reachable from the public Internet (i.e.
+you're in `vps-caddy` mode), an attacker can walk up to
+`https://<keycloak-domain>/admin` and see the admin login page. The
+built-in Keycloak brute-force protection (5 failures → 5 min lockout
+by default) and your strong `KC_ADMIN_PASSWORD` prevent credential
+stuffing, but you may prefer to hide the admin UI entirely from
+non-allowlisted IPs.
+
+**Configure from the UI**:
+1. Settings → Security → **Keycloak admin IP allowlist** panel
+2. Click **Add /32** to insert your current detected IP, or type
+   CIDRs manually (one per line)
+3. Click **Save and reload Caddy** — the server action re-renders
+   the Caddyfile and hot-reloads Caddy via its admin API
+
+Changes apply immediately with **zero downtime** — Caddy's `/load`
+endpoint validates the new config, switches over, and keeps
+serving in-flight requests from the old config until they finish.
+No container restart, no SSH, no `.env` edit needed.
+
+**What gets blocked**:
+- `/admin/*` — the Keycloak admin console
+- `/admin` — the admin root redirect
+- `/realms/master/*` — the master realm login flow used to reach
+  the admin console
+
+**What stays open**:
+- `/realms/ticketbrainy/*` — the public SSO flow for regular
+  ticket users
+- `/resources/*` — CSS/JS shared between admin and user login
+  pages (blocking this would break regular user login)
+
+**Multiple CIDRs** — one per line:
+```
+82.127.164.115/32
+10.0.0.0/8
+192.168.1.0/24
+```
+
+**Break-glass — locked yourself out?** SSH into the server and
+clear the list in the database:
+
+```bash
+docker exec -it ticketbrainyapp-db-1 psql -U ticketbrainy -d ticketbrainy \
+  -c "UPDATE \"SecuritySettings\" SET \"keycloakAdminIpAllowlist\" = ARRAY[]::text[] WHERE id='singleton';"
+docker compose --profile with-proxy restart caddy
+```
+
+The restart reloads the bare Caddyfile (no matcher), and the empty
+DB list means the web container's boot-time sync does nothing. You
+regain access to the Keycloak admin from any IP.
+
+**Residential ISPs**: same advice as the TicketBrainy allowlist —
+don't enable this if your IP is dynamic. You'll lock yourself out
+at the next modem reboot.
+
+**Survival across restarts**: the list is stored in the database,
+and the web container re-pushes it to Caddy on startup. A full
+`docker compose down/up` cycle restores the restriction
+automatically.
+
+## TicketBrainy admin IP allowlist — what to put there
 
 The **Settings → Security → Admin IP allowlist** panel restricts the
 admin-only pages (`/settings/*`, `/api/admin/*`) to specific source

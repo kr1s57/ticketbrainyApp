@@ -2,6 +2,80 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.08] — 2026-04-09
+
+### Added — Keycloak admin IP allowlist, managed from the UI
+
+The `Settings → Security` page gets a new **"Keycloak admin IP
+allowlist"** panel next to the existing TicketBrainy admin
+allowlist. It restricts `/admin/*`, `/admin`, and
+`/realms/master/*` on the Keycloak domain to specific CIDRs,
+enforced by the Caddy reverse proxy **before** the request
+reaches Keycloak.
+
+This is a separate list from the TicketBrainy admin allowlist
+because they protect different things:
+
+| Allowlist | Enforced by | What it protects |
+|---|---|---|
+| TicketBrainy admin | Next.js server actions | Security mutation routes |
+| Keycloak admin | Caddy reverse proxy | Keycloak admin console + master realm |
+
+The two are complementary — the first protects app-level admin
+actions, the second protects the identity provider admin console.
+Both default to "no restriction" on fresh installs.
+
+**Zero-downtime hot reload**: saving the list from the UI
+triggers a server action that:
+
+1. Validates CIDRs and self-lockout (your current IP must be in
+   the list before it's saved)
+2. Persists to `SecuritySettings.keycloakAdminIpAllowlist`
+3. Re-renders the entire Caddyfile from a TypeScript template
+4. POSTs the rendered config to `http://caddy:2019/load` (Caddy's
+   admin API, exposed only on the internal docker network)
+5. Caddy validates the new config, switches in-flight requests
+   over, and drops the old config — no container restart, no
+   dropped connections
+
+**Survives container restarts**: because Caddy boots with a bare
+Caddyfile (no matcher), a full `docker compose down/up` would
+silently drop the restriction. The web container's Next.js
+instrumentation hook re-pushes the current DB value to Caddy
+two seconds after boot, so the restriction is re-applied
+automatically. This also makes the restriction survive image
+upgrades.
+
+**What stays open** — the public SSO flow for regular ticket
+users (`/realms/ticketbrainy/*`) and the shared Keycloak
+`/resources/*` (CSS/JS for login pages) are not blocked. Only
+the admin surface is restricted.
+
+**Break-glass**: if you lock yourself out (e.g. ISP rotated your
+IP), SSH to the server and clear the DB list, then restart
+Caddy — see `docs/DEPLOYMENT-MODES.md` for the exact commands.
+
+### Schema changes
+
+New Prisma column on `SecuritySettings`:
+
+    keycloakAdminIpAllowlist String[] @default([])
+
+Applied automatically by the migrate container on the next boot
+via `prisma db push`. No data migration needed; existing rows
+get the default empty array, matching pre-v1.10.08 behaviour
+(no restriction).
+
+### Release mechanics
+
+- `web` + `migrate` images rebuilt (schema change triggers
+  the migrate rebuild)
+- 3 other images re-tagged from the matching v1.10.07 builds
+  for lockstep parity
+- All 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.08` +
+  `:latest`, digest parity verified
+- 6 version source files bumped 1.10.07 → 1.10.08
+
 ## [1.10.07] — 2026-04-09
 
 ### Fixed — Bootstrap banner readable in light theme

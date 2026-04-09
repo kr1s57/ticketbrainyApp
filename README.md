@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.07-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.08-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.07` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.08` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.07 fixes the bootstrap banner contrast** on the `/login` page — the amber-200 text was near-invisible on light theme backgrounds. Now uses `text-amber-900 dark:text-amber-100` so it reads cleanly on both themes. **Rolling upgrade:** `docker compose pull && docker compose up -d`.
+> **1.10.08 adds a Keycloak admin IP allowlist managed from the UI** (Settings → Security). Separate from the TicketBrainy admin allowlist — this one is enforced by Caddy and protects `/admin/*` and `/realms/master/*` on your Keycloak domain. Saving the list re-renders the Caddyfile and hot-reloads Caddy via its admin API, with zero downtime and no container restart. Survives `docker compose down/up` (re-synced at web boot). **Rolling upgrade:** `docker compose pull && docker compose up -d`.
 
 ## Requirements
 

@@ -4,6 +4,13 @@
 
 {
     email {$LETSENCRYPT_EMAIL}
+    # v1.10.08: expose the Caddy admin API on the docker internal
+    # network so the TicketBrainy web container can hot-reload the
+    # Caddyfile when the Keycloak admin IP allowlist is changed from
+    # the UI. Bound to 0.0.0.0:2019 — this port is NOT mapped to the
+    # host by docker-compose, so it stays on the internal network and
+    # can only be reached from sibling containers.
+    admin 0.0.0.0:2019
 }
 
 # TicketBrainy main app
@@ -27,6 +34,11 @@
 }
 
 # Keycloak SSO (required for public SSO login)
+# v1.10.08: The Keycloak admin IP allowlist is now managed from
+# Settings → Security in the TicketBrainy UI. The initial Caddyfile
+# has no remote_ip matcher; when the operator saves a non-empty
+# allowlist in the UI, a server action re-renders this file and
+# hot-reloads Caddy via the admin API. Empty list = no restriction.
 {$KEYCLOAK_DOMAIN} {
     reverse_proxy keycloak:8080
 

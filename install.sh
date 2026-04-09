@@ -242,6 +242,11 @@ if [ "$ENABLE_KC" = "Y" ]; then
 else
   print_success "Keycloak SSO: disabled (local accounts only)"
 fi
+# v1.10.08: The Keycloak admin IP allowlist is managed from the
+# TicketBrainy UI (Settings → Security) instead of the installer —
+# that way operators can adjust it later without touching .env or
+# restarting containers. Default on fresh installs is "no restriction"
+# until the operator configures it.
 
 # ── Write .env ─────────────────────────────────────────────────────────
 print_header "Writing configuration"
