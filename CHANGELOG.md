@@ -2,6 +2,84 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.10] — 2026-04-09
+
+### Fixed — Keycloak allowlist hot-reload regression loop
+
+The v1.10.09 fix for the Caddy admin API origin validation covered
+two of the three code paths that need the `origins` allowlist, but
+missed the third: the `renderCaddyfile()` function in the web
+container that re-generates a Caddyfile from DB state on every
+"Save & reload Caddy" click.
+
+**Symptom on the VPS after v1.10.09**: after the very first
+successful save the UI started showing
+
+```
+Saved to database, but Caddy reload failed:
+{"error":"client is not allowed to access from origin 'http://caddy:2019'"}
+```
+
+on every subsequent save. The hot-reload silently died even though
+the bootstrap `proxy/Caddyfile` and the web container both had the
+v1.10.09 fixes.
+
+**Cause**: `renderCaddyfile()` emitted `admin 0.0.0.0:2019`
+*without* an `origins` block. The first successful save — which
+passed the origin check against the bootstrap config still in
+memory — replaced the running Caddy config with the rendered one,
+wiping the origins allowlist in-process. Every later POST /load
+was then rejected. Verified live on VPS 212.47.64.102:
+
+```
+$ docker exec caddy wget -qO- http://localhost:2019/config/admin
+{"listen":"0.0.0.0:2019"}   ← no "origins" field
+```
+
+**Fix**: `apps/web/src/lib/security/caddy-reload.ts` —
+`renderCaddyfile()` now emits the same admin block as the bootstrap
+`proxy/Caddyfile`:
+
+```
+admin 0.0.0.0:2019 {
+    origins caddy:2019 localhost:2019 127.0.0.1:2019
+}
+```
+
+A comment on the block explicitly warns that this must stay in
+lockstep with `proxy/Caddyfile` in this repo.
+
+### Upgrade from v1.10.09
+
+Standard rolling upgrade. `proxy/Caddyfile` is unchanged, so no
+`--force-recreate caddy` is required this time — only the web
+image needs to be refreshed:
+
+```bash
+cd ticketbrainyApp
+git pull
+docker compose --profile with-proxy pull
+docker compose --profile with-proxy up -d --force-recreate web
+```
+
+If the operator already hit the bug on v1.10.09 and the running
+Caddy config lost its origins, one additional restart of Caddy
+will reload the bootstrap Caddyfile from disk and re-seed the
+origins:
+
+```bash
+docker compose --profile with-proxy up -d --force-recreate caddy
+```
+
+### Release mechanics
+
+- All 5 service images re-tagged + pushed at `v1.10.10` AND
+  `:latest` (lockstep release per the release-lockstep.sh script)
+- 6 version source files bumped 1.10.09 → 1.10.10
+- `proxy/Caddyfile` unchanged (already correct since v1.10.09)
+
+---
+
 ## [1.10.09] — 2026-04-09
 
 ### Fixed — Caddy admin API origin validation
