@@ -2,6 +2,59 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.12] — 2026-04-09
+
+### Improved — Deployment banner UX (per-field drift + revert)
+
+Follow-up polish to the v1.10.11 drift-detection fix. The banner
+now tells the operator **which** fields diverge and offers a
+one-click escape hatch.
+
+#### Per-field drift diff
+
+When the saved DB config differs from the running env vars, the
+banner now lists each changed field with:
+
+- the human-readable label (e.g. "LAN hosts", "App domain")
+- the value saved in the DB (what *would* apply)
+- the value currently running on the instance (what *is* live)
+
+Before, the operator had to reverse-engineer the divergence by
+comparing their `.env` against the form field-by-field.
+
+#### "Revert to running config" button
+
+A new one-click undo button inside the drift banner. Clicking it:
+
+1. Resets the form to the values currently running in the
+   container (env vars at page-load time).
+2. Saves — the DB goes back in sync with live, `hasDrift` becomes
+   `false`, and the banner disappears **without a docker restart**.
+
+Useful when the operator tested a field change, saved it, then
+wanted out of the half-committed state.
+
+### Upgrade from v1.10.11
+
+Web-only update — Caddy config and bootstrap Caddyfile unchanged:
+
+```bash
+cd ticketbrainyApp
+git pull
+docker compose --profile with-proxy pull
+docker compose --profile with-proxy up -d --force-recreate web
+```
+
+### Release mechanics
+
+- All 5 service images re-tagged + pushed at `v1.10.12` AND
+  `:latest` (lockstep release)
+- 6 version source files bumped 1.10.11 → 1.10.12
+- No changes to `docker-compose.yml`, `proxy/Caddyfile`, or
+  `proxy/caddy-entrypoint.sh`
+
+---
+
 ## [1.10.11] — 2026-04-09
 
 ### Fixed — 4 fresh-install polish issues from VPS walkthrough
