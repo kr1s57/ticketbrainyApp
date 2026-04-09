@@ -2,6 +2,52 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.04] — 2026-04-09
+
+### Added — Initial Setup checklist on the dashboard
+
+Fresh installs now get a dashboard widget that walks operators
+through the 5 must-do steps before the instance is production-ready:
+
+1. **Add your first mailbox** — IMAP + SMTP, used for both ticket
+   reception AND system notifications (password reset, invites)
+2. **Create your first Keycloak users** — opens the Keycloak admin
+   console (URL auto-resolved from KEYCLOAK_DOMAIN in Caddy mode,
+   or IP:8180 in LAN mode)
+3. **Choose your interface language** → Settings → Language
+4. **Add your first customers** → Settings → Customers
+5. **Customise your personal theme** → Settings → Appearance
+
+Each step shows a green check when done (auto-detected from real DB
+state OR manually dismissed via click), a progress bar counts the
+completed items, and the whole widget auto-hides when everything is
+done or when the operator clicks the dismiss `X`. Preference-only
+steps (language, theme) can be manually toggled; real-infra steps
+(mailbox, Keycloak users, customers) are detected from Prisma counts
+and cannot be faked.
+
+Auto-detection queries run in parallel with the existing dashboard
+queries — no added latency beyond ~5-10ms.
+
+### Fixed — Analytics / Reports "Analytics Pro" lock screen
+
+Both `/analytics` and `/analytics/reports` still referenced the
+decommissioned `analytics_pro` plugin in their `<FeatureGate>`
+lock screen. The feature flag check (`hasFeature("analytics_dashboard")`)
+already resolved correctly against the current `enterprise_pack`
+plugin, but the "Requires …" CTA text pointed users to a plugin
+that no longer exists in the marketplace. Updated both pages to
+`pluginName="Enterprise Pack"` with the correct slug, so clicking
+the lock now takes operators to the right plugin detail page.
+
+### Release mechanics
+
+- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.04` + `:latest`
+- Only `web` has source changes; the other 4 are re-tagged from
+  v1.10.03 builds for lockstep parity
+- 6 version source files bumped 1.10.03 → 1.10.04
+- Rolling upgrade: `docker compose pull && docker compose up -d`
+
 ## [1.10.03] — 2026-04-09
 
 ### Fixed — Settings/Deployment sees Caddy + wizard auto-detects mode

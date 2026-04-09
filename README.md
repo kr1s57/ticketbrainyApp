@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.03-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.04-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.03` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.04` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.03 is the third fresh-install hotfix** on top of 1.10.0. Settings → Deployment now actually sees the Caddy / Let's Encrypt configuration on Caddy-mode installs (previously all fields showed empty because the web container wasn't receiving APP_DOMAIN / KEYCLOAK_DOMAIN / LETSENCRYPT_EMAIL), and the activation wizard step 2 now auto-detects the deployment mode from `install.sh`'s env vars so operators don't silently persist `networkExposure=none` on a Caddy deploy. **If you installed v1.10.0 → v1.10.02 and Settings → Deployment shows Caddy disabled or the Security page says "Caddy inactive" even though Caddy is running, upgrade:** `docker compose pull && docker compose up -d`. Already-activated instances with `networkExposure=none` can fix the mode in-place from Settings → Security → Deployment mode.
+> **1.10.04 adds an Initial Setup checklist** to the dashboard, walking operators through the 5 must-do steps after a fresh install (mailbox, Keycloak users, language, customers, theme). Each step auto-detects its completion state from the database and provides a clickable link to the right settings page. Also fixes the Analytics / Reports lock screens which still referenced the decommissioned "Analytics Pro" plugin (features are now in the Enterprise Pack). **Rolling upgrade:** `docker compose pull && docker compose up -d`.
 
 ## Requirements
 
