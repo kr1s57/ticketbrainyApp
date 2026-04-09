@@ -10,7 +10,16 @@
     # the UI. Bound to 0.0.0.0:2019 — this port is NOT mapped to the
     # host by docker-compose, so it stays on the internal network and
     # can only be reached from sibling containers.
-    admin 0.0.0.0:2019
+    #
+    # v1.10.09: explicit `origins` allowlist. When the admin API is
+    # bound to a non-loopback address (0.0.0.0 here), Caddy's default
+    # origin validation refuses every request with `client is not
+    # allowed to access from origin ''`. We whitelist the docker
+    # service hostname used by the web container's fetch, plus the
+    # loopback variants for local debugging via SSH port-forward.
+    admin 0.0.0.0:2019 {
+        origins caddy:2019 localhost:2019 127.0.0.1:2019
+    }
 }
 
 # TicketBrainy main app

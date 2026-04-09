@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.08-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.09-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.08` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.09` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.08 adds a Keycloak admin IP allowlist managed from the UI** (Settings → Security). Separate from the TicketBrainy admin allowlist — this one is enforced by Caddy and protects `/admin/*` and `/realms/master/*` on your Keycloak domain. Saving the list re-renders the Caddyfile and hot-reloads Caddy via its admin API, with zero downtime and no container restart. Survives `docker compose down/up` (re-synced at web boot). **Rolling upgrade (IMPORTANT — includes `git pull` because this release changes the bind-mounted Caddyfile):** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate caddy web migrate`.
+> **1.10.09 fixes the Caddy admin API origin validation** introduced in 1.10.08 — saving the Keycloak admin IP allowlist from the UI was being rejected with `client is not allowed to access from origin ''` because the admin API needs an explicit `origins` whitelist when bound to a non-loopback address. Both the Caddyfile and the fetch client are now fixed. **Rolling upgrade (must include `git pull` because the bind-mounted Caddyfile changed):** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate caddy web`.
 
 ## Requirements
 

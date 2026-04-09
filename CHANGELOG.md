@@ -2,6 +2,66 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.09] — 2026-04-09
+
+### Fixed — Caddy admin API origin validation
+
+The v1.10.08 Keycloak admin IP allowlist hot-reload was rejected
+by Caddy with `client is not allowed to access from origin ''` on
+every save. Two missing pieces:
+
+**Cause**: when Caddy's admin API listens on a non-loopback
+address (`admin 0.0.0.0:2019`), the default origin validation
+refuses every request unless an explicit `origins` directive is
+specified. The v1.10.08 Caddyfile had none, so the allowed list
+was empty and every POST /load from the web container was
+dropped. On top of that, server-to-server Node fetch sends an
+empty `Origin` header by default, which also confuses Caddy's
+origin parsing.
+
+**Fix**:
+
+- `proxy/Caddyfile` — the admin block now declares the allowed
+  origins explicitly:
+
+  ```
+  admin 0.0.0.0:2019 {
+      origins caddy:2019 localhost:2019 127.0.0.1:2019
+  }
+  ```
+
+  `caddy:2019` matches the docker DNS hostname the web container
+  uses to reach Caddy. The loopback variants are kept for local
+  debugging via SSH port-forward.
+
+- `apps/web/src/lib/security/caddy-reload.ts` — the fetch call
+  now sets an explicit `Origin: http://caddy:2019` header. Caddy
+  parses this as a URL, extracts the Host part, and matches it
+  against the origins list.
+
+### Upgrade from v1.10.08
+
+Standard rolling upgrade, with `git pull` to refresh the
+bind-mounted Caddyfile:
+
+```bash
+cd ticketbrainyApp
+git pull
+docker compose --profile with-proxy pull
+docker compose --profile with-proxy up -d --force-recreate caddy web
+```
+
+The `--force-recreate caddy` is required because the Caddyfile
+is a bind mount — the running container keeps the old config
+until the process restarts.
+
+### Release mechanics
+
+- `web` image rebuilt (new digest sha256:44f605c56cae…)
+- 4 other images re-tagged from the matching v1.10.08 builds
+  for lockstep parity
+- 6 version source files bumped 1.10.08 → 1.10.09
+
 ## [1.10.08] — 2026-04-09
 
 ### Added — Keycloak admin IP allowlist, managed from the UI
