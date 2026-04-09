@@ -324,11 +324,26 @@ LAN_URL="http://${SERVER_IP}:4000"
 KC_ADMIN_LAN_URL="http://${SERVER_IP}:8180"
 
 echo -e "${BOLD}${CYAN}═════ Access URLs ═════${NC}"
-echo -e "  ${BOLD}Web UI (LAN):${NC}        ${GREEN}${LAN_URL}${NC}"
-echo -e "  ${BOLD}Activation wizard:${NC}   ${GREEN}${LAN_URL}/activate${NC}"
 if [ "$USE_CADDY" = true ]; then
-  echo -e "  ${BOLD}Web UI (Public):${NC}     ${GREEN}${APP_URL}${NC}"
-  echo -e "                        ${YELLOW}(available once DNS resolves + Let's Encrypt cert is issued)${NC}"
+  # In Caddy mode APP_URL is https://${APP_DOMAIN}, which is what
+  # NEXTAUTH_URL inside the container is set to. The browser's Origin
+  # header MUST match this exact URL for CSRF-protected endpoints
+  # (activation, server actions) to accept requests. Hitting
+  # http://${SERVER_IP}:4000 directly gets rejected with 403 because
+  # origins do not match. So we intentionally do NOT display the LAN
+  # IP URL here — the only working entry point is the HTTPS domain.
+  echo -e "  ${BOLD}Web UI:${NC}              ${GREEN}${APP_URL}${NC}"
+  echo -e "  ${BOLD}Activation wizard:${NC}   ${GREEN}${APP_URL}/activate${NC}"
+  echo ""
+  echo -e "  ${YELLOW}${BOLD}⚠  Caddy mode — the HTTPS URL above is your ONLY access point.${NC}"
+  echo -e "  ${YELLOW}   Do NOT open http://${SERVER_IP}:4000 — CSRF checks will reject it.${NC}"
+  echo -e "  ${YELLOW}   If the URL above doesn't load yet, verify:${NC}"
+  echo -e "  ${YELLOW}     • DNS:  getent hosts ${APP_DOMAIN}${NC}"
+  echo -e "  ${YELLOW}     • Cert: docker compose logs caddy | tail -20${NC}"
+  echo -e "  ${YELLOW}     • Firewall: ports 80/443 open on your provider${NC}"
+else
+  echo -e "  ${BOLD}Web UI:${NC}              ${GREEN}${LAN_URL}${NC}"
+  echo -e "  ${BOLD}Activation wizard:${NC}   ${GREEN}${LAN_URL}/activate${NC}"
 fi
 echo ""
 echo -e "  ${BOLD}Keycloak admin:${NC}      ${GREEN}${KC_ADMIN_LAN_URL}${NC}"
@@ -349,14 +364,20 @@ echo -e "  Password:   ${CYAN}${KC_ADMIN_PASS}${NC}"
 echo ""
 
 echo -e "${BOLD}═════ Next steps ═════${NC}"
-echo "  1. Open ${BOLD}${LAN_URL}/activate${NC} in your browser"
+if [ "$USE_CADDY" = true ]; then
+  echo "  1. Open ${BOLD}${APP_URL}/activate${NC} in your browser (NOT the IP URL)"
+else
+  echo "  1. Open ${BOLD}${LAN_URL}/activate${NC} in your browser"
+fi
 echo "  2. Enter your license email:  ${LICENSE_EMAIL}"
 echo "  3. Pick your deployment mode in the wizard (step 2)"
 echo "  4. Log in with  admin@ticketbrainy.local  /  (password above)"
 echo "  5. Change the admin password in Settings → Team"
-if [ "$USE_CADDY" = true ]; then
-  echo "  6. Verify ${APP_DOMAIN} resolves to this server, then access ${APP_URL}"
-fi
+echo ""
+echo "  To use Keycloak SSO instead of the local admin account:"
+echo "   a. Log in once with admin@ticketbrainy.local (above)"
+echo "   b. Open ${KC_ADMIN_LAN_URL} — realm 'ticketbrainy' — create your user"
+echo "   c. Log out, click 'Single Sign-On' — your first SSO login auto-promotes to ADMIN"
 echo ""
 
 echo -e "${BOLD}═════ Useful commands ═════${NC}"

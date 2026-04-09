@@ -2,6 +2,120 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.01] — 2026-04-09
+
+### Fixed — Fresh install / SSO first-login UX
+
+Four fixes that unblock the first-time deploy experience on a fresh
+VPS. A real end-to-end test install on v1.10.0 hit every single one
+of these in sequence — the hardest one left the app entirely unusable
+after a successful Keycloak SSO login.
+
+**SSO first-admin auto-promotion (critical)**
+
+The jwt callback in `apps/web/src/lib/auth/index.ts` used
+`userCount === 0 ? "ADMIN" : "AGENT"` to decide whether a fresh
+Keycloak user should be auto-promoted. On every real install
+`prisma/seed.ts` has already created the seed local account
+`admin@ticketbrainy.local` *before* anyone logs in via SSO, so
+userCount is always ≥ 1 and every SSO user landed as AGENT with
+`isActive=false`.
+
+Worse: the next branch (`if (!dbUser.isActive)`) returned the token
+without setting `token.userId` or `token.role`. Every downstream
+`db.user.findUnique({ where: { id: session.userId } })` then threw
+`User not found` with a cryptic 500, and every admin endpoint
+returned 403 because `session.user.role` was undefined. The user
+was left with an apparently-working login that crashed on every
+page.
+
+New logic: the first user with `keycloakId IS NOT NULL AND
+role='ADMIN' AND isActive=true` is the "first SSO admin" — the
+seed local account does not block this check because it has no
+keycloakId. Additionally, `token.userId` and `token.role` are
+always set, even for inactive users, so downstream code can render
+a proper "account pending approval" screen instead of crashing.
+`token.error='inactive'` is now an *additional* marker, not a
+replacement.
+
+Security model: whoever holds access to the Keycloak realm is
+trusted to be the first TicketBrainy admin. This is already the
+trust boundary in practice — Keycloak realm access is what gates
+who can reach the app at all.
+
+**Telegram bot crash loop**
+
+`process.exit(1)` on missing `TELEGRAM_BOT_TOKEN` combined with
+Docker's `restart: unless-stopped` caused a crash-loop that flooded
+logs on every fresh install that did not use Telegram notifications.
+Replaced with a silent poll-wait loop that re-checks env + DB every
+60s. When the operator eventually configures a token in Settings
+→ Telegram, the bot picks it up on the next poll and starts
+normally. No more log noise, no more manual `docker compose stop
+telegram-bot` workaround.
+
+**install.sh — Caddy-mode final summary**
+
+In Caddy mode, `APP_URL` (and `NEXTAUTH_URL` inside the container)
+is set to `https://<domain>`. The CSRF check in `/api/activate` and
+every server action requires the browser's `Origin` header to match
+that exact URL. Hitting `http://<server-ip>:4000` in Caddy mode
+gets rejected with **403 Forbidden** because origins don't match.
+
+The installer now:
+- Displays ONLY the HTTPS domain URL in Caddy mode (never the LAN IP)
+- Shows a prominent warning box explaining why `http://<ip>:4000`
+  must NOT be used in Caddy mode
+- Includes quick troubleshooting pointers (DNS resolution, Caddy
+  logs, firewall ports 80/443)
+- Updates the Next steps block to point at the right URL per mode
+- Adds a "Keycloak SSO as admin" section documenting the auto-promotion
+  rule from the fix above
+
+**docs/DEPLOYMENT-MODES.md — Keycloak email + first SSO admin**
+
+Added two new sections:
+
+- **Keycloak email** — explains that "No sender address configured
+  in the realm settings for emails" comes from a missing realm-level
+  SMTP config in Keycloak. Documents both paths to unblock user
+  provisioning (configure realm SMTP OR use `Credentials → Set
+  password` instead of the email-based reset flow).
+- **First SSO admin login** — documents the auto-promotion rule from
+  v1.10.01 and the interaction with the seed local account.
+
+### Upgrade notes from v1.10.0
+
+**If you already installed v1.10.0 and your SSO user is stuck:**
+
+The cleanest fix is to wipe and re-install — same outcome, zero
+manual surgery:
+
+```bash
+docker compose down -v
+cd ..
+rm -rf ticketbrainyApp
+git clone https://github.com/kr1s57/ticketbrainyApp.git
+cd ticketbrainyApp
+bash install.sh
+```
+
+For operators who cannot drop the database, the SQL fix is:
+
+```sql
+UPDATE "User"
+SET "isActive" = true, "role" = 'ADMIN'
+WHERE email = '<your-email>' AND "keycloakId" IS NOT NULL;
+```
+
+Followed by `docker compose pull && docker compose up -d --force-recreate web`.
+
+### Release mechanics
+
+- 5 images rebuilt and pushed to `ghcr.io/kr1s57/ticketbrainy-*`
+  at BOTH `v1.10.01` AND `:latest`, digest parity verified
+- 6 version source files bumped 1.10.0 → 1.10.01
+
 ## [1.10.0] — 2026-04-09
 
 ### New — Security Settings page

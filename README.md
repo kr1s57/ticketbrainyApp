@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.3.202-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.01-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.3.202` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.01` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.3.202 is a security patch** that strips raw source, build configs, and source maps from the `web` Docker image. No functional change — just `docker compose pull && up -d`. Ships on top of 1.3.201's per-mailbox inbound filter rules and multi-select delete, and 1.3.200's Dashboard + Statistics redesign + Keycloak hardening sync.
+> **1.10.01 is a fresh-install hotfix** on top of 1.10.0. It fixes the first SSO login on fresh deploys (previously left SSO users inactive with a broken session), stops the telegram-bot crash-loop when no token is configured, and removes the misleading LAN URL from `install.sh`'s Caddy-mode summary (it was triggering CSRF 403s). **If you installed v1.10.0 and hit "User not found" or a 403 on every page, upgrade:** `docker compose down -v && rm -rf <clone> && git clone ... && bash install.sh`.
 
 ## Requirements
 
