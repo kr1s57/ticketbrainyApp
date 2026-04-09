@@ -134,8 +134,16 @@ services:
   web:
     image: ghcr.io/kr1s57/ticketbrainy-web:latest
     restart: unless-stopped
+    # v1.10.131 (hardening P0) — fix C-01 : bind le port Next.js sur
+    # 127.0.0.1 par défaut pour empêcher son exposition HTTP clair
+    # directement sur Internet. Caddy atteint le container via le
+    # réseau Docker interne (web:3000), donc fermer le port côté hôte
+    # est transparent pour le reverse proxy. Un opérateur qui tourne
+    # sans Caddy (mode "direct / vps-naked") peut remettre le port
+    # publiquement en passant WEB_BIND=0.0.0.0 dans son .env, mais le
+    # défaut sûr reste localhost.
     ports:
-      - "${APP_PORT:-4000}:3000"
+      - "${WEB_BIND:-127.0.0.1}:${APP_PORT:-4000}:3000"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379

@@ -2,6 +2,176 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.131] — 2026-04-10
+
+### Security — blackbox pentest hardening (6 fixes)
+
+A black-box external pentest conducted on a v1.10.13 VPS install
+surfaced 1 critical + 4 high-severity findings in the infrastructure
+configuration (the application code itself — Next.js Server Actions,
+NextAuth middleware, SQL access paths — was found clean: no SQLi,
+XSS, SSRF, IDOR, SSTI, or path traversal). This release closes all
+critical/high findings and two of the medium findings.
+
+#### C-01 (CRITICAL) — Next.js port exposed in cleartext HTTP
+
+The `web` service in `docker-compose.yml` published `${APP_PORT}:3000`
+on all interfaces (`0.0.0.0`), making the Next.js HTTP port directly
+reachable from the internet without TLS. Cookies (CSRF, callback,
+session) were emitted over cleartext on this port, bypassing Caddy
+entirely and exposing them to MitM interception.
+
+**Fix**: the port mapping now defaults to `127.0.0.1:${APP_PORT}:3000`
+(loopback only). Caddy reaches the container through the internal
+Docker network (`web:3000`), which is unaffected. Operators who
+genuinely run without a reverse proxy can opt back in by setting
+`WEB_BIND=0.0.0.0` in their `.env`.
+
+- Reproducer before fix: `curl http://vps.example:4000/api/auth/session` → 200 OK
+- Reproducer after fix: `curl http://vps.example:4000/api/auth/session` → Connection refused
+
+#### H-01 (HIGH) — NextAuth cookies missing `Secure` flag
+
+`useSecureCookies` was hard-coded to `false` in `auth/index.ts`, so
+all NextAuth cookies (`next-auth.session-token`,
+`next-auth.callback-url`, `next-auth.csrf-token`) were emitted
+without `Secure`, allowing them to travel over plain HTTP. The
+rationale in the previous comment (`SSL is terminated at the reverse
+proxy, so the app always receives HTTP`) was correct for the
+internal socket but had the wrong conclusion: the cookies are
+emitted into the browser, which speaks HTTPS to the reverse proxy,
+so `Secure` is the correct flag.
+
+**Fix**: `useSecureCookies` is now derived from `NEXTAUTH_URL`
+(`true` if it starts with `https://`). In HTTPS mode, cookies are
+renamed with the `__Secure-` prefix (session, callback) and `__Host-`
+prefix (csrf) so browsers refuse them if ever served over HTTP. Dev
+mode (local HTTP) is unaffected.
+
+#### H-02 (HIGH) — Keycloak master admin console publicly exposed
+
+The Keycloak admin console at `/admin/master/console/` was
+reachable without any restriction, and the master realm
+authentication endpoints had no rate-limit. A combination that
+enabled credential stuffing and made the entire IAM one working
+exploit away from a pre-auth Keycloak CVE.
+
+**Fix**: the proxy `Caddyfile` now blocks `/admin/*`, `/admin`, and
+`/realms/master/*` with a hard `404` in the default (no-allowlist)
+case, masking the very existence of the admin console from
+scanners. If the operator configures an admin IP allowlist via
+Settings → Security, the web container re-renders the Caddyfile and
+switches that block to `403` for non-allowlisted IPs (historical
+behavior preserved for admin access use cases). The Keycloak user
+login flow (`/realms/ticketbrainy/*`, `/resources/*`, `/js/*`)
+remains fully open.
+
+#### H-03 (HIGH) — Keycloak reflects arbitrary CORS `Origin` with credentials
+
+All Keycloak OIDC endpoints (`/token`, `/userinfo`, `/logout`,
+`/certs`, `.well-known/openid-configuration`) reflected any
+`Origin` header back in `Access-Control-Allow-Origin` with
+`Access-Control-Allow-Credentials: true`. Tested origins:
+`https://evil.example`, `null`, `http://attacker.internal` — all
+accepted. Root cause: a client with `Web Origins: *` or `+`
+upstream.
+
+**Fix**: two levels of defense. Level 1: the `ticketbrainy` realm
+JSON is already clean (explicit `webOrigins` per client). Level 2
+(defense-in-depth): Caddy now strips all `Access-Control-Allow-*`
+headers emitted by Keycloak and re-emits them conditionally only
+when the request `Origin` matches exactly `https://${KEYCLOAK_DOMAIN}`.
+Any other origin — including `null` and future regressions in the
+realm JSON — is silently blocked at the proxy layer.
+
+#### M-01 (MEDIUM) — no rate-limit on master realm login
+
+8 consecutive failed `grant_type=password` attempts against
+`/realms/master/.../token` returned 8 × 401 with no 429, no
+`Retry-After`, no slow-down. The master realm is the administrative
+realm of Keycloak and had Brute Force Protection disabled by
+default.
+
+**Fix**: `apply-config.sh` now applies Brute Force Protection to the
+`master` realm in addition to `ticketbrainy`: `failureFactor=5`,
+`maxFailureWaitSeconds=900` (15-minute lockout),
+`minimumQuickLoginWaitSeconds=60`, password policy upgraded to
+`length(14)` (vs 12 on the user realm) because master is
+admin-only.
+
+#### M-02 (MEDIUM) — Direct Access Grants (ROPC) on `admin-cli`
+
+The `admin-cli` public client in the master realm accepted
+`grant_type=password`, and `team.actions.ts` (the Keycloak user
+sync action) was the last applicative consumer of this
+flow — using the global admin credentials kept in Node process
+memory. Both facts made the flow vulnerable to credential stuffing
+(mitigated by M-01 above) and violated the OAuth 2.1 / OAuth
+Security BCP recommendation against ROPC.
+
+**Fix**: `apply-config.sh` now provisions a dedicated confidential
+client `ticketbrainy-admin-write` in the `ticketbrainy` realm
+with `serviceAccountsEnabled: true`,
+`directAccessGrantsEnabled: false`, and the minimal realm-management
+roles `manage-users` + `view-users` + `query-users` (no
+`manage-realm`, no `manage-clients`, no `view-events` — principle
+of least privilege). The client secret is published through the
+same `kc-secrets` volume pattern as `admin-read`, and
+`team.actions.ts` now authenticates with `grant_type=client_credentials`
+via a new helper at
+`apps/web/src/lib/security/keycloak-admin-write.ts`. The global
+admin credentials are no longer needed by the web process.
+
+`admin-cli` remains enabled for the bootstrap-only consumers that
+still need it: `apply-config.sh` itself (which runs before the new
+client exists) and `scripts/keycloak-reset-admin.sh` (break-glass).
+Both run in contexts where credential-stuffing is not a realistic
+vector, and are now mitigated by the master realm's Brute Force
+Protection.
+
+### Hardening details — headers and TLS
+
+- Strict-Transport-Security now includes `preload` on both vhosts
+- New headers on the app vhost: `X-Frame-Options: DENY`,
+  `Cross-Origin-Opener-Policy: same-origin`,
+  `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+- Referrer-Policy now explicit on the Keycloak vhost
+  (`strict-origin-when-cross-origin`)
+
+### Upgrade instructions
+
+Bind-mounted installs (most self-hosted users) **must** force
+recreate the web container so the new `Caddyfile` takes effect:
+
+```
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+After restart, check:
+
+```
+# C-01 verification — port 4000 should refuse connections
+curl --connect-timeout 5 http://your-vps.example:4000/api/auth/session
+# Expected: Connection refused
+
+# H-02 verification — Keycloak admin should 404
+curl -I https://vpskey.example/admin/master/console/
+# Expected: HTTP/2 404
+
+# H-03 verification — CORS from evil origin should not emit ACAO
+curl -I -H "Origin: https://evil.example" \
+  https://vpskey.example/realms/ticketbrainy/.well-known/openid-configuration \
+  | grep -i access-control
+# Expected: (empty output)
+
+# M-01/M-02 verification — check keycloak-init logs
+docker logs aidesk-keycloak-init-1 2>&1 | grep -E "(admin-write|master realm)"
+# Expected: "ticketbrainy-admin-write" creation + "master realm hardened"
+```
+
 ## [1.10.13] — 2026-04-10
 
 ### Fixed — KC_ADMIN_READ_CLIENT_SECRET auto-wired on fresh install

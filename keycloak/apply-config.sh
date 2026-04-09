@@ -282,4 +282,166 @@ if [ -n "$SECRET_VALUE" ]; then
   echo "[apply-config] (web container will pick it up automatically — no .env edit needed)"
 fi
 
+# ---------------------------------------------------------------------------
+# Step 6b (v1.10.131 hardening P1) — fix M-02 : client ticketbrainy-admin-write
+# ---------------------------------------------------------------------------
+# Read-WRITE service account client used par team.actions.ts pour la
+# synchro des users Keycloak → TicketBrainy. Avant v1.10.131, cette
+# synchro utilisait `grant_type=password` contre `admin-cli` dans le
+# realm `master` avec les credentials admin globaux. C'était la
+# dernière utilisation de ROPC (Direct Access Grants) applicative côté
+# serveur — finding pentest M-02 (CWE-287).
+#
+# Nouveau pattern : client confidentiel ticketbrainy-admin-write dans
+# le realm ticketbrainy, avec `serviceAccountsEnabled: true`,
+# `directAccessGrantsEnabled: false`, et les rôles realm-management
+# `manage-users` + `view-users` + `query-users`. team.actions.ts fait
+# `grant_type=client_credentials` avec ce client → zéro credential
+# admin en mémoire Node, et admin-cli ROPC n'est plus requis pour
+# l'usage applicatif (apply-config.sh et keycloak-reset-admin.sh
+# restent sur admin-cli car ils tournent dans un contexte de
+# bootstrap où le client confidentiel n'existe pas encore / n'est pas
+# accessible). Les Brute-Force Protection + failureFactor=5 appliqués
+# dans Step 7 mitigent le résidu de risque sur admin-cli.
+#
+# Principe de moindre privilège : le client admin-write n'a PAS
+# view-events, view-identity-providers, manage-realm, manage-clients.
+# Il ne peut QUE lire et créer/updater/supprimer des users — ce dont
+# a besoin team.actions.ts.
+echo "[apply-config] ensuring ticketbrainy-admin-write client exists..."
+
+EXISTING_WRITE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+  "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-write" || echo "[]")
+
+EXISTING_WRITE_UUID=$(echo "$EXISTING_WRITE_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+
+if [ -z "$EXISTING_WRITE_UUID" ]; then
+  echo "[apply-config] creating ticketbrainy-admin-write..."
+  WRITE_CREATE_STATUS=$(curl -s -o /tmp/apply-config-write.out -w '%{http_code}' \
+    -X POST "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "clientId": "ticketbrainy-admin-write",
+      "enabled": true,
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "protocol": "openid-connect"
+    }')
+
+  if [ "$WRITE_CREATE_STATUS" != "201" ]; then
+    echo "[apply-config] WARNING: admin-write client creation returned HTTP ${WRITE_CREATE_STATUS}" >&2
+    cat /tmp/apply-config-write.out >&2 || true
+    # Non-fatal : on log et on continue. Si la création échoue, le
+    # helper TypeScript basculera sur une erreur propre à la prochaine
+    # invocation de team.actions.ts syncKeycloakUsers() et l'opérateur
+    # verra le message dans l'UI. Le reste du script continue pour ne
+    # pas bloquer le boot d'un fresh install.
+    EXISTING_WRITE_UUID=""
+  else
+    # Re-fetch to get the UUID
+    EXISTING_WRITE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+      "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-write")
+    EXISTING_WRITE_UUID=$(echo "$EXISTING_WRITE_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+    echo "[apply-config] ticketbrainy-admin-write created (uuid=${EXISTING_WRITE_UUID})"
+  fi
+else
+  echo "[apply-config] ticketbrainy-admin-write already exists (uuid=${EXISTING_WRITE_UUID})"
+fi
+
+# Assign realm-management WRITE roles to the service account user.
+# Note : `REALM_MGMT_UUID` a été calculé dans Step 6 juste au-dessus —
+# on le réutilise pour éviter un second fetch.
+if [ -n "$EXISTING_WRITE_UUID" ]; then
+  WRITE_SVC_USER_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+    "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_WRITE_UUID}/service-account-user")
+  WRITE_SVC_USER_ID=$(echo "$WRITE_SVC_USER_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+
+  for ROLE in manage-users view-users query-users; do
+    ROLE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+      "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${REALM_MGMT_UUID}/roles/${ROLE}")
+    curl -s -o /dev/null -w '' \
+      -X POST "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/users/${WRITE_SVC_USER_ID}/role-mappings/clients/${REALM_MGMT_UUID}" \
+      -H "Authorization: Bearer ${TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "[${ROLE_JSON}]" || true
+  done
+  echo "[apply-config] ticketbrainy-admin-write roles assigned (manage-users/view-users/query-users)"
+
+  # Publish the secret via the same kc-secrets volume pattern used
+  # for admin-read. `team.actions.ts` reads it from
+  # /data/keycloak-secrets/admin-write-secret.
+  WRITE_SECRET_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+    "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_WRITE_UUID}/client-secret")
+  WRITE_SECRET_VALUE=$(echo "$WRITE_SECRET_JSON" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
+  if [ -n "$WRITE_SECRET_VALUE" ]; then
+    SECRET_DIR="/opt/keycloak-init/secrets"
+    mkdir -p "$SECRET_DIR" 2>/dev/null || true
+    umask 022
+    printf '%s' "$WRITE_SECRET_VALUE" > "${SECRET_DIR}/admin-write-secret.tmp"
+    mv "${SECRET_DIR}/admin-write-secret.tmp" "${SECRET_DIR}/admin-write-secret"
+    chmod 644 "${SECRET_DIR}/admin-write-secret" 2>/dev/null || true
+    echo "[apply-config] KC_ADMIN_WRITE_CLIENT_SECRET written to ${SECRET_DIR}/admin-write-secret"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Step 7 (v1.10.131 hardening P1) — fix M-01 : durcissement du realm master
+# ---------------------------------------------------------------------------
+# Le realm `master` hérite des paramètres par défaut de Keycloak, qui
+# n'activent PAS la protection brute-force. Findings pentest :
+#   M-01 : aucun rate-limit / lockout sur /realms/master/.../token
+#   H-02 : /admin/master/console/ atteignable publiquement (couvert
+#          côté Caddy, mais on ajoute du defense-in-depth ici)
+#
+# On applique sur master un sous-ensemble du hardening ticketbrainy :
+# brute-force protection activée avec les mêmes seuils (5 tentatives,
+# 15 min lockout) + password policy aggressive. On NE PIN PAS
+# frontendUrl (master est LAN-only, request-based detection suffit).
+#
+# v1.10.131 M-02 : admin-cli reste activé pour ROPC parce que ce
+# script lui-même en a besoin au bootstrap (avant que
+# ticketbrainy-admin-write n'existe) et que keycloak-reset-admin.sh
+# (break-glass manuel) l'utilise aussi. La mitigation est la
+# brute-force protection ci-dessous : 5 tentatives → 15 min lockout,
+# ce qui neutralise le credential stuffing / password spraying même
+# si ROPC reste théoriquement ouvert sur admin-cli.
+echo "[apply-config] hardening master realm (brute-force + password policy)..."
+
+MASTER_PAYLOAD='{
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "maxDeltaTimeSeconds": 43200,
+  "quickLoginCheckMilliSeconds": 1000,
+  "passwordPolicy": "length(14) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5)",
+  "sslRequired": "external",
+  "rememberMe": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800
+}'
+
+MASTER_PUT_STATUS=$(curl -s -o /tmp/apply-config-master.out -w '%{http_code}' \
+  -X PUT "${KC_INTERNAL_URL}/admin/realms/master" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$MASTER_PAYLOAD")
+
+if [ "$MASTER_PUT_STATUS" != "204" ]; then
+  # Non-fatal : si le hardening master échoue (permissions, version
+  # Keycloak différente), on log et on continue — le realm principal
+  # ticketbrainy reste correctement configuré.
+  echo "[apply-config] WARNING: master realm hardening PUT returned HTTP ${MASTER_PUT_STATUS}" >&2
+  cat /tmp/apply-config-master.out >&2 || true
+else
+  echo "[apply-config] master realm hardened (brute-force + password policy)"
+fi
+
 echo "[apply-config] OK — Keycloak realm '${KC_REALM}' is hardened"

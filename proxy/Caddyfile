@@ -35,24 +35,68 @@
     }
 
     # Security headers (complements app-level CSP)
+    # v1.10.131 (hardening P1) — HSTS preload + COOP + Permissions-Policy + X-Frame-Options
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
         Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "DENY"
+        Cross-Origin-Opener-Policy "same-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
     }
 }
 
 # Keycloak SSO (required for public SSO login)
 # v1.10.08: The Keycloak admin IP allowlist is now managed from
-# Settings → Security in the TicketBrainy UI. The initial Caddyfile
-# has no remote_ip matcher; when the operator saves a non-empty
-# allowlist in the UI, a server action re-renders this file and
-# hot-reloads Caddy via the admin API. Empty list = no restriction.
+# Settings → Security in the TicketBrainy UI. When the operator saves
+# a non-empty allowlist, the web container re-renders this file and
+# hot-reloads Caddy via the admin API.
+#
+# v1.10.131 (hardening P1) — durcissements bootstrap :
+#   - fix H-02 : blocage inconditionnel de /admin/*, /admin, /realms/master/*
+#     → 404 hard, masque l'existence de la console admin Keycloak aux
+#     scanners. Surchargé par le render dynamique en 403 allowlist si
+#     l'opérateur configure un allowlist IP depuis l'UI.
+#   - fix H-03 : stripping des headers CORS réfléchis par Keycloak en
+#     amont + ré-émission conditionnelle pour l'Origin légitime
+#     uniquement (defense-in-depth en plus du webOrigins realm-level).
 {$KEYCLOAK_DOMAIN} {
+    # v1.10.131 fix H-02 : bloc admin Keycloak (bootstrap statique).
+    # Le render dynamique (via Settings → Security UI) peut remplacer
+    # ce bloc par une allowlist IP en 403, mais par défaut au premier
+    # boot avant toute config UI, on masque complètement l'existence
+    # de l'admin console pour ne pas laisser une fenêtre d'exposition
+    # publique entre `docker compose up` et le premier sync boot du
+    # container web.
+    @kc_admin_hidden {
+        path /admin/* /admin /realms/master/*
+    }
+    respond @kc_admin_hidden 404
+
+    # v1.10.131 fix H-03 : retirer les headers CORS réfléchis par
+    # Keycloak avant d'appliquer notre propre whitelist.
+    header -Access-Control-Allow-Origin
+    header -Access-Control-Allow-Credentials
+    header -Access-Control-Allow-Headers
+    header -Access-Control-Allow-Methods
+    header -Access-Control-Expose-Headers
+
+    # Whitelist CORS : on ré-émet les headers UNIQUEMENT quand la
+    # requête porte un Origin qui correspond exactement à l'origine
+    # publique de ce vhost. Toute autre valeur (y compris null,
+    # https://evil.example, http://localhost:*) se voit refuser le
+    # bonus ACAO+ACAC → le navigateur bloque l'accès cross-origin.
+    @legit_kc_origin header Origin https://{$KEYCLOAK_DOMAIN}
+    header @legit_kc_origin Access-Control-Allow-Origin "https://{$KEYCLOAK_DOMAIN}"
+    header @legit_kc_origin Access-Control-Allow-Credentials "true"
+    header @legit_kc_origin Vary "Origin"
+
     reverse_proxy keycloak:8080
 
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        X-Frame-Options "DENY"
     }
 }
