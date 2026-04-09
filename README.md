@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.05-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.06-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.05` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.06` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.05 polishes the fresh-install UX**: install.sh now spells out the 2 DNS A records required for Caddy mode (one for the app, one for Keycloak) and runs a non-blocking DNS pre-check; the activation wizard pre-fills the license email from what you already gave install.sh (no more retyping); the Admin IP allowlist panel detects your current IP, offers a one-click "Add /32" button, and documents the break-glass procedure inline. **Rolling upgrade:** `docker compose pull && docker compose up -d`.
+> **1.10.06 polishes the Initial Setup checklist**: the "Create Keycloak users" step now opens the Keycloak admin root (so you get the admin login flow) instead of a deep link that bypassed login, and the mailbox step copy clarifies that multiple mailboxes are supported and that the first one added becomes the default SMTP for system notifications. **Rolling upgrade:** `docker compose pull && docker compose up -d`.
 
 ## Requirements
 

@@ -2,6 +2,42 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.06] — 2026-04-09
+
+### Fixed — Initial Setup checklist polish
+
+Two small fixes to the dashboard checklist introduced in v1.10.04,
+caught during the first operator walkthrough.
+
+**Keycloak users step lands on admin login, not a deep link**
+— the step opened
+`https://KEYCLOAK_DOMAIN/admin/ticketbrainy/console/#/ticketbrainy/users`
+directly. That URL bypasses the master realm's admin login flow and
+lands on a blank/broken state because Keycloak can't reconcile the
+requested page with the missing admin session. Changed to just the
+root `https://KEYCLOAK_DOMAIN/` so operators go through the normal
+admin login flow, then navigate to the `ticketbrainy` realm from the
+dropdown (which matches the walkthrough in the step description).
+
+**Mailbox step copy explains multi-mailbox + default SMTP** — the
+step description conflated "ticket reception" and "system
+notifications" without explaining how multiple mailboxes are handled.
+Rewrote to explicitly say:
+
+- You can add several mailboxes
+- The **first mailbox you add** becomes the default SMTP used by the
+  ticketing system for outbound notifications (user invites, password
+  resets, new-ticket alerts)
+
+Both EN and FR copy updated.
+
+### Release mechanics
+
+- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.06` + `:latest`
+- Only `web` has source changes; the other 4 are re-tagged from the
+  matching v1.10.05 builds for lockstep parity
+- 6 version source files bumped 1.10.05 → 1.10.06
+
 ## [1.10.05] — 2026-04-09
 
 ### Added
