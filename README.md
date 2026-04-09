@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.10-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.11-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.10` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.11` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.10 finishes the Caddy admin API origin fix** started in 1.10.09 — the `renderCaddyfile()` function in the web container was still emitting an `admin` block without the `origins` allowlist, so the first successful save silently wiped Caddy's origins and every subsequent save was rejected with `client is not allowed to access from origin 'http://caddy:2019'`. Rolling upgrade only needs a web refresh (bootstrap Caddyfile is unchanged): `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate web`.
+> **1.10.11 ships 4 fresh-install polish fixes** reported on a clean VPS walkthrough: (1) the Initial Setup "Add your first customer" step no longer counts the system catch-all, (2) that catch-all is renamed from "AutresClients" to "Other" for non-French operators, (3) Settings → Deployment pending-changes banner no longer gets stuck after a no-op save, (4) Settings → Security → SSL certificates now actually sees the Let's Encrypt cert (caddy entrypoint shim widens `*.crt` perms so the web container can read them through the `:ro` mount — keys stay 600). **Rolling upgrade:** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate caddy web` (force-recreate caddy picks up the new entrypoint bind mount).
 
 ## Requirements
 

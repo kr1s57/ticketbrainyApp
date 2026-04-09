@@ -2,6 +2,105 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.11] — 2026-04-09
+
+### Fixed — 4 fresh-install polish issues from VPS walkthrough
+
+Four independent bugs reported on a clean v1.10.10 VPS install.
+All shipped in a single lockstep release.
+
+#### 1. Initial Setup checklist — "Add your first customer" was always complete
+
+`db.customer.count()` in the checklist also counted the seeded
+system customer (the catch-all for public-domain emails), so the
+step was auto-completed before the operator had added anyone.
+The query now excludes `isSystem: true` rows.
+
+#### 2. Renamed the catch-all from "AutresClients" to "Other"
+
+The catch-all for orphan tickets from public email domains
+(gmail/hotmail/outlook/…) was named "AutresClients", a
+French-only label that confused non-French operators. It's now
+called "Other" — universally readable across the languages we
+support.
+
+The seed upsert force-renames existing rows on every `up -d`
+(`update: { isSystem: true, name: "Other" }`), so upgrading
+installs rename automatically. No manual SQL needed.
+
+The ticket table previously decided the red system-badge avatar
+via a brittle string comparison `customer.name === "AutresClients"`
+— now switched to `customer.isSystem` which is rename-safe.
+
+#### 3. Deployment pending banner stuck after save
+
+Settings → Deployment → *Save* used to hard-code the client-side
+drift to `true` after every save, so:
+
+- Clicking Save with no actual changes raised a false
+  "Modifications en attente d'application" banner.
+- Even after the operator ran the suggested
+  `docker compose down && up -d`, the banner never cleared
+  without a page refresh.
+
+`saveDeploymentConfig` now re-computes the real drift against
+live env vars post-save and returns it. The form uses that value
+directly — no-op saves no longer raise a false banner, and saves
+that bring the DB back in sync with live env clear an existing
+banner instantly.
+
+#### 4. SSL certificates panel — "No Caddy certificates detected" despite a live cert
+
+Settings → Security → SSL certificates displayed "No Caddy
+certificates detected" even when Caddy was actively serving a
+Let's Encrypt certificate. Root cause:
+
+- Caddy writes every file it creates in 600 mode
+  (`-rw-------` root:root).
+- The web container mounts `caddy-data:/data/caddy:ro` and
+  runs Node.js as `uid 1001 (nextjs)`.
+- `listCaddyCerts()` hit `Permission denied` on every
+  `readdir` under `/data/caddy/caddy/certificates/...` even
+  though the files were right there.
+
+Fix: wrap the caddy container with a small entrypoint shim
+(`proxy/caddy-entrypoint.sh`) that runs a background loop every
+60 seconds and widens perms on PUBLIC cert files only:
+
+```sh
+find /data/caddy/certificates -type d -exec chmod o+rx {} +
+find /data/caddy/certificates -type f -name '*.crt' -exec chmod o+r {} +
+```
+
+Private keys (`*.key`) and ACME metadata (`*.json`) stay 600
+and are never exposed outside the caddy container. The 60s loop
+catches cert renewals too — Caddy re-writes renewed certs in
+600, and the next sweep re-widens them.
+
+### Upgrade from v1.10.10
+
+```bash
+cd ticketbrainyApp
+git pull
+docker compose --profile with-proxy pull
+docker compose --profile with-proxy up -d --force-recreate caddy web
+```
+
+`--force-recreate caddy` is required because `caddy-entrypoint.sh`
+is a new bind mount (the running caddy container must restart to
+pick it up). The seed re-runs automatically via the `migrate`
+service and force-renames "AutresClients" → "Other".
+
+### Release mechanics
+
+- All 5 service images re-tagged + pushed at `v1.10.11` AND
+  `:latest` (lockstep release)
+- 6 version source files bumped 1.10.10 → 1.10.11
+- Public repo additions: `proxy/caddy-entrypoint.sh`,
+  `docker-compose.yml` caddy service now mounts the entrypoint
+
+---
+
 ## [1.10.10] — 2026-04-09
 
 ### Fixed — Keycloak allowlist hot-reload regression loop

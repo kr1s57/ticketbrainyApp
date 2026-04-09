@@ -256,6 +256,12 @@ services:
     image: caddy:2-alpine
     restart: unless-stopped
     profiles: ["with-proxy"]
+    # v1.10.11: custom entrypoint wraps `caddy run` with a background
+    # loop that widens perms on public cert files (*.crt and their
+    # parent dirs) so the web container can display cert expiry info
+    # in Settings → Security. Private keys (*.key) stay 600 — never
+    # exposed. See proxy/caddy-entrypoint.sh for the full rationale.
+    entrypoint: ["/bin/sh", "/etc/caddy/caddy-entrypoint.sh"]
     ports:
       - "80:80"
       - "443:443"
@@ -266,6 +272,7 @@ services:
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./proxy/caddy-entrypoint.sh:/etc/caddy/caddy-entrypoint.sh:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
