@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.06-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.07-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.06` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.07` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.06 polishes the Initial Setup checklist**: the "Create Keycloak users" step now opens the Keycloak admin root (so you get the admin login flow) instead of a deep link that bypassed login, and the mailbox step copy clarifies that multiple mailboxes are supported and that the first one added becomes the default SMTP for system notifications. **Rolling upgrade:** `docker compose pull && docker compose up -d`.
+> **1.10.07 fixes the bootstrap banner contrast** on the `/login` page — the amber-200 text was near-invisible on light theme backgrounds. Now uses `text-amber-900 dark:text-amber-100` so it reads cleanly on both themes. **Rolling upgrade:** `docker compose pull && docker compose up -d`.
 
 ## Requirements
 

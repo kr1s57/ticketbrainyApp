@@ -2,6 +2,30 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.07] — 2026-04-09
+
+### Fixed — Bootstrap banner readable in light theme
+
+The bootstrap-mode banner on the `/login` page used `text-amber-200`
+with no `dark:` variant, which made the text almost invisible on
+a light-theme background (pale yellow on near-white). Dark theme
+was fine.
+
+Now uses a proper light/dark colour pair:
+
+- `bg-amber-100/70 text-amber-900` in light mode
+- `dark:bg-amber-500/5 dark:text-amber-100` in dark mode
+
+And the inline `<code>` elements get a matching split
+(`bg-amber-500/20` / `dark:bg-amber-500/10`).
+
+### Release mechanics
+
+- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.07` + `:latest`
+- Only `web` has source changes; the other 4 are re-tagged from
+  the matching v1.10.06 builds for lockstep parity
+- 6 version source files bumped 1.10.06 → 1.10.07
+
 ## [1.10.06] — 2026-04-09
 
 ### Fixed — Initial Setup checklist polish
