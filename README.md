@@ -6,7 +6,7 @@ Self-hosted customer support platform with AI-powered ticket analysis, multi-mai
 
 > **Latest version:** `1.10.08` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.08 adds a Keycloak admin IP allowlist managed from the UI** (Settings → Security). Separate from the TicketBrainy admin allowlist — this one is enforced by Caddy and protects `/admin/*` and `/realms/master/*` on your Keycloak domain. Saving the list re-renders the Caddyfile and hot-reloads Caddy via its admin API, with zero downtime and no container restart. Survives `docker compose down/up` (re-synced at web boot). **Rolling upgrade:** `docker compose pull && docker compose up -d`.
+> **1.10.08 adds a Keycloak admin IP allowlist managed from the UI** (Settings → Security). Separate from the TicketBrainy admin allowlist — this one is enforced by Caddy and protects `/admin/*` and `/realms/master/*` on your Keycloak domain. Saving the list re-renders the Caddyfile and hot-reloads Caddy via its admin API, with zero downtime and no container restart. Survives `docker compose down/up` (re-synced at web boot). **Rolling upgrade (IMPORTANT — includes `git pull` because this release changes the bind-mounted Caddyfile):** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate caddy web migrate`.
 
 ## Requirements
 
@@ -66,6 +66,25 @@ The installer will guide you through:
 - Keycloak SSO setup (optional)
 - Automatic secret generation
 - Docker image pull and deploy
+
+### Rolling upgrade (existing installs)
+
+Because TicketBrainy bind-mounts files from the repo (`proxy/Caddyfile`,
+`keycloak/apply-config.sh`, `docker-compose.yml`, etc.), a plain
+`docker compose pull` is **not enough** to pick up config-file
+changes in a new release. Always `git pull` first, then pull
+images, then recreate the affected containers:
+
+```bash
+cd ticketbrainyApp
+git pull                                                       # 1. refresh bind-mounted files
+docker compose --profile with-proxy pull                       # 2. fetch new images
+docker compose --profile with-proxy up -d --force-recreate     # 3. recreate everything
+```
+
+If you only recreate `web` (and not `caddy` / `keycloak`), changes
+to their bind mounts won't take effect because the containers
+keep running with the old mount.
 
 At the end, it prints your admin credentials and next steps.
 
