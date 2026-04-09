@@ -257,15 +257,29 @@ for ROLE in view-realm view-users view-events view-identity-providers; do
 done
 echo "[apply-config] ticketbrainy-admin-read roles assigned (view-realm/view-users/view-events/view-identity-providers)"
 
-# Log the client secret ONCE so the operator can copy it to .env
+# Fetch the client secret and publish it to the shared volume so the
+# web container can pick it up automatically. Before v1.10.13 this
+# required a manual copy-from-logs-into-.env + restart dance; the
+# secret is now written to /opt/keycloak-init/secrets/admin-read-secret
+# which is a docker volume (`kc-secrets`) also mounted read-only into
+# the web container at /data/keycloak-secrets. keycloak-admin.ts
+# falls back to reading that file when KC_ADMIN_READ_CLIENT_SECRET
+# is not set in the environment.
 SECRET_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_CLIENT_UUID}/client-secret")
 SECRET_VALUE=$(echo "$SECRET_JSON" | sed -n 's/.*"value":"\([^"]*\)".*/\1/p')
 if [ -n "$SECRET_VALUE" ]; then
-  echo "[apply-config] =============================================="
-  echo "[apply-config] KC_ADMIN_READ_CLIENT_SECRET=${SECRET_VALUE}"
-  echo "[apply-config] (copy this to .env for the web service)"
-  echo "[apply-config] =============================================="
+  SECRET_DIR="/opt/keycloak-init/secrets"
+  mkdir -p "$SECRET_DIR" 2>/dev/null || true
+  # Atomic write: tmp file + rename so the web container never sees
+  # a partially-written secret. 644 perms so uid 1001 (nextjs) can
+  # read it through the read-only mount.
+  umask 022
+  printf '%s' "$SECRET_VALUE" > "${SECRET_DIR}/admin-read-secret.tmp"
+  mv "${SECRET_DIR}/admin-read-secret.tmp" "${SECRET_DIR}/admin-read-secret"
+  chmod 644 "${SECRET_DIR}/admin-read-secret" 2>/dev/null || true
+  echo "[apply-config] KC_ADMIN_READ_CLIENT_SECRET written to ${SECRET_DIR}/admin-read-secret"
+  echo "[apply-config] (web container will pick it up automatically — no .env edit needed)"
 fi
 
 echo "[apply-config] OK — Keycloak realm '${KC_REALM}' is hardened"

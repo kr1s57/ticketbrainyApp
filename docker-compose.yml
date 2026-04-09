@@ -103,6 +103,12 @@ services:
   keycloak-init:
     image: curlimages/curl:8.10.1
     restart: "no"
+    # v1.10.13: run as root so the container can write the admin-read
+    # client secret into the kc-secrets volume that the web container
+    # mounts read-only. Without this override curlimages/curl runs as
+    # uid 100 and can't create files in a root-owned named volume.
+    # The script only does curl + file writes, no network exposure.
+    user: "0:0"
     entrypoint: ["sh", "/opt/keycloak-init/apply-config.sh"]
     environment:
       KC_INTERNAL_URL: http://keycloak:8080
@@ -112,6 +118,12 @@ services:
       MAX_WAIT_SECONDS: 180
     volumes:
       - ./keycloak/apply-config.sh:/opt/keycloak-init/apply-config.sh:ro
+      # v1.10.13: kc-secrets shared volume. apply-config.sh writes the
+      # ticketbrainy-admin-read client secret here after creating the
+      # client; the web container mounts the same volume read-only at
+      # /data/keycloak-secrets and reads the secret automatically. No
+      # more manual "copy from logs into .env and restart" dance.
+      - kc-secrets:/opt/keycloak-init/secrets
     depends_on:
       keycloak:
         condition: service_started
@@ -175,6 +187,12 @@ services:
       # volume on LAN/WAF deployments where Caddy is not used — adapters
       # handle this gracefully and show "No certificates detected".
       - caddy-data:/data/caddy:ro
+      # v1.10.13: read the ticketbrainy-admin-read client secret that
+      # keycloak-init writes on every boot. keycloak-admin.ts loads it
+      # lazily when KC_ADMIN_READ_CLIENT_SECRET env var is empty, so
+      # fresh installs get the Security → Authentication panel working
+      # immediately without any manual .env edit.
+      - kc-secrets:/data/keycloak-secrets:ro
     depends_on:
       db:
         condition: service_healthy
@@ -287,6 +305,7 @@ volumes:
   claude-config:
   caddy-data:
   caddy-config:
+  kc-secrets:
 
 networks:
   internal:

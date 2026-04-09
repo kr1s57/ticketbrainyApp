@@ -2,6 +2,80 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.13] — 2026-04-10
+
+### Fixed — KC_ADMIN_READ_CLIENT_SECRET auto-wired on fresh install
+
+Reported on a clean v1.10.11 VPS install. Settings → Security →
+Authentication panel showed:
+
+> Unable to reach Keycloak — check ticketbrainy-admin-read
+> client credentials. KC_ADMIN_READ_CLIENT_SECRET is not set
+
+Before v1.10.13, the fresh-install flow for this panel required
+a **3-step manual dance** no operator actually does:
+
+1. `keycloak-init` creates the `ticketbrainy-admin-read` client
+   on first boot and prints the client secret in its logs.
+2. Operator reads the logs, finds the secret, copies it into
+   `.env` as `KC_ADMIN_READ_CLIENT_SECRET=...`.
+3. Operator restarts the web container to pick up the new env.
+
+Step 2 never happened on real installs — the Security page just
+stayed broken indefinitely.
+
+#### Fix — shared volume bridge
+
+`keycloak-init` now writes the secret atomically to a new docker
+named volume (`kc-secrets`) that the web container mounts
+read-only at `/data/keycloak-secrets`. `keycloak-admin.ts`
+lazy-reads the secret from the file when the env var is empty,
+so fresh installs work out of the box.
+
+Touched files:
+
+- **`keycloak/apply-config.sh`** — after fetching the secret
+  from Keycloak, atomically writes it to
+  `/opt/keycloak-init/secrets/admin-read-secret` (tmp file +
+  rename, 644 perms so `uid 1001 (nextjs)` can read).
+- **`docker-compose.yml`** — new `kc-secrets` volume.
+  `keycloak-init` now runs as `user: "0:0"` (root) and mounts
+  it `:rw`; `web` mounts it `:ro`.
+- **`apps/web/src/lib/security/keycloak-admin.ts`** *(private
+  repo)* — new `loadClientSecret()` helper that prefers the env
+  var and falls back to the file, caches on first success.
+
+#### Backward compatible
+
+Operators who already set `KC_ADMIN_READ_CLIENT_SECRET` in their
+`.env` keep their workflow — the env var takes precedence over
+the file. The fallback only fires when the env var is
+unset/empty.
+
+### Upgrade from v1.10.12
+
+```bash
+cd ticketbrainyApp
+git pull
+docker compose --profile with-proxy pull
+docker compose --profile with-proxy up -d --force-recreate keycloak-init web
+```
+
+`--force-recreate keycloak-init` is required so it picks up the
+new `apply-config.sh` logic, the root user override, and the
+`kc-secrets` mount. `web` recreate picks up the new volume
+mount and the updated `keycloak-admin.ts`.
+
+### Release mechanics
+
+- All 5 service images re-tagged + pushed at `v1.10.13` AND
+  `:latest` (lockstep release)
+- 6 version source files bumped 1.10.12 → 1.10.13
+- Public repo changes: `docker-compose.yml` +
+  `keycloak/apply-config.sh`
+
+---
+
 ## [1.10.12] — 2026-04-09
 
 ### Improved — Deployment banner UX (per-field drift + revert)

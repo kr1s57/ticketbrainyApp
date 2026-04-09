@@ -1,12 +1,12 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.12-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.13-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.12` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.13` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.12 polishes the Deployment banner UX** (follow-up to 1.10.11 #3). The "Configuration changes pending" banner now lists exactly which fields diverge between the DB and the running container (saved value vs live value per field) and ships a one-click **"Revert to running config"** button that resets the form to the live values and saves — banner clears instantly, no docker restart needed. Useful when you saved a form test you didn't mean to persist. **Rolling upgrade (web-only):** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate web`.
+> **1.10.13 auto-wires `KC_ADMIN_READ_CLIENT_SECRET` on fresh install.** Before this release Settings → Security → Authentication showed "Unable to reach Keycloak" on every clean VPS install because the operator had to manually copy the secret from `keycloak-init` logs into `.env` and restart the web container. `keycloak-init` now writes the secret into a shared docker volume (`kc-secrets`) that the web container mounts read-only, and `keycloak-admin.ts` falls back to reading the file when the env var is empty — zero manual steps. **Rolling upgrade:** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate keycloak-init web`.
 
 ## Requirements
 
