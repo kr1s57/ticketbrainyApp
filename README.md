@@ -1,20 +1,47 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.04-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.05-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.04` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.05` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.04 adds an Initial Setup checklist** to the dashboard, walking operators through the 5 must-do steps after a fresh install (mailbox, Keycloak users, language, customers, theme). Each step auto-detects its completion state from the database and provides a clickable link to the right settings page. Also fixes the Analytics / Reports lock screens which still referenced the decommissioned "Analytics Pro" plugin (features are now in the Enterprise Pack). **Rolling upgrade:** `docker compose pull && docker compose up -d`.
+> **1.10.05 polishes the fresh-install UX**: install.sh now spells out the 2 DNS A records required for Caddy mode (one for the app, one for Keycloak) and runs a non-blocking DNS pre-check; the activation wizard pre-fills the license email from what you already gave install.sh (no more retyping); the Admin IP allowlist panel detects your current IP, offers a one-click "Add /32" button, and documents the break-glass procedure inline. **Rolling upgrade:** `docker compose pull && docker compose up -d`.
 
 ## Requirements
+
+### Host
 
 - **Docker** 24+ and **Docker Compose** v2+
 - **2 CPU / 4 GB RAM** minimum (8 GB recommended)
 - **10 GB** disk space
-- A domain name with HTTPS (via reverse proxy)
-- Outbound HTTPS access to `license.ticketbrainy.com`
+- Outbound HTTPS access to `license.ticketbrainy.com` (license server)
+
+### DNS & Ports (Caddy mode only — skip if you already have a reverse proxy)
+
+For production exposure with managed HTTPS, you need **two DNS A records**
+both pointing at the same VPS public IP:
+
+| Record | Example | Purpose |
+|---|---|---|
+| `<app-domain>` | `support.example.com` | TicketBrainy UI |
+| `<keycloak-domain>` | `auth.example.com` | Keycloak SSO + admin console |
+
+Both records resolve to the same server — Caddy dispatches requests to
+the right backend based on the `Host` header. You need them **separate**
+because Keycloak's OIDC redirect URIs require it to live on its own
+origin (trying to put both on the same hostname breaks the SSO flow).
+
+Required open ports:
+
+| Port | Direction | Why |
+|---|---|---|
+| 80 | inbound | Let's Encrypt HTTP-01 ACME challenge |
+| 443 | inbound | HTTPS traffic (both UI and SSO) |
+
+`install.sh` runs a non-blocking DNS pre-check — if either domain
+doesn't resolve to the server yet, it warns you but lets you continue
+(Caddy will obtain the cert as soon as DNS propagates).
 
 ## Quick Start — Interactive Installer
 

@@ -47,11 +47,25 @@
 
 **Pre-requisites:**
 - Public VPS with IPv4 / IPv6
-- Domain name with A/AAAA record pointing at the VPS
-- Ports 80 and 443 open to the Internet
+- **Two DNS A records** both pointing at the same VPS IP:
+  - `<app-domain>` — e.g. `support.example.com` — serves the TicketBrainy UI
+  - `<keycloak-domain>` — e.g. `auth.example.com` — serves the Keycloak
+    admin console and SSO endpoints
+  - Caddy dispatches requests to the right backend based on the `Host` header,
+    so both records resolve to the same IP address. You need both: one for
+    your users, one for the identity provider. Trying to put both on the
+    same hostname doesn't work because Keycloak needs its own origin for
+    OIDC redirect URIs.
+- Ports 80 and 443 open to the Internet (Caddy listens on both — 80 for the
+  ACME HTTP-01 challenge, 443 for TLS traffic)
 - Email address for Let's Encrypt registration
+- Outbound HTTPS access from the VPS to `acme-v02.api.letsencrypt.org`
 
-**Activation:** Go to Settings → Deployment → enable Caddy → fill in domain + email → download and apply the generated Caddyfile + docker-compose override.
+**Activation:** run `bash install.sh` from the repo root. The installer
+asks for both domains in sequence and runs a non-blocking DNS pre-check
+that warns if either domain doesn't resolve to the server yet — you can
+still continue the install and fix DNS afterwards, Caddy will obtain the
+cert as soon as the DNS propagates.
 
 **Recommended security toggles:**
 - ✅ Audit logging
@@ -78,6 +92,39 @@ the implications.
 - ✅ Upload rate-limit
 - ✅ Login anomaly detection
 - ⚠️ Admin IP allowlist — **strongly recommended**, configure before exposing the admin routes
+
+## Admin IP allowlist — what to put there
+
+The **Settings → Security → Admin IP allowlist** panel restricts the
+admin-only pages (`/settings/*`, `/api/admin/*`) to specific source
+IPs or CIDR ranges. Regular ticket agents and end-users are NOT
+affected — only the admin surface.
+
+**The panel auto-detects your current IP** (shown in a blue banner at
+the top) and gives you a one-click "Add /32" button to insert it into
+the list before saving. Use that to prevent the most common self-lockout.
+
+**What to enter:**
+
+- **One IP or CIDR per line**, no commas
+- **`203.0.113.45/32`** — a single admin workstation (most common for
+  solo operators). Good if your office IP is stable; risky if you're
+  on a residential ISP with a dynamic IP
+- **`192.168.1.0/24`** — an entire office subnet (use this if multiple
+  admins share the same network)
+- **`203.0.113.0/24`** — an entire provider CIDR range (use if your
+  corporate ISP gives you a static range but rotates within it)
+
+**Leave it empty** to disable the restriction entirely. This is the
+recommended setting for the first week of operation — use that time
+to identify your stable admin IPs, then tighten the list. Authentication
+(local accounts + Keycloak SSO) still protects every page when the
+allowlist is empty.
+
+**Residential ISPs (dynamic IP):** don't enable the allowlist. Your IP
+will change at the next modem reboot or lease renewal, and you'll lock
+yourself out. Prefer WAF-level IP restrictions at your upstream firewall
+or use Keycloak's brute-force protection + password policy instead.
 
 ## Break-glass procedure (admin IP allowlist lockout)
 

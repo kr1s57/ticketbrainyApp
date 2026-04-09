@@ -165,6 +165,9 @@ services:
       APP_PORT: ${APP_PORT:-4000}
       KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+      # v1.10.05: pre-fill the /activate wizard's email field so the
+      # operator doesn't re-type what install.sh already captured.
+      LICENSE_EMAIL: ${LICENSE_EMAIL:-}
     volumes:
       - app-data:/data
       - claude-config:/home/nextjs/.claude

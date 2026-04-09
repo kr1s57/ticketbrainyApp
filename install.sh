@@ -128,8 +128,15 @@ echo "     Good for LAN deployments, development, or behind an existing"
 echo "     reverse proxy / WAF (you handle HTTPS externally)."
 echo ""
 echo -e "  ${BOLD}B)${NC} Caddy — built-in reverse proxy with automatic Let's Encrypt HTTPS"
-echo "     Your server must have ports 80/443 open and your domain must"
-echo "     already resolve to this server via a DNS A record."
+echo ""
+echo -e "     ${YELLOW}${BOLD}Prerequisites for mode B:${NC}"
+echo -e "     ${YELLOW}  • Ports 80 and 443 open on the server firewall${NC}"
+echo -e "     ${YELLOW}  • TWO DNS A records pointing at this server's public IP:${NC}"
+echo -e "     ${YELLOW}      1. <app-domain>      (e.g. support.example.com)${NC}"
+echo -e "     ${YELLOW}      2. <keycloak-domain> (e.g. auth.example.com)${NC}"
+echo -e "     ${YELLOW}    — the app domain serves the TicketBrainy UI${NC}"
+echo -e "     ${YELLOW}    — the keycloak domain serves the SSO / admin console${NC}"
+echo -e "     ${YELLOW}    — both domains share the same server IP (Caddy dispatches by Host)${NC}"
 echo ""
 read -rp "Mode [A/B] (default A): " MODE
 MODE=${MODE:-A}
@@ -158,6 +165,27 @@ if [ "$MODE" = "B" ]; then
   LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-$LICENSE_EMAIL}
 fi
 print_success "Mode: $([ "$USE_CADDY" = true ] && echo "Caddy + Let's Encrypt (${APP_DOMAIN})" || echo "Direct (http://${SERVER_IP}:4000)")"
+
+# v1.10.05: DNS pre-check (non-blocking) — if the operator entered a
+# domain that doesn't resolve to this server yet, print a clear warning
+# and give them a chance to abort. Caddy would still try to obtain the
+# certificate but the first few minutes post-install would look broken.
+check_dns_match() {
+  local domain="$1"
+  local label="$2"
+  local resolved
+  resolved=$(getent hosts "$domain" 2>/dev/null | awk '{print $1; exit}' || true)
+  if [ -z "$resolved" ]; then
+    print_warning "${label} (${domain}) does not resolve — Let's Encrypt will fail until you add a DNS A record pointing at ${SERVER_IP}"
+    return 1
+  fi
+  if [ "$resolved" != "$SERVER_IP" ]; then
+    print_warning "${label} (${domain}) resolves to ${resolved}, not this server (${SERVER_IP}) — Let's Encrypt may fail the HTTP-01 challenge"
+    return 1
+  fi
+  print_success "${label} (${domain}) → ${resolved} ✓"
+  return 0
+}
 
 # ── Step 4 — LAN access ────────────────────────────────────────────────
 print_header "Step 4/5 — LAN access control"
@@ -252,6 +280,12 @@ print_step "Writing configuration values"
 set_env "APP_URL"   "$APP_URL"
 set_env "APP_PORT"  "4000"
 set_env "LAN_HOSTS" "$LAN_HOSTS_VALUE"
+# v1.10.05: Persist LICENSE_EMAIL into .env so the activate wizard can
+# pre-fill it. Avoids the "I'm repeating myself" friction — the operator
+# already told us the license email, they shouldn't have to retype it in
+# the browser. The wizard still renders the form so the operator can
+# confirm/edit before clicking Activate — we don't auto-submit.
+set_env "LICENSE_EMAIL" "$LICENSE_EMAIL"
 
 if [ "$ENABLE_KC" = "Y" ]; then
   set_env "KEYCLOAK_URL" "$KEYCLOAK_URL_VALUE"
@@ -273,6 +307,37 @@ if [ "$USE_CADDY" = true ]; then
   set_env "KC_BIND" "127.0.0.1"
 fi
 print_success ".env written"
+
+# v1.10.05: DNS pre-check — now that both domains are known and the
+# operator hasn't started docker yet, verify each domain resolves to
+# this server. Warn + prompt rather than block — some operators set
+# up DNS after the install (e.g. they need the server IP first), and
+# we don't want to hard-stop them from finishing configuration.
+if [ "$USE_CADDY" = true ]; then
+  print_header "DNS pre-check"
+  DNS_ISSUES=0
+  check_dns_match "$APP_DOMAIN" "App domain" || DNS_ISSUES=$((DNS_ISSUES + 1))
+  if [ -n "$KEYCLOAK_DOMAIN" ]; then
+    check_dns_match "$KEYCLOAK_DOMAIN" "Keycloak domain" || DNS_ISSUES=$((DNS_ISSUES + 1))
+  fi
+  if [ "$DNS_ISSUES" -gt 0 ]; then
+    echo ""
+    echo -e "${YELLOW}${BOLD}${DNS_ISSUES} domain(s) above have DNS issues.${NC}"
+    echo -e "${YELLOW}Caddy will keep trying to obtain a Let's Encrypt cert every few"
+    echo -e "minutes in the background — it will work as soon as DNS is correct."
+    echo -e "You can continue the install and fix DNS after. Set the A record to:"
+    echo -e "${NC}"
+    echo -e "    ${BOLD}${SERVER_IP}${NC}"
+    echo ""
+    read -rp "Continue the install anyway? [Y/n]: " DNS_CONTINUE
+    DNS_CONTINUE=${DNS_CONTINUE:-Y}
+    if [ "$(echo "$DNS_CONTINUE" | tr '[:lower:]' '[:upper:]')" = "N" ]; then
+      echo ""
+      print_error "Install aborted — fix DNS and re-run bash install.sh"
+      exit 1
+    fi
+  fi
+fi
 
 # ── Pull + up ──────────────────────────────────────────────────────────
 print_header "Deploying the stack"

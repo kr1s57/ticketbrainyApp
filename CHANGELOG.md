@@ -2,6 +2,76 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.05] — 2026-04-09
+
+### Added
+
+**DNS prerequisites spelled out + pre-check** — `install.sh` now
+explicitly lists the two DNS A records required for Caddy mode
+(one for the app, one for Keycloak) in the mode B description,
+and runs a non-blocking DNS resolution check after both domains
+are captured. If either domain doesn't resolve or points somewhere
+else, you get a clear warning and a confirmation prompt — you can
+continue the install and fix DNS afterwards (Caddy keeps trying
+the ACME challenge in the background). `docs/DEPLOYMENT-MODES.md`
+has a new prerequisites table explaining why two records are
+needed (Keycloak's OIDC redirect URIs require its own origin).
+
+**Activation wizard pre-fills from install.sh** — the license
+email you typed at the terminal is now persisted to `.env`,
+passed to the web container via docker-compose, and read by the
+server component of `/activate` so step 1 renders with the email
+pre-populated. You still confirm before clicking "Activate" —
+we don't auto-submit, you stay in control — but there's no more
+retyping the same address in the browser. Prevents the typo-driven
+"two fresh-deploy devices" issue on VigilanceKey.
+
+**Admin IP allowlist panel — inline help + current-IP quick-insert**
+The Settings → Security → Admin IP allowlist panel has three new
+UX improvements:
+
+1. An inline help block at the top explaining the format (one
+   IP/CIDR per line), concrete examples (`/32` for a single
+   workstation, `/24` for an office subnet), and that an empty
+   list is a valid first-run setting (auth still protects the
+   pages).
+
+2. The server component now reads `x-forwarded-for` from the
+   current request and passes your current IP to the form. A
+   blue banner displays the detected IP and a one-click "Add /32"
+   button inserts it into the textarea. Prevents self-lockout.
+
+3. A break-glass procedure block documents
+   `SECURITY_ALLOWLIST_BYPASS=true` as the documented emergency
+   recovery path, with the exact 2-command sequence to run on
+   the server.
+
+`docs/DEPLOYMENT-MODES.md` has a new "Admin IP allowlist — what
+to put there" section with guidance for residential ISPs with
+dynamic IPs (don't enable it; use WAF-level restrictions at your
+upstream firewall instead).
+
+### Upgrade notes
+
+Standard rolling upgrade:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+If you're upgrading from v1.10.02 or earlier and want to take
+advantage of the wizard pre-fill on an already-activated instance,
+there's nothing to do — the feature only kicks in on fresh
+installs, your existing `.env` is untouched.
+
+### Release mechanics
+
+- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.05` + `:latest`
+- Only `web` has source changes; the other 4 are re-tagged from
+  the matching v1.10.04 builds for lockstep parity
+- 6 version source files bumped 1.10.04 → 1.10.05
+
 ## [1.10.04] — 2026-04-09
 
 ### Added — Initial Setup checklist on the dashboard
