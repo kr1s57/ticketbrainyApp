@@ -2,6 +2,27 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1443] — 2026-04-11
+
+### Added — Ticket Notifications
+
+- **Toast alerts** — when a new ticket arrives or a customer replies, a
+  toast notification appears in the top-right corner with the ticket title
+  and a "Voir" button to jump straight to the ticket.
+- **Bell badge** — the notification bell in the header now shows real-time
+  unread count that updates every 30 seconds (aligned with IMAP polling).
+- **Smart routing** — new tickets notify all admins and supervisors;
+  customer replies notify the assigned agent (or admins if unassigned).
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.1442] — 2026-04-11
 
 ### Added — Email Authentication Badges + Attachment Warning
