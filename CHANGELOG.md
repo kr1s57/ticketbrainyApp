@@ -2,6 +2,32 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1444] — 2026-04-11
+
+### Added — Spam Management Module
+
+- **Spam detection** — incoming emails are scored using upstream MTA
+  headers (Exchange SCL, Forefront anti-spam, SpamAssassin). Emails
+  flagged as spam are automatically routed to the Spam folder with no
+  auto-reply sent to the sender.
+- **Whitelist / Blacklist** — manage email addresses and domains in
+  Settings → Spam. Customer domains are automatically whitelisted.
+  Blacklisted senders are silently blocked (no ticket created) with
+  a detailed notification to admins.
+- **Spam folder** — sidebar badge shows spam count. Each spam ticket
+  has a "Legitimate" button (moves to inbox + auto-whitelists sender)
+  and a "Delete" button.
+- Available in all 5 languages (EN/FR/ES/IT/DE).
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.1443] — 2026-04-11
 
 ### Added — Ticket Notifications
