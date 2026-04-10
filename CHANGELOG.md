@@ -2,6 +2,52 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.142] — 2026-04-11
+
+### Added — Rate-Limit UI + Analytics Deltas + Telegram Security Alerts + Draft Cleanup
+
+#### Rate-Limit Configuration UI
+
+New page under Settings → Deploy & Security → Rate Limits. Operators can
+now adjust the 6 rate-limit presets (login, AI, CSAT, upload, activate)
+from the UI instead of hardcoded values. Each preset can be enabled/disabled,
+with configurable max requests and window duration. Changes stored in
+`SecuritySettings.rateLimitConfig` JSON with 60-second cache.
+
+#### Analytics Period Comparison
+
+KPI cards on the Overview and SLA tabs now show comparison deltas (▲/▼)
+against the previous period. For example, if viewing 30 days, the delta
+compares against the 30 days before that. Response time deltas use
+inverted colors (green when faster). CSAT already had this feature.
+
+#### Telegram Security Alerts
+
+Real-time security event notifications via Telegram. The bot now
+subscribes to a `security:alert` Redis channel and sends formatted
+alerts for: honeypot hits, IP auto-blocks, geo-blocks, and auth
+failures (3+ in 5min from same IP). Each alert includes inline
+keyboard buttons to mute by event type (1h/6h/24h/permanent) or
+by IP. Mute configuration stored in the Setting table. Four new
+routing toggles added to Settings → Telegram.
+
+#### Draft Cleanup Scheduler
+
+New scheduler in the mail-service that runs every 6 hours and
+hard-deletes draft messages (`isDraft=true`) older than 48 hours.
+Prevents abandoned drafts from accumulating in the database.
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+No schema migration — all features use existing tables.
+
 ## [1.10.141] — 2026-04-11
 
 ### Added — Security Dashboard + Reports v2
