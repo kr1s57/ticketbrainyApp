@@ -2,6 +2,68 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1312] — 2026-04-10
+
+### Docs — upgrade gotcha + Keycloak admin posture guidance
+
+Doc-only patch. Surfaces two learnings from the v1.10.131 rollout
+on a production VPS that would have silently broken the hardening
+otherwise.
+
+#### Upgrade must use `--force-recreate`
+
+The v1.10.131 fixes live in two bind-mounted files:
+`proxy/Caddyfile` (Caddy reverse proxy config) and
+`keycloak/apply-config.sh` (Keycloak realm hardener). When you
+run `git pull && docker compose pull && docker compose up -d`,
+Compose **only recreates services whose image changed**. The
+`caddy:2` and `curlimages/curl` images used by `caddy` and
+`keycloak-init` are stable, so **those two containers keep
+running with their previous in-memory config**, silently
+ignoring the updated bind-mounted files.
+
+**Symptom:** your pentest shows the hardening isn't active
+(admin console still reachable, CORS still wildcard, BFP still
+off on the master realm), even though the files on disk are
+up to date and the web container is running the new version.
+
+**Fix:** always upgrade with:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+Or restart the two bind-mount consumers explicitly:
+
+```bash
+docker compose restart caddy keycloak-init
+```
+
+`docs/deployment-modes.md` now opens with a prominent
+"Upgrading from a previous version — READ FIRST" section that
+calls this out explicitly.
+
+#### Keycloak admin posture — by order of preference
+
+The v1.10.131 hardening left the Keycloak admin console
+reachable for allowlisted IPs so that self-hosted operators
+without a VPN or bastion can still access `/admin/master/console/`
+from their office network. This is a deliberate trade-off and
+`docs/deployment-modes.md §Keycloak admin IP allowlist` now
+documents the preferred order:
+
+1. **VPN / bastion / LAN** — best. The admin console should
+   ideally never be reachable from the public Internet.
+2. **Allowlist IP** — pragmatic fallback. `/admin/*` and
+   `/realms/master/*` return 404 for non-allowlisted IPs
+   (masks the existence of the console from scanners).
+3. **Neither** — acceptable only if paired with strong
+   `KC_ADMIN_PASSWORD` + Brute Force Protection (which v1.10.131
+   applies automatically on the master realm).
+
+No code changes — pure documentation patch. Images rebuilt
+through `release-lockstep.sh` for lockstep discipline.
+
 ## [1.10.131] — 2026-04-10
 
 ### Security — blackbox pentest hardening (6 fixes)
