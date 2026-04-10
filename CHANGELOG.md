@@ -36,10 +36,19 @@ to preserve operator bookmarks.
 
 A new feature under `/settings/deploy-security/geo-block` lets the
 operator block or allow visitors based on their country of origin.
-The lookup is powered by an offline MaxMind GeoLite2-Country database
-bundled inside the `web` Docker image — no outbound network call,
-no API key required, and the policy is hot-reloadable from the UI
+The lookup is powered by the `CF-IPCountry` header injected by
+Cloudflare on every proxied request (~99.9% accuracy). Cloudflare
+free plan is sufficient. The policy is hot-reloadable from the UI
 without restarting any container.
+
+> **Cloudflare (free plan) is required** for Geo Block to work.
+> See [docs/cloudflare-setup.md](docs/cloudflare-setup.md) for
+> step-by-step instructions (3 scenarios: VPS+Caddy, behind WAF,
+> WAF without Cloudflare via `X-Country-Code` header).
+>
+> The previous GeoLite2 MMDB approach was removed — the free MaxMind
+> database misclassified too many European IPs (Luxembourg resolved
+> as FR/DE/US), making the feature unreliable in production.
 
 Two modes:
 - **Denylist** — allow everyone except listed countries (e.g. block
@@ -66,9 +75,11 @@ review. The Geo Block page surfaces a 24-hour stats widget with the
 top blocked countries.
 
 Tech notes for operators upgrading:
-- The MMDB file lives at `/app/apps/web/data/GeoLite2-Country.mmdb`
-  inside the `web` container. It can be updated independently by
-  mounting a newer version via the `GEOIP_MMDB_PATH` env var.
+- Geo Block requires Cloudflare proxy (orange cloud) enabled on your
+  DNS records. Without the `CF-IPCountry` header, the feature is
+  disabled and the UI shows a red "Cloudflare requis" banner.
+- Operators behind a WAF without Cloudflare can configure their WAF
+  to inject `X-Country-Code` as an alternative (see cloudflare-setup.md).
 - Schema migration adds `geoBlockEnabled`, `geoBlockMode`,
   `geoBlockCountries`, `geoBlockSetAt`, `geoBlockSetBy` to
   `SecuritySettings`. Default `geoBlockEnabled=false`, so the

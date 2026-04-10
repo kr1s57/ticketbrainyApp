@@ -103,6 +103,7 @@ docker compose restart caddy keycloak-init
 - ✅ Magic-bytes validation
 - ✅ Login anomaly detection (defense in depth)
 - 💡 Admin IP allowlist (optional — your WAF may already do this)
+- 💡 Geo Block — requires Cloudflare upstream or WAF injecting `X-Country-Code` (see [Cloudflare Setup Guide](cloudflare-setup.md))
 - ❌ Upload rate-limit (WAF should already rate-limit)
 
 ## Mode `vps-caddy` — VPS with managed Caddy
@@ -135,6 +136,7 @@ cert as soon as the DNS propagates.
 - ✅ Upload rate-limit
 - ✅ Login anomaly detection
 - 💡 Admin IP allowlist (strongly suggested — your app is Internet-facing)
+- 💡 Geo Block — add Cloudflare (free) in front of the VPS for country-level blocking (see [Cloudflare Setup Guide](cloudflare-setup.md))
 
 ## Mode `vps-naked` — VPS direct (advanced)
 
@@ -390,6 +392,24 @@ On a fresh deploy you have two login paths:
 If you are on a pre-v1.10.01 build and every SSO page throws 403 or
 "User not found" — upgrade. The earlier first-admin check was broken
 and left SSO users inactive with a half-constructed session.
+
+## Geo Block — Cloudflare requirement
+
+The **Geo Block** feature (Settings → Deploy & Security → Geo Block) lets
+you restrict access by country. It relies on the `CF-IPCountry` header
+that Cloudflare injects into every proxied request.
+
+**Cloudflare (free plan) is required** for Geo Block to work. Without it,
+the feature is disabled and the UI shows a red "Cloudflare requis" banner.
+
+| Mode | Geo Block available? | Setup needed |
+|---|---|---|
+| `behind-waf` | ✅ Yes — add Cloudflare upstream of your WAF, or configure your WAF to inject `X-Country-Code` | See [Cloudflare Setup Guide](cloudflare-setup.md) scenarios 2 & 3 |
+| `vps-caddy` | ✅ Yes — add Cloudflare in front of the VPS | See [Cloudflare Setup Guide](cloudflare-setup.md) scenario 1 |
+| `none` | ❌ No — LAN-only, no Cloudflare | N/A |
+| `vps-naked` | ⚠️ Only if your custom proxy injects `X-Country-Code` | Manual WAF configuration required |
+
+For step-by-step instructions, see **[docs/cloudflare-setup.md](cloudflare-setup.md)**.
 
 ## What's NOT in phase 1
 
