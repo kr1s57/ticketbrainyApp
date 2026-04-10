@@ -2,6 +2,59 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.141] — 2026-04-11
+
+### Added — Security Dashboard + Reports v2
+
+#### Security Dashboard
+
+New page under Settings → Deploy & Security → Dashboard showing real-time
+security metrics:
+
+- **KPI row:** Events (24h), Blocked IPs, Blocked Countries, Honeypot Hits
+- **Event timeline:** Stacked area chart showing security events by hour
+  (auth failures, geo blocks, honeypot hits, IP auto-blocks)
+- **Top blocked IPs:** Table with reason, hit count, expiration, country
+- **Top blocked countries:** Horizontal bar chart (requires Geo Block)
+- **Critical events feed:** Last 20 danger-severity events
+
+No license required — operational security feature available to all.
+
+#### Reports v2 — Statistiques refondues
+
+The sidebar is consolidated: a single "Statistiques" item replaces the
+former "Statistiques" + "Rapports" entries. The analytics section now
+uses internal tab navigation with four tabs:
+
+- **Vue d'ensemble** — existing dashboard with a new period selector
+  (7 days / 30 days / 90 days) replacing the hardcoded 30-day view
+- **SLA** — new tab with SLA compliance metrics: compliance by priority,
+  breach trend, response time distribution histogram, resolution time
+  distribution histogram, and tickets-in-breach table
+- **Satisfaction** — new tab with CSAT analytics: average score, star
+  distribution, trend over time, top agents by satisfaction, and
+  lowest-rated tickets
+- **Rapports** — existing reports table, now integrated as a tab
+
+All analytics tabs require Enterprise Pack license.
+
+#### Feature gating fix
+
+The reports page now checks `analytics_reports` (not `analytics_dashboard`)
+for its feature gate, matching the Enterprise Pack feature registry.
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+No schema migration in this release — all features use existing tables
+(AuditLog, IpBlocklist, SecuritySettings, Ticket, SlaPolicy, CsatResponse).
+
 ## [1.10.14] — 2026-04-10
 
 ### Added — Settings restructure + Geo Block + security hardening Phase 2
