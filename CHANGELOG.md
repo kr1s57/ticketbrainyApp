@@ -2,6 +2,35 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.144] — 2026-04-11
+
+### Added — Multilanguage Support (Spanish, Italian, German)
+
+TicketBrainy now supports 5 languages: English, French, Spanish, Italian,
+and German. Users choose their language in Settings → Language.
+
+- **i18n architecture refactored** — the monolithic 137 KB translations
+  file is now split into per-language files (`locales/{en,fr,es,it,de}.ts`),
+  improving maintainability and git diff readability
+- **1358 keys translated** into each new language via AI, with automatic
+  English fallback for any approximate translations
+- **Date formatting localised** — all dates throughout the application
+  (analytics charts, reports, ticket timestamps) now format in the user's
+  chosen language instead of hardcoded French/English
+- **Default language:** English (unchanged). Each operator can switch in
+  Settings → Language
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+No schema migration — locale is stored client-side in localStorage.
+
 ## [1.10.143] — 2026-04-11
 
 ### Added — System Clock Diagnostic
