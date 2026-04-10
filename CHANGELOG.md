@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.143] — 2026-04-11
+
+### Added — System Clock Diagnostic
+
+New card in Settings → General showing real-time system clock status:
+server time, timezone, UTC offset, database time, and clock drift
+between Node.js and PostgreSQL. Drift alerts at 2s (warning) and
+5s (critical) — important for Keycloak token validation.
+
+New CLI script `scripts/configure-time.sh` for interactive timezone
+and NTP management via SSH (show status, change timezone, force NTP
+sync, configure NTP server).
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.142] — 2026-04-11
 
 ### Added — Rate-Limit UI + Analytics Deltas + Telegram Security Alerts + Draft Cleanup
