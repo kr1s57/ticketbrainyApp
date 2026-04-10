@@ -2,6 +2,30 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1442] — 2026-04-11
+
+### Added — Email Authentication Badges + Attachment Warning
+
+- **SPF / DKIM / DMARC badges** — every inbound email message now displays
+  3 small colour-coded badges showing the authentication status of the
+  sender's email server. Green = pass, red = fail, grey = not available.
+  Tooltips explain what each protocol checks. Visible to all roles.
+- **Attachment warning badge** — if the magic-bytes scan detects that a
+  file's content does not match its declared extension (e.g., an `.exe`
+  disguised as `.pdf`), an orange "Suspect" badge appears next to the
+  attachment filename with the detection reason in a tooltip.
+- **Purely informational** — no emails are blocked, no attachments are
+  rejected. The badges help agents assess email legitimacy at a glance.
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.144] — 2026-04-11
 
 ### Added — Multilanguage Support (Spanish, Italian, German)
