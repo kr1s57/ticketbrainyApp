@@ -1,11 +1,4 @@
-###############################################################################
-#  TicketBrainy — Production Docker Compose
-#  Copy .env.example to .env, fill in your values, then:
-#    docker compose up -d
-###############################################################################
-
 services:
-  # ── Database ────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -24,7 +17,6 @@ services:
     networks:
       - internal
 
-  # ── Cache & Queues ──────────────────────────────────────────
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -39,33 +31,30 @@ services:
     networks:
       - internal
 
-  # ── Database Migrations + Seed (runs once, then exits) ───────
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-migrate:latest
-    # Apply schema then seed the admin user. Without this command override
-    # the image falls back to the base node CMD and exits without running
-    # migrations — which leaves the DB empty and login returns 401.
-    command: sh -c "cd /app/apps/web && npx prisma db push --schema=prisma/schema.prisma && npx tsx prisma/seed.ts"
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: builder
+    command: sh -c "cd apps/web && npx prisma db push"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
     networks:
       - internal
     restart: "no"
+    pull_policy: build
 
-  # ── SSO (Keycloak) ─────────────────────────────────────────
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     restart: unless-stopped
     entrypoint: ["/opt/keycloak/custom-entry/docker-entrypoint.sh"]
-    # In Caddy mode set KC_BIND=127.0.0.1 in .env so this port is NOT
-    # exposed on the public internet — Caddy reaches Keycloak via the
-    # internal docker network (keycloak:8080), so the host port is only
-    # useful for local debugging. Default 0.0.0.0 keeps LAN deployments
-    # working (admins on the LAN can hit http://<server-ip>:8180).
+    # v1.10.02: KC_BIND makes the host port bind configurable. Default
+    # 0.0.0.0 keeps LAN deployments working; Caddy-mode installs should
+    # set KC_BIND=127.0.0.1 in .env so the admin console isn't exposed
+    # publicly on IP:8180 (Caddy reaches it via the internal network).
     ports:
       - "${KC_BIND:-0.0.0.0}:${KC_PORT:-8180}:8080"
     environment:
@@ -76,6 +65,35 @@ services:
       KC_DB_USERNAME: ${DB_USER:-ticketbrainy}
       KC_DB_PASSWORD: ${DB_PASSWORD}
       KC_DB_SCHEMA: ${KC_DB_SCHEMA:-keycloak}
+      # v1.8.5: request-based hostname detection (no KC_HOSTNAME pin).
+      #
+      # Keycloak 26 only supports ONE global hostname config, but this
+      # install serves TWO distinct frontends from the same instance:
+      #
+      #   * `auth.ticketbrainy.com` (WAF, public) → user flows on the
+      #     `ticketbrainy` realm (SSO login, password reset, 2FA enroll,
+      #     enrollment emails)
+      #   * `http://10.55.112.112:3028` (direct LAN) → admin console on
+      #     the `master` realm — never exposed externally (WAF blocks
+      #     /admin/*).
+      #
+      # Trying to pin KC_HOSTNAME breaks whichever frontend isn't the
+      # pinned one (v1.8.2→v1.8.4 rabbit hole: pinning to the public URL
+      # made the LAN admin console hit CORS + cross-domain-cookie walls,
+      # pinning to the LAN URL would leak internal IPs in emails).
+      #
+      # Instead: leave KC_HOSTNAME UNSET and rely on request-based URL
+      # generation. X-Forwarded-Host from the WAF gives the public URL
+      # for WAF traffic; direct LAN requests carry their own host.
+      # KC_PROXY_HEADERS=xforwarded tells Keycloak to trust X-Forwarded-*.
+      #
+      # To keep user-flow emails deterministic (independent of which
+      # host triggered them from the admin side), the `ticketbrainy`
+      # realm has its `frontendUrl` attribute pinned to
+      # ${KEYCLOAK_URL} via apply-config.sh — that attribute overrides
+      # the request-host for email link generation on that realm only.
+      # The `master` realm gets no frontendUrl override because admin
+      # access only ever happens from the LAN.
       KC_HOSTNAME_STRICT: "false"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
@@ -83,7 +101,7 @@ services:
       KC_SPI_THEME_STATIC_MAX_AGE: "-1"
       KC_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       APP_URL: ${APP_URL:-http://localhost:3000}
-      APP_PORT: ${APP_PORT:-4000}
+      APP_PORT: ${APP_PORT:-3027}
       LAN_HOST: ${LAN_HOSTS:-localhost}
     volumes:
       - ./keycloak/ticketbrainy-realm.json:/opt/keycloak/data/realm-template/ticketbrainy-realm.json:ro
@@ -95,19 +113,19 @@ services:
     networks:
       - internal
 
-  # ── Keycloak hardening sync (one-shot, idempotent) ─────────
-  # Re-applies our security defaults on every `up -d`. Survives
-  # Keycloak image upgrades and accidental admin-UI changes that
-  # would revert loginTheme, bruteForceProtected, password policy,
-  # OTP algorithm, etc. Logs: docker compose logs keycloak-init
+  # ---------------------------------------------------------------------------
+  # keycloak-init — one-shot post-start hardening sync
+  # ---------------------------------------------------------------------------
+  # Re-applies our realm security defaults + login theme on every `up -d`.
+  # Idempotent. Survives Keycloak image upgrades and accidental UI changes
+  # that revert security settings (loginTheme, bruteForceProtected, ...).
+  # Logs:  docker logs aidesk-keycloak-init-1
   keycloak-init:
     image: curlimages/curl:8.10.1
     restart: "no"
     # v1.10.13: run as root so the container can write the admin-read
-    # client secret into the kc-secrets volume that the web container
-    # mounts read-only. Without this override curlimages/curl runs as
-    # uid 100 and can't create files in a root-owned named volume.
-    # The script only does curl + file writes, no network exposure.
+    # client secret into the kc-secrets volume. See the public
+    # docker-compose.yml for the full rationale.
     user: "0:0"
     entrypoint: ["sh", "/opt/keycloak-init/apply-config.sh"]
     environment:
@@ -115,14 +133,16 @@ services:
       KC_REALM: ${KEYCLOAK_REALM:-ticketbrainy}
       KC_ADMIN_USER: ${KC_ADMIN_USER:-admin}
       KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      # v1.8.2: passed through to apply-config.sh so the realm's
+      # frontendUrl attribute is pinned to the public URL — every
+      # email action link generated by Keycloak uses this base.
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_URL}
       MAX_WAIT_SECONDS: 180
     volumes:
       - ./keycloak/apply-config.sh:/opt/keycloak-init/apply-config.sh:ro
-      # v1.10.13: kc-secrets shared volume. apply-config.sh writes the
-      # ticketbrainy-admin-read client secret here after creating the
-      # client; the web container mounts the same volume read-only at
-      # /data/keycloak-secrets and reads the secret automatically. No
-      # more manual "copy from logs into .env and restart" dance.
+      # v1.10.13: kc-secrets — apply-config.sh writes the
+      # ticketbrainy-admin-read client secret here for the web
+      # container to pick up automatically (no .env edit required).
       - kc-secrets:/opt/keycloak-init/secrets
     depends_on:
       keycloak:
@@ -130,20 +150,28 @@ services:
     networks:
       - internal
 
-  # ── Web Application ─────────────────────────────────────────
   web:
-    image: ghcr.io/kr1s57/ticketbrainy-web:latest
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
     restart: unless-stopped
-    # v1.10.131 (hardening P0) — fix C-01 : bind le port Next.js sur
-    # 127.0.0.1 par défaut pour empêcher son exposition HTTP clair
-    # directement sur Internet. Caddy atteint le container via le
-    # réseau Docker interne (web:3000), donc fermer le port côté hôte
-    # est transparent pour le reverse proxy. Un opérateur qui tourne
-    # sans Caddy (mode "direct / vps-naked") peut remettre le port
-    # publiquement en passant WEB_BIND=0.0.0.0 dans son .env, mais le
-    # défaut sûr reste localhost.
+    # Start as root so docker-claude-init.sh can read host-mounted
+    # Claude credentials (owned by root:root on the host) and drop to
+    # nextjs (uid 1001) via su-exec for the Node server process.
+    user: "0:0"
+    # v1.10.131 (hardening P0) — fix C-01 : bind le port sur 127.0.0.1 pour
+    # empêcher l'exposition HTTP clair du service web directement sur
+    # Internet. En mode Caddy, le reverse proxy atteint le container via
+    # le réseau Docker interne (web:3000), donc fermer le port côté hôte
+    # est transparent pour Caddy. Ça conserve l'accès local via
+    # http://127.0.0.1:${APP_PORT} pour le debug SSH port-forward et les
+    # curls de healthcheck depuis l'hôte (install.sh en utilise 2).
+    # Variable WEB_BIND surchargeable : si un opérateur passe réellement
+    # en mode "direct / vps-naked" il peut mettre WEB_BIND=0.0.0.0 dans
+    # son .env pour réouvrir le port publiquement, mais le défaut sûr
+    # reste localhost.
     ports:
-      - "${WEB_BIND:-127.0.0.1}:${APP_PORT:-4000}:3000"
+      - "${WEB_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
@@ -154,8 +182,8 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
       KEYCLOAK_URL: ${KEYCLOAK_URL:-}
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-ticketbrainy}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ticketbrainy-web}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
       KC_ADMIN_USER: ${KC_ADMIN_USER:-admin}
       KC_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:-}
@@ -164,11 +192,6 @@ services:
       OAUTH_REDIRECT_URL: ${OAUTH_REDIRECT_URL:-}
       UPLOAD_STORAGE_PATH: /data/uploads
       INSTANCE_ID_PATH: /data/.instance-id
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
-      # v1.10.0: Security Settings page — read-only Keycloak admin client
-      # (the keycloak-init container creates it idempotently and prints the
-      # secret once in its logs). Leave empty on first boot, then copy the
-      # value from the logs into .env and recreate the web container.
       KC_ADMIN_READ_CLIENT_ID: ${KC_ADMIN_READ_CLIENT_ID:-ticketbrainy-admin-read}
       KC_ADMIN_READ_CLIENT_SECRET: ${KC_ADMIN_READ_CLIENT_SECRET:-}
       KC_REALM: ${KEYCLOAK_REALM:-ticketbrainy}
@@ -191,15 +214,19 @@ services:
     volumes:
       - app-data:/data
       - claude-config:/home/nextjs/.claude
-      # v1.10.0: read Caddy certs for the Security page SSL panel. Empty
-      # volume on LAN/WAF deployments where Caddy is not used — adapters
-      # handle this gracefully and show "No certificates detected".
+      # Host Claude CLI creds, read-only. Synced into the persistent volume
+      # by docker-claude-init.sh at container start so AI features keep
+      # working after rebuilds without any manual script. See:
+      # feedback_ai_must_survive_rebuild.md
+      - ${HOST_CLAUDE_CREDS_FILE:-/root/.claude/.credentials.json}:/host-claude/credentials.json:ro
+      - ${HOST_CLAUDE_CONFIG_FILE:-/root/.claude.json}:/host-claude/claude.json:ro
+      # v1.10.0: Caddy cert mount (read-only). Empty volume on LAN/WAF
+      # deployments where Caddy is not used; populated on VPS Caddy
+      # deployments. Security adapters gracefully handle empty mount.
       - caddy-data:/data/caddy:ro
       # v1.10.13: read the ticketbrainy-admin-read client secret that
-      # keycloak-init writes on every boot. keycloak-admin.ts loads it
-      # lazily when KC_ADMIN_READ_CLIENT_SECRET env var is empty, so
-      # fresh installs get the Security → Authentication panel working
-      # immediately without any manual .env edit.
+      # keycloak-init writes on every boot. Lazy-loaded by
+      # keycloak-admin.ts when KC_ADMIN_READ_CLIENT_SECRET env is empty.
       - kc-secrets:/data/keycloak-secrets:ro
     depends_on:
       db:
@@ -211,10 +238,14 @@ services:
     networks:
       - internal
 
-  # ── AI Analysis Service ─────────────────────────────────────
   ai-service:
-    image: ghcr.io/kr1s57/ticketbrainy-ai:latest
+    build:
+      context: .
+      dockerfile: apps/ai-service/Dockerfile
     restart: unless-stopped
+    # Start as root so docker-claude-init.sh can read host-mounted
+    # Claude credentials and drop to appuser (uid 1001) via su-exec.
+    user: "0:0"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
@@ -223,6 +254,11 @@ services:
       AI_SERVICE_PORT: "3001"
     volumes:
       - claude-config:/home/appuser/.claude
+      # Host Claude CLI creds, read-only. Synced into the persistent volume
+      # by docker-claude-init.sh at container start so AI features keep
+      # working after rebuilds without any manual script.
+      - ${HOST_CLAUDE_CREDS_FILE:-/root/.claude/.credentials.json}:/host-claude/credentials.json:ro
+      - ${HOST_CLAUDE_CONFIG_FILE:-/root/.claude.json}:/host-claude/claude.json:ro
     depends_on:
       db:
         condition: service_healthy
@@ -231,9 +267,10 @@ services:
     networks:
       - internal
 
-  # ── Email Processing Service ────────────────────────────────
   mail-service:
-    image: ghcr.io/kr1s57/ticketbrainy-mail:latest
+    build:
+      context: .
+      dockerfile: apps/mail-service/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
@@ -256,9 +293,10 @@ services:
     networks:
       - internal
 
-  # ── Telegram Bot ────────────────────────────────────────────
   telegram-bot:
-    image: ghcr.io/kr1s57/ticketbrainy-telegram:latest
+    build:
+      context: .
+      dockerfile: apps/telegram-bot/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
@@ -275,44 +313,12 @@ services:
     networks:
       - internal
 
-  # ── Reverse Proxy (optional, for direct internet exposure) ──
-  # Activated with: docker compose --profile with-proxy up -d
-  # Handles HTTPS automatically via Let's Encrypt (auto-renewed)
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    profiles: ["with-proxy"]
-    # v1.10.11: custom entrypoint wraps `caddy run` with a background
-    # loop that widens perms on public cert files (*.crt and their
-    # parent dirs) so the web container can display cert expiry info
-    # in Settings → Security. Private keys (*.key) stay 600 — never
-    # exposed. See proxy/caddy-entrypoint.sh for the full rationale.
-    entrypoint: ["/bin/sh", "/etc/caddy/caddy-entrypoint.sh"]
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      APP_DOMAIN: ${APP_DOMAIN:-}
-      KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
-      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
-    volumes:
-      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./proxy/caddy-entrypoint.sh:/etc/caddy/caddy-entrypoint.sh:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - web
-    networks:
-      - internal
-
 volumes:
   pg-data:
   redis-data:
   app-data:
   claude-config:
   caddy-data:
-  caddy-config:
   kc-secrets:
 
 networks:
