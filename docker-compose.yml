@@ -32,10 +32,7 @@ services:
       - internal
 
   migrate:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      target: builder
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:latest
     command: sh -c "cd apps/web && npx prisma db push"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
@@ -45,7 +42,6 @@ services:
     networks:
       - internal
     restart: "no"
-    pull_policy: build
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
@@ -151,9 +147,7 @@ services:
       - internal
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/kr1s57/ticketbrainy-web:latest
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials (owned by root:root on the host) and drop to
@@ -239,9 +233,7 @@ services:
       - internal
 
   ai-service:
-    build:
-      context: .
-      dockerfile: apps/ai-service/Dockerfile
+    image: ghcr.io/kr1s57/ticketbrainy-ai:latest
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials and drop to appuser (uid 1001) via su-exec.
@@ -268,9 +260,7 @@ services:
       - internal
 
   mail-service:
-    build:
-      context: .
-      dockerfile: apps/mail-service/Dockerfile
+    image: ghcr.io/kr1s57/ticketbrainy-mail:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
@@ -294,9 +284,7 @@ services:
       - internal
 
   telegram-bot:
-    build:
-      context: .
-      dockerfile: apps/telegram-bot/Dockerfile
+    image: ghcr.io/kr1s57/ticketbrainy-telegram:latest
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
