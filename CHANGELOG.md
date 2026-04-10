@@ -2,6 +2,202 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14] — 2026-04-10
+
+### Added — Settings restructure + Geo Block + security hardening Phase 2
+
+This release reorganises the Settings menu around a new top-level
+"Deploy & Security" section, introduces the **Geo Block** feature
+that lets operators block or allow access by country at the
+application layer, and ships several Phase 2 security hardenings
+recommended by the v1.10.131 pentest follow-up.
+
+#### Settings menu restructure
+
+The "General" tab no longer mixes deployment + security with the
+unrelated configuration items (language, notifications, tags, …).
+A new top-level tab **Deploy & Security** sits between General and
+Workspace and groups the security-relevant pages:
+
+- **Mode** — network exposure mode + Keycloak posture + rate-limit
+  posture + SSL certificate panel + the Caddy/HTTPS deployment form
+  (former /settings/deployment + the top section of /settings/security)
+- **Whitelist** — admin and Keycloak admin IP allowlists, each with
+  its own form and audit trail
+- **Audit** — the four security toggles (audit log, upload rate
+  limit, magic bytes, login anomaly) and the live audit log feed
+- **Geo Block** — new feature, see below
+
+The legacy `/settings/deployment` and `/settings/security` URLs
+continue to work — they redirect to `/settings/deploy-security/mode`
+to preserve operator bookmarks.
+
+#### Geo Block — country-based access control
+
+A new feature under `/settings/deploy-security/geo-block` lets the
+operator block or allow visitors based on their country of origin.
+The lookup is powered by an offline MaxMind GeoLite2-Country database
+bundled inside the `web` Docker image — no outbound network call,
+no API key required, and the policy is hot-reloadable from the UI
+without restarting any container.
+
+Two modes:
+- **Denylist** — allow everyone except listed countries (e.g. block
+  RU, KP, IR but accept the rest of the world)
+- **Allowlist** — block everyone except listed countries (e.g.
+  accept only FR, BE, CH, LU, MC for a French-speaking SaaS)
+
+Self-lockout protection: when the operator enables Geo Block from
+the UI, the server detects their own country from the request IP
+and automatically adjusts the lists so they don't block themselves
+on the next page load. The "Test" widget on the same page lets
+them simulate access from any country before saving.
+
+Always-exempt paths (cannot be geo-blocked):
+- Health check endpoints
+- OIDC callback URLs (/api/auth/*)
+- Stripe webhooks (/api/stripe/webhook — Stripe IPs are global)
+- Public CSAT surveys (/api/csat/public/* — customer feedback
+  must remain reachable from anywhere)
+
+Every blocked request emits an `AuditLog` event of type `GEO_BLOCK`,
+with the country, IP, and path stored in the metadata for forensic
+review. The Geo Block page surfaces a 24-hour stats widget with the
+top blocked countries.
+
+Tech notes for operators upgrading:
+- The MMDB file lives at `/app/apps/web/data/GeoLite2-Country.mmdb`
+  inside the `web` container. It can be updated independently by
+  mounting a newer version via the `GEOIP_MMDB_PATH` env var.
+- Schema migration adds `geoBlockEnabled`, `geoBlockMode`,
+  `geoBlockCountries`, `geoBlockSetAt`, `geoBlockSetBy` to
+  `SecuritySettings`. Default `geoBlockEnabled=false`, so the
+  feature is opt-in and existing installs see no behaviour change
+  until they activate it from the UI.
+
+#### Honeypot routes + auto-blocklist (Phase 2 hardening)
+
+Real TicketBrainy users never access `/wp-admin`, `/wp-login.php`,
+`/.env`, `/.git/HEAD`, `/phpmyadmin`, `/administrator`, `/admin.php`,
+or other common scanner paths — those are exclusively probed by
+automated attack tools.
+
+Each hit on one of these paths now:
+1. Returns a generic 404 (so the attacker doesn't know they
+   tripped a trap)
+2. Records an `AuditLog` event of type `HONEYPOT_HIT` with the
+   probed path, source IP, and User-Agent
+3. Adds the source IP to a new `IpBlocklist` table with reason
+   `honeypot`, expiring after `honeypotBlockDurationHours`
+   (default 24h, configurable in `SecuritySettings`)
+
+Subsequent requests from the same IP are then rejected by
+`enforceAccess()` — the dashboard layout check that runs before
+any other authorization. This means a single hit on `/wp-admin`
+shuts the attacker out of the entire instance for 24 hours.
+
+Schema migration adds the `IpBlocklist` table and the
+`honeypotEnabled` + `honeypotBlockDurationHours` columns to
+`SecuritySettings`. Honeypots are enabled by default — there's
+no downside.
+
+#### CSP nonce strict (Phase 2 hardening)
+
+The previous Content-Security-Policy header included
+`'unsafe-inline'` on `script-src`, which the v1.10.131 pentest
+correctly flagged as a regression vector for any XSS that might
+land in a future code change. v1.10.14 replaces it with a strict
+nonce-based policy.
+
+The middleware now:
+1. Generates a fresh 16-byte random nonce for every HTML request
+2. Sets it on a request header (`x-nonce`) so Server Components
+   can read it via `headers().get('x-nonce')`
+3. Emits a Content-Security-Policy header with
+   `'nonce-XXXX' 'strict-dynamic'` on `script-src`
+
+`'unsafe-inline'` is kept as a legacy fallback for browsers that
+don't support `'strict-dynamic'` (Chrome ≤59, Firefox ≤58, Safari
+≤15.4 — every modern browser ignores it when a valid nonce is
+present, per the W3C CSP3 spec).
+
+`style-src` keeps `'unsafe-inline'` because Tailwind and shadcn
+inject style attributes at runtime that can't be nonced.
+
+#### `/.well-known/security.txt` (RFC 9116)
+
+A standard `security.txt` file is now served at
+`https://your-instance.example/.well-known/security.txt` with the
+TicketBrainy security contact email and disclosure policy URL.
+This is a small but well-documented signal to security researchers
+that you have a coordinated disclosure process — and it's expected
+by most bug bounty platforms and audit checklists.
+
+#### Plugins page — license fingerprint for support
+
+The license display on the Plugins page now shows the first and
+last 4 characters of both the license key and the hardware ID
+(middle masked with `…`). Allows support to identify the active
+license without leaking enough material to clone it. The full key
+never leaves the server.
+
+### Schema migration
+
+```sql
+-- New columns on SecuritySettings
+ALTER TABLE "SecuritySettings"
+  ADD COLUMN "geoBlockEnabled"            BOOLEAN  DEFAULT false NOT NULL,
+  ADD COLUMN "geoBlockMode"               TEXT     DEFAULT 'denylist' NOT NULL,
+  ADD COLUMN "geoBlockCountries"          TEXT[]   DEFAULT ARRAY[]::TEXT[],
+  ADD COLUMN "geoBlockSetAt"              TIMESTAMP(3),
+  ADD COLUMN "geoBlockSetBy"              TEXT,
+  ADD COLUMN "honeypotEnabled"            BOOLEAN  DEFAULT true NOT NULL,
+  ADD COLUMN "honeypotBlockDurationHours" INTEGER  DEFAULT 24 NOT NULL,
+  ADD COLUMN "rateLimitConfig"            JSONB;
+
+-- New table
+CREATE TABLE "IpBlocklist" (
+  id        TEXT PRIMARY KEY,
+  ip        TEXT NOT NULL UNIQUE,
+  reason    TEXT NOT NULL,
+  source    TEXT,
+  "expiresAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) DEFAULT NOW() NOT NULL,
+  metadata  JSONB
+);
+CREATE INDEX "IpBlocklist_expiresAt_idx" ON "IpBlocklist"("expiresAt");
+CREATE INDEX "IpBlocklist_reason_createdAt_idx" ON "IpBlocklist"("reason", "createdAt");
+```
+
+The `migrate` container runs this automatically on first boot of
+the new image — no manual migration needed.
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+The `--force-recreate` flag is mandatory — without it, the `caddy`
+and `keycloak-init` containers (whose images haven't changed in
+this release) won't pick up the bind-mounted file updates from the
+git pull. See `docs/deployment-modes.md` for the rationale.
+
+After restart, visit Settings → Deploy & Security → Geo Block to
+configure the new feature, and Settings → Deploy & Security →
+Audit to verify all four security toggles are still active.
+
+### Reported in v1.10.141 (next release)
+
+- Security Dashboard widgets (24h events graph, top blocked IPs,
+  top blocked countries, alert center)
+- Configurable rate-limit thresholds via UI (the limits are
+  hardcoded today; the `rateLimitConfig` JSON column on
+  `SecuritySettings` is the storage backbone for the upcoming UI)
+
 ## [1.10.1312] — 2026-04-10
 
 ### Docs — upgrade gotcha + Keycloak admin posture guidance
