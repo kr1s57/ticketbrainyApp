@@ -2,6 +2,34 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1446] — 2026-04-11
+
+### Added — AI Expert Skills
+
+- **Specialized expert skills** — admins can create AI skills (e.g.,
+  Office 365, Active Directory, Network) in Settings → AI Expert → Skills.
+  Each skill contains a detailed expert prompt and trigger keywords.
+- **AI-assisted generation** — click "Generate with AI" after entering a
+  skill name and description, and Claude Sonnet writes the full expert
+  instructions automatically. The admin can edit before saving.
+- **Automatic activation** — when a ticket matches a skill's trigger
+  keywords (e.g., "outlook", "exchange"), the expert instructions are
+  injected into the deep analysis prompt, giving Claude specialized
+  knowledge for that domain.
+- **Mailbox scoping** — a skill can apply to all mailboxes or be restricted
+  to specific ones (e.g., Office 365 skill only on the IT support mailbox).
+- **Enable/disable toggle** — skills can be turned off temporarily without
+  deletion.
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.1445] — 2026-04-11
 
 ### Added — AI Conversation Summary
