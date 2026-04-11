@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1445] — 2026-04-11
+
+### Added — AI Conversation Summary
+
+- **On-demand summary** — agents can generate a 3-5 line AI summary of any
+  ticket conversation with one click. Covers what was asked, what was tried,
+  and current status. Ideal for long threads or ticket handoffs.
+- **Smart refresh** — the summary card shows how many new messages arrived
+  since the last generation, with a refresh button to update.
+- **AI Sidebar** — new "Conversation Summary" card appears alongside the
+  existing Auto Triage and Deep Analysis cards.
+- Available in all 5 languages.
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.1444] — 2026-04-11
 
 ### Added — Spam Management Module
