@@ -39,6 +39,73 @@ print_success() { echo -e "${GREEN}✓${NC} $1"; }
 print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 print_error()   { echo -e "${RED}✗${NC} $1" >&2; }
 
+# v1.10.1448: Defensive input handling for the wizard prompts.
+#
+# `read` captures terminal escape sequences literally when the user edits
+# the prompt with Del / arrow keys in a TTY that doesn't translate them
+# (common when SSHing with a misconfigured TERM). Those bytes used to
+# end up straight in .env and later poisoned docker-compose env vars —
+# Keycloak would then crashloop on realm import with "Illegal unquoted
+# character CTRL-CHAR code 27". `sanitize_input` strips every ASCII
+# control character except LF/CR from whatever `read` captured.
+sanitize_input() {
+  printf '%s' "$1" | tr -d '\000-\011\013-\037\177'
+}
+
+is_valid_ipv4() {
+  local ip="$1"
+  [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  local IFS='.' octet
+  for octet in $ip; do
+    [ "$octet" -ge 0 ] && [ "$octet" -le 255 ] || return 1
+  done
+  return 0
+}
+
+is_valid_email() {
+  [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]
+}
+
+is_valid_domain() {
+  [[ "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
+}
+
+is_valid_url() {
+  [[ "$1" =~ ^https?://[a-zA-Z0-9.-]+(:[0-9]+)?(/.*)?$ ]]
+}
+
+is_valid_mode() {
+  case "${1^^}" in A|B) return 0 ;; *) return 1 ;; esac
+}
+
+is_valid_yn() {
+  case "${1^^}" in Y|N|YES|NO) return 0 ;; *) return 1 ;; esac
+}
+
+# prompt_validated PROMPT DEFAULT VALIDATOR ERROR
+# Writes prompt to stderr, reads from stdin, strips ctrl chars, applies
+# DEFAULT if empty, re-prompts on validator failure. Returns the clean
+# value on stdout so callers can capture it with `$(…)`.
+prompt_validated() {
+  local prompt="$1" default="$2" validator="$3" error="$4"
+  local value
+  while true; do
+    printf '%s' "$prompt" >&2
+    read -r value || value=""
+    value=$(sanitize_input "$value")
+    value=${value:-$default}
+    if [ -z "$value" ]; then
+      print_error "This field is required."
+      continue
+    fi
+    if $validator "$value"; then
+      printf '%s' "$value"
+      return 0
+    fi
+    print_error "$error"
+  done
+}
+
 # ── Sanity checks ──────────────────────────────────────────────────────
 if [ ! -f "docker-compose.yml" ]; then
   print_error "docker-compose.yml not found. Run this script from the repository root."
@@ -78,14 +145,22 @@ fi
 
 # ── Welcome ────────────────────────────────────────────────────────────
 print_header "TicketBrainy Installation Wizard"
-echo "This will deploy the full TicketBrainy stack on this server."
-echo "You will be asked a few questions. Defaults are shown in [brackets]."
+echo "This wizard deploys the full TicketBrainy stack on this server."
+echo ""
+echo "You will go through 4 short steps. For every question:"
+echo ""
+echo "  • A hint in [brackets] shows the suggested default."
+echo "  • Press ${BOLD}[Enter]${NC} without typing anything to accept the default."
+echo "  • Type a new value to override."
+echo ""
+echo "Invalid input (empty value, bad IP, bad email, control keys) is"
+echo "rejected and the question is asked again — nothing breaks silently."
 echo ""
 echo "Press Ctrl+C at any time to cancel."
 echo ""
 
-# ── Step 1 — Server address ────────────────────────────────────────────
-print_header "Step 1/5 — Server identity"
+# ── Step 1 — Network identity (server + admin) ─────────────────────────
+print_header "Step 1/4 — Network identity"
 
 DETECTED_IP=""
 if command -v ip >/dev/null 2>&1; then
@@ -95,52 +170,103 @@ if [ -z "$DETECTED_IP" ] && command -v hostname >/dev/null 2>&1; then
   DETECTED_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 fi
 
-print_step "Server IP address"
-echo "The IP users will use to reach TicketBrainy from your LAN."
-read -rp "Server IP [${DETECTED_IP}]: " SERVER_IP
-SERVER_IP=${SERVER_IP:-$DETECTED_IP}
-if [ -z "$SERVER_IP" ]; then
-  print_error "Server IP is required."
-  exit 1
-fi
+# --- Q1a — Server IP ---
+print_step "Server IP address (1 of 2)"
+cat <<EOF
+The network address where TicketBrainy runs. It is used to build
+the URLs users will open in their browser (and the post-install
+summary).
+
+  - On-premise install    : private LAN IP of this server
+                            Example: 192.168.1.50
+  - VPS / remote server   : public IP of this server
+                            Example: 37.59.115.12
+
+We auto-detected the value below — in most cases you can just press
+[Enter] to accept it.
+
+EOF
+SERVER_IP=$(prompt_validated "Server IP [${DETECTED_IP}]: " "$DETECTED_IP" is_valid_ipv4 "Invalid IPv4 address. Expected something like 192.168.1.50 or 37.59.115.12.")
 print_success "Server IP: ${SERVER_IP}"
+echo ""
+
+# --- Q1b — Admin IP ---
+print_step "Administrator IP address (2 of 2)"
+cat <<EOF
+The IP address from which YOU — the administrator — will connect to
+TicketBrainy's admin pages and to the Keycloak admin console.
+
+This IP (plus localhost and the server IP) will be allowed to:
+  * See the local email+password form on the /login page
+  * Open the admin pages and the Keycloak admin UI
+Every other visitor sees the public site and SSO login only.
+
+  - On-premise install    : the same as the server IP above.
+                            Just press [Enter] to accept the default.
+  - VPS / remote server   : the PUBLIC IP of YOUR OWN workstation
+                            (the IP your browser goes out with).
+                            Tip: run \`curl ifconfig.me\` on your workstation
+                            to find it.
+                            Example: 87.240.204.21
+
+More IPs and CIDR ranges can be added later by editing .env (LAN_HOSTS
+accepts comma lists and CIDRs like 192.168.1.0/24).
+
+EOF
+ADMIN_IP=$(prompt_validated "Administrator IP [${SERVER_IP}]: " "$SERVER_IP" is_valid_ipv4 "Invalid IPv4 address. Expected something like 192.168.1.10 or 87.240.204.21.")
+print_success "Administrator IP: ${ADMIN_IP}"
+
+# Build LAN_HOSTS: always localhost + server IP, plus admin IP if different.
+LAN_HOSTS_VALUE="localhost,${SERVER_IP}"
+if [ "$ADMIN_IP" != "$SERVER_IP" ]; then
+  LAN_HOSTS_VALUE="${LAN_HOSTS_VALUE},${ADMIN_IP}"
+fi
 
 # ── Step 2 — License ───────────────────────────────────────────────────
-print_header "Step 2/5 — License"
+print_header "Step 2/4 — License"
 
 print_step "License activation email"
-echo "The email address registered with your TicketBrainy license."
-echo "You will use this email to activate the product in the web wizard."
-read -rp "License email: " LICENSE_EMAIL
-if [ -z "$LICENSE_EMAIL" ]; then
-  print_error "License email is required."
-  exit 1
-fi
+cat <<EOF
+The email address registered with your TicketBrainy purchase.
+
+You will re-enter this email in the web wizard at /activate right
+after the install finishes — that is how the instance activates
+against the license server.
+
+If you choose Caddy mode in the next step, this email is also
+reused by default for Let's Encrypt certificate-expiration alerts.
+
+EOF
+LICENSE_EMAIL=$(prompt_validated "License email: " "" is_valid_email "Invalid email. Expected something like you@yourcompany.com.")
 print_success "License email: ${LICENSE_EMAIL}"
 
 # ── Step 3 — Deployment mode ───────────────────────────────────────────
-print_header "Step 3/5 — Deployment mode"
+print_header "Step 3/4 — Deployment mode"
 
-echo "How will TicketBrainy be exposed to users?"
-echo ""
-echo -e "  ${BOLD}A)${NC} Direct — expose TicketBrainy on port 4000"
-echo "     Good for LAN deployments, development, or behind an existing"
-echo "     reverse proxy / WAF (you handle HTTPS externally)."
-echo ""
-echo -e "  ${BOLD}B)${NC} Caddy — built-in reverse proxy with automatic Let's Encrypt HTTPS"
-echo ""
-echo -e "     ${YELLOW}${BOLD}Prerequisites for mode B:${NC}"
-echo -e "     ${YELLOW}  • Ports 80 and 443 open on the server firewall${NC}"
-echo -e "     ${YELLOW}  • TWO DNS A records pointing at this server's public IP:${NC}"
-echo -e "     ${YELLOW}      1. <app-domain>      (e.g. support.example.com)${NC}"
-echo -e "     ${YELLOW}      2. <keycloak-domain> (e.g. auth.example.com)${NC}"
-echo -e "     ${YELLOW}    — the app domain serves the TicketBrainy UI${NC}"
-echo -e "     ${YELLOW}    — the keycloak domain serves the SSO / admin console${NC}"
-echo -e "     ${YELLOW}    — both domains share the same server IP (Caddy dispatches by Host)${NC}"
-echo ""
-read -rp "Mode [A/B] (default A): " MODE
-MODE=${MODE:-A}
-MODE=$(echo "$MODE" | tr '[:lower:]' '[:upper:]')
+print_step "How will users reach TicketBrainy?"
+cat <<EOF
+
+  A) Direct
+     TicketBrainy listens on port 4000 without any built-in proxy.
+     Pick this if:
+       * You are on a LAN — users type http://${SERVER_IP}:4000
+       * You already run a reverse proxy or WAF in front (Cloudflare
+         Tunnel, nginx, Traefik, Sophos, pfSense) that handles HTTPS.
+
+  B) Caddy (recommended for VPS / public install)
+     Built-in Caddy reverse proxy — obtains free Let's Encrypt TLS
+     certificates automatically. Pick this if:
+       * The server is reachable on the public internet
+       * Ports 80 AND 443 are open on its firewall
+       * You own TWO domain names, both with an A record pointing at
+         this server's public IP (${SERVER_IP}):
+             1. <app-domain>       e.g. support.yourcompany.com
+             2. <keycloak-domain>  e.g. auth.yourcompany.com
+         (both domains share the same server IP — Caddy routes by Host)
+
+EOF
+MODE=$(prompt_validated "Mode [A/B] (Enter = A): " "A" is_valid_mode "Please type A or B.")
+MODE="${MODE^^}"
 
 USE_CADDY=false
 APP_DOMAIN=""
@@ -150,19 +276,33 @@ APP_URL="http://${SERVER_IP}:4000"
 
 if [ "$MODE" = "B" ]; then
   USE_CADDY=true
-  print_step "Public domain for TicketBrainy"
-  echo "Example: support.yourcompany.com"
-  read -rp "App domain: " APP_DOMAIN
-  if [ -z "$APP_DOMAIN" ]; then
-    print_error "App domain is required for Caddy mode."
-    exit 1
-  fi
-  APP_URL="https://${APP_DOMAIN}"
+  echo ""
+  print_step "App domain — the public hostname users will type"
+  cat <<EOF
+Example: support.yourcompany.com
 
+This domain MUST resolve to ${SERVER_IP} BEFORE you continue, or
+Let's Encrypt will fail to issue the certificate. A DNS pre-check
+runs at the end of this wizard and warns you if the record is
+missing or wrong.
+
+EOF
+  APP_DOMAIN=$(prompt_validated "App domain: " "" is_valid_domain "Invalid domain. Expected something like support.yourcompany.com.")
+  APP_URL="https://${APP_DOMAIN}"
+  print_success "App domain: ${APP_DOMAIN}"
+
+  echo ""
   print_step "Let's Encrypt notification email"
-  echo "Used by Let's Encrypt for certificate-expiration warnings."
-  read -rp "Email [${LICENSE_EMAIL}]: " LETSENCRYPT_EMAIL
-  LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-$LICENSE_EMAIL}
+  cat <<EOF
+Let's Encrypt uses this address to email you BEFORE a certificate
+expires (they never spam it for anything else). It is not shared
+with third parties.
+
+We default to your license email — press [Enter] to accept.
+
+EOF
+  LETSENCRYPT_EMAIL=$(prompt_validated "Notification email [${LICENSE_EMAIL}]: " "$LICENSE_EMAIL" is_valid_email "Invalid email.")
+  print_success "Notification email: ${LETSENCRYPT_EMAIL}"
 fi
 print_success "Mode: $([ "$USE_CADDY" = true ] && echo "Caddy + Let's Encrypt (${APP_DOMAIN})" || echo "Direct (http://${SERVER_IP}:4000)")"
 
@@ -187,58 +327,61 @@ check_dns_match() {
   return 0
 }
 
-# ── Step 4 — LAN access ────────────────────────────────────────────────
-print_header "Step 4/5 — LAN access control"
+# ── Step 4 — Keycloak SSO (optional) ───────────────────────────────────
+# v1.10.1448: the old Step 4 "LAN access control" was removed — its
+# single question about who can see the local login form is now covered
+# by the Administrator IP in Step 1 (feeds the same LAN_HOSTS env var).
+# Operators can still add more IPs or CIDR ranges post-install by
+# editing LAN_HOSTS in .env.
+print_header "Step 4/4 — Keycloak SSO (optional)"
 
-print_step "Local login form (email + password)"
-echo "Which IPs or CIDR ranges should see the local email+password login"
-echo "form on the /login page? Everyone outside this list sees SSO only."
-echo ""
-echo "  Examples:"
-echo "    - Single admin PC:      192.168.1.10"
-echo "    - Whole LAN subnet:     192.168.1.0/24"
-echo "    - Multiple:             192.168.1.10,192.168.1.11"
-echo ""
-read -rp "LAN hosts [${SERVER_IP}]: " LAN_INPUT
-LAN_INPUT=${LAN_INPUT:-$SERVER_IP}
-LAN_HOSTS_VALUE="localhost,${SERVER_IP}"
-if [ "$LAN_INPUT" != "$SERVER_IP" ]; then
-  LAN_HOSTS_VALUE="${LAN_HOSTS_VALUE},${LAN_INPUT}"
-fi
-print_success "LAN hosts: ${LAN_HOSTS_VALUE}"
+print_step "Enable Single Sign-On via Keycloak?"
+cat <<EOF
+Keycloak adds a "Sign in with SSO" button to the /login page and lets
+you plug in Active Directory, LDAP, Google Workspace, Microsoft Entra,
+or any OIDC identity provider.
 
-# ── Step 5 — Keycloak SSO ──────────────────────────────────────────────
-print_header "Step 5/5 — Keycloak SSO (optional)"
+If you do not need SSO today, leave it off — you can enable it later
+from Settings -> Security without reinstalling.
 
-echo "Keycloak provides Single Sign-On against Active Directory, LDAP,"
-echo "or your own identity provider. You can leave it disabled now and"
-echo "enable it later in Settings → Security."
-echo ""
-read -rp "Enable Keycloak SSO now? [y/N]: " ENABLE_KC
-ENABLE_KC=${ENABLE_KC:-N}
-ENABLE_KC=$(echo "$ENABLE_KC" | tr '[:lower:]' '[:upper:]')
+EOF
+ENABLE_KC=$(prompt_validated "Enable Keycloak SSO now? [y/N] (Enter = N): " "N" is_valid_yn "Please type y or n.")
+ENABLE_KC="${ENABLE_KC^^}"
+case "$ENABLE_KC" in YES) ENABLE_KC="Y" ;; NO) ENABLE_KC="N" ;; esac
 
 KEYCLOAK_URL_VALUE=""
 if [ "$ENABLE_KC" = "Y" ]; then
   if [ "$USE_CADDY" = true ]; then
-    print_step "Public domain for Keycloak"
-    echo "Example: auth.yourcompany.com — must resolve to this server."
-    read -rp "Keycloak domain: " KEYCLOAK_DOMAIN
-    if [ -z "$KEYCLOAK_DOMAIN" ]; then
-      print_error "Keycloak domain is required when combining SSO with Caddy mode."
-      exit 1
-    fi
+    echo ""
+    print_step "Keycloak public domain"
+    cat <<EOF
+A second domain, distinct from your App domain, that serves the
+Keycloak login pages and admin console.
+Example: auth.yourcompany.com (when app is support.yourcompany.com)
+
+It must also have a DNS A record pointing at ${SERVER_IP}.
+
+EOF
+    KEYCLOAK_DOMAIN=$(prompt_validated "Keycloak domain: " "" is_valid_domain "Invalid domain.")
     KEYCLOAK_URL_VALUE="https://${KEYCLOAK_DOMAIN}"
+    print_success "Keycloak domain: ${KEYCLOAK_DOMAIN}"
   else
+    echo ""
     print_step "Keycloak public URL"
-    echo "The URL users will hit for SSO (typically through your existing WAF)."
-    read -rp "Keycloak URL (e.g. https://auth.example.com): " KEYCLOAK_URL_VALUE
-    if [ -z "$KEYCLOAK_URL_VALUE" ]; then
-      print_error "Keycloak URL is required when SSO is enabled."
-      exit 1
-    fi
+    cat <<EOF
+The full URL at which Keycloak will be reachable by end users.
+
+  * If you have a reverse proxy / WAF in front (Cloudflare, nginx,
+    Sophos, Traefik…) serving HTTPS, enter its public URL.
+      Example: https://auth.yourcompany.com
+  * If users will hit Keycloak directly on this server, enter:
+      http://${SERVER_IP}:8180
+
+EOF
+    KEYCLOAK_URL_VALUE=$(prompt_validated "Keycloak URL: " "" is_valid_url "Invalid URL — must start with http:// or https:// and include a hostname.")
+    print_success "Keycloak URL: ${KEYCLOAK_URL_VALUE}"
   fi
-  print_success "Keycloak SSO: ${KEYCLOAK_URL_VALUE}"
+  print_success "Keycloak SSO: enabled (${KEYCLOAK_URL_VALUE})"
 else
   print_success "Keycloak SSO: disabled (local accounts only)"
 fi
@@ -334,13 +477,14 @@ if [ "$USE_CADDY" = true ]; then
     echo -e "${NC}"
     echo -e "    ${BOLD}${SERVER_IP}${NC}"
     echo ""
-    read -rp "Continue the install anyway? [Y/n]: " DNS_CONTINUE
-    DNS_CONTINUE=${DNS_CONTINUE:-Y}
-    if [ "$(echo "$DNS_CONTINUE" | tr '[:lower:]' '[:upper:]')" = "N" ]; then
-      echo ""
-      print_error "Install aborted — fix DNS and re-run bash install.sh"
-      exit 1
-    fi
+    DNS_CONTINUE=$(prompt_validated "Continue the install anyway? [Y/n] (Enter = Y): " "Y" is_valid_yn "Please type y or n.")
+    case "${DNS_CONTINUE^^}" in
+      N|NO)
+        echo ""
+        print_error "Install aborted — fix DNS and re-run bash install.sh"
+        exit 1
+        ;;
+    esac
   fi
 fi
 
@@ -475,11 +619,6 @@ echo "     SSO login auto-promotes to ADMIN. Bootstrap banner disappears,"
 echo "     local form is hidden from public IPs from then on."
 echo ""
 echo "  5. Change the seed admin password in Settings → Team (or disable the account)."
-echo ""
-echo "  To use Keycloak SSO instead of the local admin account:"
-echo "   a. Log in once with admin@ticketbrainy.local (above)"
-echo "   b. Open ${KC_ADMIN_LAN_URL} — realm 'ticketbrainy' — create your user"
-echo "   c. Log out, click 'Single Sign-On' — your first SSO login auto-promotes to ADMIN"
 echo ""
 
 echo -e "${BOLD}═════ Useful commands ═════${NC}"

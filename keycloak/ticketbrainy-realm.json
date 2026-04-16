@@ -36,11 +36,11 @@
       "secret": "${KC_CLIENT_SECRET}",
       "redirectUris": [
         "${APP_URL}/api/auth/callback/keycloak",
-        "http://${LAN_HOST:-localhost}:${APP_PORT:-3027}/api/auth/callback/keycloak"
+        "http://${LAN_HOST}:${APP_PORT}/api/auth/callback/keycloak"
       ],
       "webOrigins": [
         "${APP_URL}",
-        "http://${LAN_HOST:-localhost}:${APP_PORT:-3027}"
+        "http://${LAN_HOST}:${APP_PORT}"
       ],
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,

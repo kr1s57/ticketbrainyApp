@@ -444,4 +444,41 @@ else
   echo "[apply-config] master realm hardened (brute-force + password policy)"
 fi
 
+# ---------------------------------------------------------------------------
+# Step 8 (v1.10.1447 pentest fix) — disable ROPC on default realm clients
+# ---------------------------------------------------------------------------
+# Finding pentest 2026-04-13 : le grant type password (ROPC) est annoncé
+# dans le .well-known/openid-configuration ET les clients par défaut de
+# Keycloak (admin-cli, account, account-console, broker) l'ont activé
+# par défaut. Un attaquant peut tenter du brute-force/credential-stuffing
+# via grant_type=password sur n'importe lequel de ces clients.
+#
+# Notre client applicatif ticketbrainy-web a déjà ROPC désactivé (realm
+# JSON). Ici on désactive ROPC sur TOUS les clients par défaut du realm
+# ticketbrainy. Le admin-cli du realm MASTER reste intact (nécessaire
+# pour ce script lui-même et keycloak-reset-admin.sh — mitigé par la
+# brute-force protection du Step 7).
+echo "[apply-config] disabling ROPC (Direct Access Grants) on default clients..."
+
+for DEFAULT_CLIENT_ID in admin-cli account account-console broker security-admin-console; do
+  DC_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+    "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=${DEFAULT_CLIENT_ID}" || echo "[]")
+  DC_UUID=$(echo "$DC_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+
+  if [ -n "$DC_UUID" ]; then
+    DC_PUT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+      -X PUT "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${DC_UUID}" \
+      -H "Authorization: Bearer ${TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "{\"clientId\":\"${DEFAULT_CLIENT_ID}\",\"directAccessGrantsEnabled\":false}")
+    if [ "$DC_PUT_STATUS" = "204" ]; then
+      echo "[apply-config]   ${DEFAULT_CLIENT_ID}: ROPC disabled"
+    else
+      echo "[apply-config]   ${DEFAULT_CLIENT_ID}: PUT returned HTTP ${DC_PUT_STATUS} (non-fatal)" >&2
+    fi
+  else
+    echo "[apply-config]   ${DEFAULT_CLIENT_ID}: not found in realm (skipped)"
+  fi
+done
+
 echo "[apply-config] OK — Keycloak realm '${KC_REALM}' is hardened"

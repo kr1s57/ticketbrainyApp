@@ -2,6 +2,106 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1448] — 2026-04-16
+
+### Fixed — Install wizard UX (customer feedback)
+
+Operators following the on-site install wizard reported that the
+questions were unclear — they did not know which IP to enter at which
+step, and on at least one install a mis-entered Del key left an ANSI
+escape sequence in the `.env` that later crashlooped Keycloak on
+realm import (`Illegal unquoted character CTRL-CHAR code 27`).
+
+This release reworks the wizard end-to-end:
+
+- **Step 1 split in two sub-questions** — "Server IP" (the network
+  address where the service runs, used for URLs) and "Administrator
+  IP" (the IP *from which you will administer the server*). Each
+  sub-question now shows on-premise vs VPS / remote-server examples
+  so operators know exactly what to type.
+- **Old Step 4 "LAN hosts" removed** — its role is covered by the
+  new Administrator IP sub-prompt (same `LAN_HOSTS` env var; extra
+  IPs and CIDR ranges can be added later by editing `.env`).
+- **All 9 questions rewritten** in plain language with concrete
+  examples for every deployment mode.
+- **Input sanitization and re-prompt validation** — every answer is
+  stripped of ASCII control characters, then validated against the
+  expected format (IPv4, email, domain, URL, A/B, y/n). Invalid
+  input is rejected with a clear error and the question is asked
+  again. Silent acceptance of garbage can no longer happen.
+- **Explicit default handling** — the welcome banner and every prompt
+  now state that `[brackets]` is the default and `[Enter]` accepts
+  it, which removes the Del-key confusion at the root.
+
+### Fixed — Keycloak realm template
+
+The realm template used `${LAN_HOST:-localhost}` / `${APP_PORT:-3027}`
+(bash default syntax) but the `docker-entrypoint.sh` `sed` only
+matched the bare `${LAN_HOST}` / `${APP_PORT}` forms, so those
+placeholders survived substitution and Keycloak's own SmallRye Config
+expanded them at realm-import time with the raw container env value.
+Combined with a poisoned `.env`, this produced the CTRL-CHAR crash.
+
+- Template now uses bare placeholders that match the `sed` pattern.
+- `docker-entrypoint.sh` now sanitizes every env var before `sed`
+  substitution — defense in depth so a bad `.env` edited by hand
+  cannot reach the rendered JSON.
+
+### Upgrade
+
+Existing installs must refresh the bind-mounted wizard + Keycloak
+config, then re-pull images:
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+---
+
+## [1.10.1447] — 2026-04-13
+
+### Security — Pentest findings (IT-Secure.lu)
+
+Addresses four Keycloak hardening items flagged during an external
+pentest of a customer install. Three additional defense-in-depth
+layers are added for each finding.
+
+- **Block OAuth 2.0 Device Authorization Flow** — the flow was enabled
+  by default on the `ticketbrainy` realm. Device-code phishing is a
+  real attack vector with no business need here. Flow is now refused
+  at the realm level *and* at the Caddy layer (returns 404 on
+  `/realms/ticketbrainy/protocol/openid-connect/auth/device`).
+- **Master realm lockdown** — middleware + Caddy now refuse any HTTP
+  request that targets the `master` realm. Master is only reachable
+  via the direct LAN admin URL (`http://<lan-ip>:${KC_PORT}/admin/`),
+  which the WAF blocks externally anyway. Prevents the "oh, the
+  master realm is indexable" surprise reported by the pentester.
+- **Disable ROPC on default realm clients** — Resource Owner Password
+  Credentials flow is disabled on `ticketbrainy-web` and the
+  admin-read client (`directAccessGrantsEnabled: false`). ROPC lets
+  a client exchange a username/password for tokens, bypassing SSO
+  controls. No legitimate internal code path relies on it.
+- **Disable client-registration policy** — the anonymous client
+  registration endpoint is locked down so untrusted parties cannot
+  self-register clients against the realm.
+
+See `keycloak/apply-config.sh` for the full post-start hardening
+script (runs on every `up -d` — idempotent).
+
+### Upgrade
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+---
+
 ## [1.10.1446] — 2026-04-11
 
 ### Added — AI Expert Skills
