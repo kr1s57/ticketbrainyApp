@@ -902,6 +902,40 @@ If any row still shows `signed=f` after clicking Sync, see [*Troubleshooting*](#
 
 ## 16. Troubleshooting
 
+### Cloudflare 521 / "Web server is down" on the app domain (Caddy mode)
+
+**Who is affected:** VPS installs done with any release between
+v1.10.0 and v1.10.1448, Mode B (Caddy + Let's Encrypt), typically
+behind Cloudflare.
+
+**Symptom:** your browser shows a Cloudflare 521 error on
+`https://<app-domain>/`. SSH into the VPS and confirm with:
+
+```bash
+ss -tlnp | grep -E ':(80|443)\b'   # returns empty
+docker ps --format '{{.Names}}'    # no caddy container
+```
+
+**Cause:** the `docker-compose.yml` in those releases did not define
+a `caddy` service, so `install.sh --profile with-proxy` never started
+a reverse proxy. Fixed in v1.10.1449.
+
+**Fix (takes ~30 seconds, no image rebuild):**
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose --profile with-proxy up -d
+docker compose logs -f caddy     # watch for "certificate obtained successfully"
+```
+
+Let's Encrypt HTTP-01 works **through Cloudflare Proxied** (orange
+cloud) — you do **not** need to temporarily set the DNS record to
+"DNS only". If you see `connection refused` / `timeout` in the caddy
+log during the challenge, check Cloudflare SSL mode is **Full** or
+**Full (strict)** (not Flexible) and that no page rule strips the
+`/.well-known/acme-challenge/*` path.
+
 ### Container won't start
 
 ```bash

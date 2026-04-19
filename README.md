@@ -1,12 +1,25 @@
 # TicketBrainy
 
-![Version](https://img.shields.io/badge/version-1.10.13-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.10.1449-blue) ![License](https://img.shields.io/badge/license-Proprietary-red) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 Self-hosted customer support platform with AI-powered ticket analysis, multi-mailbox management, Keycloak SSO, and a plugin marketplace.
 
-> **Latest version:** `1.10.13` — see [CHANGELOG.md](CHANGELOG.md) for release notes
+> **Latest version:** `1.10.1449` — see [CHANGELOG.md](CHANGELOG.md) for release notes
 >
-> **1.10.13 auto-wires `KC_ADMIN_READ_CLIENT_SECRET` on fresh install.** Before this release Settings → Security → Authentication showed "Unable to reach Keycloak" on every clean VPS install because the operator had to manually copy the secret from `keycloak-init` logs into `.env` and restart the web container. `keycloak-init` now writes the secret into a shared docker volume (`kc-secrets`) that the web container mounts read-only, and `keycloak-admin.ts` falls back to reading the file when the env var is empty — zero manual steps. **Rolling upgrade:** `git pull && docker compose --profile with-proxy pull && docker compose --profile with-proxy up -d --force-recreate keycloak-init web`.
+> **⚠ If your VPS / Caddy install is stuck on Cloudflare 521**, it is
+> because v1.10.0–v1.10.1448 shipped without a `caddy` service in the
+> compose file (the `install.sh --profile with-proxy` flag was silently
+> a no-op). Fix — compose-only, no rebuild needed:
+> ```bash
+> cd /opt/ticketbrainyApp
+> git pull
+> docker compose --profile with-proxy up -d
+> docker compose logs -f caddy   # watch for "certificate obtained successfully"
+> ```
+> Let's Encrypt HTTP-01 works through Cloudflare Proxied (orange cloud),
+> so you don't need to temporarily flip DNS to DNS-only. See
+> [`docs/DEPLOYMENT-MODES.md`](docs/DEPLOYMENT-MODES.md) and
+> [`docs/INSTALL.md#16-troubleshooting`](docs/INSTALL.md#16-troubleshooting).
 
 ## Requirements
 

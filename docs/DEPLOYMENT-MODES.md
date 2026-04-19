@@ -4,6 +4,37 @@
 > Pick the mode that matches your infrastructure, then enable the
 > matching security modules in Settings → Security.
 
+## ⚠️ Cloudflare 521 / nothing on port 443 after a Caddy install (≤ v1.10.1448)
+
+If you followed the VPS install wizard (Mode B — Caddy + Let's Encrypt)
+on **any release between v1.10.0 and v1.10.1448**, your stack is up but
+**nothing is bound to ports 80/443**. Browsers hitting your `APP_DOMAIN`
+through Cloudflare return a **521 "Web server is down"**, and
+`ss -tlnp | grep -E ':(80|443)'` on the host returns empty.
+
+**Cause:** those releases shipped a broken `docker-compose.yml` that did
+not define a `caddy` service nor a `with-proxy` profile, even though
+`install.sh` invoked `docker compose --profile with-proxy up`. The flag
+was silently a no-op.
+
+**Fix — upgrade to v1.10.1449+ (compose-only patch, no rebuild):**
+
+```bash
+cd /opt/ticketbrainyApp
+git pull
+docker compose --profile with-proxy up -d
+```
+
+Caddy will start, obtain Let's Encrypt certs for both domains (works
+with Cloudflare Proxied / orange cloud — no DNS-only toggle needed),
+and the 521 disappears within ~30 seconds. Watch it with:
+
+```bash
+docker compose logs -f caddy
+```
+
+You should see `certificate obtained successfully` for each domain.
+
 ## ⚠️ Upgrading from a previous version — READ FIRST
 
 TicketBrainy ships Caddy config + `apply-config.sh` (Keycloak hardener)
