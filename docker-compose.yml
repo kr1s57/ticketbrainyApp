@@ -301,6 +301,32 @@ services:
     networks:
       - internal
 
+  # v1.10.1449: Caddy reverse proxy for Caddy-mode (VPS / public) installs.
+  # Only starts when docker compose is invoked with --profile with-proxy
+  # (done automatically by install.sh when the operator picks Mode B).
+  # LAN/WAF deployments skip this service entirely — nothing binds 80/443.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: [with-proxy]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./proxy/caddy-entrypoint.sh:/usr/local/bin/caddy-entrypoint.sh:ro
+      - caddy-data:/data/caddy
+    entrypoint: ["/bin/sh", "/usr/local/bin/caddy-entrypoint.sh"]
+    depends_on:
+      - web
+      - keycloak
+    networks:
+      - internal
+
 volumes:
   pg-data:
   redis-data:

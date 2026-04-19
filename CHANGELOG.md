@@ -2,6 +2,33 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1449] — 2026-04-19
+
+### Fixed — Caddy mode (VPS / public install) restored
+
+Operators who picked **Mode B (Caddy + Let's Encrypt)** in the install
+wizard ended up with a stack where nothing bound ports 80/443. The
+`install.sh` invoked `docker compose --profile with-proxy up`, but the
+compose file **never defined a `caddy` service nor a `with-proxy`
+profile** — so the flag was silently a no-op. Browsers hitting the
+configured `APP_DOMAIN` received a Cloudflare **521 (Web server is
+down)** because the origin accepted TCP but refused 443.
+
+- **`caddy` service added** to `docker-compose.yml`, gated behind
+  `profiles: [with-proxy]` so LAN/WAF installs still skip it and
+  nothing binds 80/443 on those setups.
+- Bind-mounts `proxy/Caddyfile` + `proxy/caddy-entrypoint.sh`, mounts
+  the existing `caddy-data` volume read-write (web container already
+  mounts it read-only for cert inspection), exposes admin API on
+  `caddy:2019` inside the `internal` network for runtime reloads
+  from the web container.
+- Depends on `web` and `keycloak` so the reverse proxy only starts
+  once its upstreams are ready.
+
+No source/image change in this release — patch is compose-only.
+Existing Mode B installs simply need `git pull && docker compose
+--profile with-proxy up -d` to get a working reverse proxy.
+
 ## [1.10.1448] — 2026-04-16
 
 ### Fixed — Install wizard UX (customer feedback)
