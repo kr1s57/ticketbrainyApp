@@ -1001,13 +1001,15 @@ Common issues:
 
 ### Reset admin password
 
-If you forgot the admin password:
+If you forgot the local admin password, use the recovery helper and choose a
+new strong password:
 
 ```bash
-docker compose exec -T db psql -U ticketbrainy ticketbrainy -c "UPDATE \"User\" SET password = '\$2a\$12\$LJ3m4ys3uz0dHjcPHFaKne0WFhPCMxVGPFqFzWEC/xXgTBkzFo9mq' WHERE email = 'admin@ticketbrainy.local';"
+bash scripts/keycloak-reset-admin.sh --mode recovery '<NEW_STRONG_PASSWORD>'
 ```
 
-This resets the password to: `Admin123!@#` — change it immediately after login.
+Then update `KC_ADMIN_PASSWORD` in `.env` and re-run the Keycloak hardening
+sync as shown by the script.
 
 ### Factory reset (delete ALL data)
 

@@ -66,10 +66,10 @@ services:
       # Keycloak 26 only supports ONE global hostname config, but this
       # install serves TWO distinct frontends from the same instance:
       #
-      #   * `auth.ticketbrainy.com` (WAF, public) → user flows on the
+      #   * `auth.example.com` (WAF, public) → user flows on the
       #     `ticketbrainy` realm (SSO login, password reset, 2FA enroll,
       #     enrollment emails)
-      #   * `http://10.55.112.112:3028` (direct LAN) → admin console on
+      #   * `http://192.168.1.50:3028` (direct LAN) → admin console on
       #     the `master` realm — never exposed externally (WAF blocks
       #     /admin/*).
       #

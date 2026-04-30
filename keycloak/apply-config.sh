@@ -25,8 +25,9 @@ MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-120}"
 #
 # Keycloak has ONE global hostname config, but this install serves TWO
 # origins from the same instance: the public WAF vhost
-# (support.ticketbrainy.com, shared with the web UI via the Next.js
-# /realms proxy) for user flows, AND the direct LAN port (10.55.x:3028)
+# (for example support.example.com, shared with the web UI via the Next.js
+# /realms proxy) for user flows, AND the direct LAN port (for example
+# 192.168.1.50:3028)
 # for the admin console on the master realm.
 #
 # Pinning KC_HOSTNAME to either one breaks the other (v1.8.2→v1.8.4

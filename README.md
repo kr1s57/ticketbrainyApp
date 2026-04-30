@@ -104,6 +104,8 @@ At the end, it prints your admin credentials and next steps.
 > **Full manual install guide:** [docs/INSTALL.md](docs/INSTALL.md)
 >
 > **Keycloak SSO step-by-step guide:** [docs/KEYCLOAK-GUIDE.md](docs/KEYCLOAK-GUIDE.md)
+>
+> **AI CLI provider setup:** [docs/SETTINGS-AI.md](docs/SETTINGS-AI.md)
 
 ## Deployment Modes
 
