@@ -2,6 +2,26 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.144922] — 2026-05-06
+
+### Fixed — TOTP enrollment with Google / Microsoft Authenticator
+
+The realm `otpPolicyAlgorithm` was set to `HmacSHA256`, but the most
+widely deployed TOTP apps (Google Authenticator, Microsoft
+Authenticator) silently ignore the `algorithm` parameter in the QR-code
+`otpauth://` URI and always compute SHA-1. Result: every code those
+apps generated was rejected with "Le code d'authentification est
+invalide" / "Invalid authentication code".
+
+Reverted to `HmacSHA1`, the RFC 6238 default and the variant accepted
+by NIST SP 800-63B. TOTP security is provided by the 160-bit shared
+secret, not the HMAC variant.
+
+After updating, users who had enrolled TOTP under the old policy must:
+1. Have their OTP credential reset (admin → user → Credentials → delete OTP)
+2. Re-add the **Configure OTP** required action
+3. Re-scan the QR code at next login
+
 ## [1.10.1449] — 2026-04-19
 
 ### Fixed — Caddy mode (VPS / public install) restored

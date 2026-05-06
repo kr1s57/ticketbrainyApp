@@ -110,7 +110,12 @@ fi
 #   maxDeltaTimeSeconds=43200          ← 12h failure window
 #   permanentLockout=false             ← auto-unlock after wait
 #   passwordPolicy=length(12)+upper+lower+digit+special+notUsername+history(5)
-#   otpPolicyAlgorithm=HmacSHA256      ← upgrade from default HmacSHA1
+#   otpPolicyAlgorithm=HmacSHA1        ← Google/MS Authenticator ignore the
+#                                         algorithm param in QR URIs and always
+#                                         compute SHA-1, so SHA-256 caused 100%
+#                                         "invalid auth code" rejection. SHA-1
+#                                         is the RFC 6238 default and accepted
+#                                         by every major TOTP app + NIST 800-63B.
 #   sslRequired=external               ← HTTPS for non-localhost
 #   registrationAllowed=false          ← no public signup
 #   editUsernameAllowed=false          ← prevent identity drift
@@ -141,7 +146,7 @@ PAYLOAD='{
   "quickLoginCheckMilliSeconds": 1000,
   "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5)",
   "otpPolicyType": "totp",
-  "otpPolicyAlgorithm": "HmacSHA256",
+  "otpPolicyAlgorithm": "HmacSHA1",
   "otpPolicyDigits": 6,
   "otpPolicyPeriod": 30,
   "sslRequired": "external",
