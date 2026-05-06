@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.144923] — 2026-05-06
+
+### Added — Customer salutation in auto-reply emails
+
+Auto-reply emails can now greet recipients politely as
+`"Bonjour M. BELLO,"` or `"Bonjour Mme. DUPONT,"` instead of the bare
+`"Bonjour BELLO,"`.
+
+A new optional **Salutation** field (`—` / `M.` / `Mme.`) was added to
+the customer record (visible in the customer create/edit dialog under
+"Key Contact"). A new template placeholder `{%customer.salutation%}`
+renders as `M.`, `Mme.`, or empty when unset.
+
+The default auto-reply template now includes the placeholder. Existing
+user-edited templates keep working unchanged but must be edited
+manually to take advantage of the new placeholder. When the
+salutation is empty, a post-substitution pass collapses any double
+space so output stays clean.
+
+Schema migration `add_customer_salutation` runs automatically on
+container restart (nullable column, no backfill).
+
 ## [1.10.144922] — 2026-05-06
 
 ### Fixed — TOTP enrollment with Google / Microsoft Authenticator
