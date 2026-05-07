@@ -2,6 +2,43 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14502] — 2026-05-07
+
+### Changed — Signature model reworked
+
+The per-agent / per-mailbox signature overrides shipped in v1.10.1450
+didn't fit the operational model. The new model is admin-only:
+
+- The admin defines the signature for each mailbox in
+  `/settings/mailboxes` (the existing `Mailbox.signature` field).
+- At reply time, the email body is auto-suffixed with a fixed
+  three-block template:
+  1. The per-mailbox logo (`Mailbox.logoPath`) as an inline CID image.
+  2. The replying agent's first + last name in bold.
+  3. The mailbox signature HTML.
+- Each block is skipped silently when its source is empty so the
+  template degrades cleanly.
+- The previous **global** brand logo from
+  `Setting.branding.logoPath` (gated by the white-label feature) is no
+  longer prepended to outgoing replies — the **per-mailbox logo**
+  replaces it.
+
+Agents no longer have any self-service control over signatures; the
+"Signatures" tab is removed from `/profile`.
+
+### Removed
+
+- `UserMailboxSignature` table + `User.defaultSignature` column
+  (down migration runs automatically on container restart).
+- 30 i18n keys (`profile.tabs.*`, `profile.signatures.*`) across the
+  5 supported locales.
+
+### Upgrade notes
+
+Existing operators don't need to do anything — the down migration
+runs automatically on container restart. Any per-agent signature data
+saved in the brief v1.10.1450 → v1.10.14501 window is dropped.
+
 ## [1.10.14501] — 2026-05-07
 
 ### Fixed
