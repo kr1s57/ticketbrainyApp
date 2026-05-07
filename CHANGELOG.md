@@ -2,6 +2,30 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14504] — 2026-05-07
+
+### Changed
+
+- **Theme + sidebar style are now global, admin-only.** Up to 14503
+  these lived in localStorage per browser, so agents had to redo the
+  styling on every device and the admin's choice never propagated to
+  the team. Four new Setting keys back the global values; the root
+  layout fetches them server-side and paints `<html data-theme>` plus
+  sidebar CSS variables without a flash. The `/profile` Apparence
+  card is removed — agents go to `/settings/appearance` (admin only)
+  to change appearance, and the change applies to every authenticated
+  user.
+
+- **Ticket page top action bar replaces the in-sidebar controls.**
+  The right-side ticket sidebar mixed metadata with operationally
+  critical actions (time tracking, billing toggle, CSAT survey,
+  merge, delete/restore), which made it cluttered. A new
+  `TicketActionBar` mounts a horizontal toolbar above the
+  `#number/subject` heading hosting the TimeTracker (left) and the
+  four action buttons (right). The sidebar now carries metadata
+  only (status, agent, customer, tags, details, dates). The
+  collapsible AI panel on the right is unchanged.
+
 ## [1.10.14503] — 2026-05-07
 
 ### Fixed
