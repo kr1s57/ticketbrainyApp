@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14503] — 2026-05-07
+
+### Fixed
+
+- **Mailbox + customer logos cached for 24 h after replacement.** Each
+  upload reused the deterministic filename `(mailbox|customer)-<id>.<ext>`,
+  so the canonical URL was identical between uploads. Combined with
+  `Cache-Control: max-age=86400` on the serve route, an operator who
+  uploaded a new logo kept seeing the old one until cache expiry.
+  Filenames are now timestamped (`(mailbox|customer)-<id>-<unix-ms>.<ext>`),
+  so the resulting URL changes on every upload and the browser/CDN
+  treats it as a new resource. Cleanup also removes legacy and older
+  timestamped variants. Cache-Control lowered to `60s, must-revalidate`
+  as a belt-and-braces measure for legacy rows.
+
 ## [1.10.14502] — 2026-05-07
 
 ### Changed — Signature model reworked
