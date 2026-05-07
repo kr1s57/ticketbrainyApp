@@ -67,7 +67,8 @@ docker compose restart caddy keycloak-init
 
 **Pre-requisites:**
 - Upstream WAF/firewall that terminates TLS (or passes it through)
-- Trust your upstream's `X-Forwarded-For` header (configure TicketBrainy accordingly)
+- Trust your upstream's `X-Forwarded-For` / country headers only after
+  the WAF has stripped any inbound spoofed copies
 - Upstream handles geoblock, L7 DDoS, rate-limiting, TLS renewals
 
 **Examples:** Cloudflare Zero Trust, Sophos XGS, F5 BIG-IP, Traefik with `middlewares`, AWS ALB + WAF.
@@ -105,6 +106,30 @@ docker compose restart caddy keycloak-init
 - 💡 Admin IP allowlist (optional — your WAF may already do this)
 - 💡 Geo Block — requires Cloudflare upstream or WAF injecting `X-Country-Code` (see [Cloudflare Setup Guide](cloudflare-setup.md))
 - ❌ Upload rate-limit (WAF should already rate-limit)
+
+**Trusted proxy policy for Sophos / enterprise WAFs:**
+
+For production behind Sophos XGS, configure the WAF to remove inbound
+client-supplied forwarding headers and inject its own values:
+
+```env
+TRUSTED_PROXY_MODE=sophos
+TRUSTED_PROXY_HEADER_NAME=x-ticketbrainy-trusted-proxy
+TRUSTED_PROXY_HEADER_VALUE=<long-random-shared-secret>
+TRUST_X_COUNTRY_CODE=true
+```
+
+Then configure Sophos XGS to add:
+
+```http
+X-TicketBrainy-Trusted-Proxy: <same-long-random-shared-secret>
+X-Country-Code: <Sophos country variable>
+X-Forwarded-For: <real client IP>
+```
+
+The secret header is not an authentication system for users. It is a
+proof that the request passed through the trusted WAF before TicketBrainy
+trusts `X-Forwarded-For`, `X-Real-IP`, or `X-Country-Code`.
 
 ## Mode `vps-caddy` — VPS with managed Caddy
 
@@ -393,20 +418,23 @@ If you are on a pre-v1.10.01 build and every SSO page throws 403 or
 "User not found" — upgrade. The earlier first-admin check was broken
 and left SSO users inactive with a half-constructed session.
 
-## Geo Block — Cloudflare requirement
+## Geo Block — trusted proxy requirement
 
 The **Geo Block** feature (Settings → Deploy & Security → Geo Block) lets
-you restrict access by country. It relies on the `CF-IPCountry` header
-that Cloudflare injects into every proxied request.
+you restrict access by country. It relies on a country header injected
+by a trusted upstream:
 
-**Cloudflare (free plan) is required** for Geo Block to work. Without it,
-the feature is disabled and the UI shows a red "Cloudflare requis" banner.
+- Cloudflare: `CF-IPCountry`
+- Sophos XGS / F5 / Traefik: `X-Country-Code`
+
+Without a trusted country header, Geo Block fails open to avoid locking
+out legitimate users.
 
 | Mode | Geo Block available? | Setup needed |
 |---|---|---|
-| `behind-waf` | ✅ Yes — add Cloudflare upstream of your WAF, or configure your WAF to inject `X-Country-Code` | See [Cloudflare Setup Guide](cloudflare-setup.md) scenarios 2 & 3 |
+| `behind-waf` | ✅ Yes — configure Sophos/F5/Traefik to inject `X-Country-Code`, or add Cloudflare upstream | See [Cloudflare Setup Guide](cloudflare-setup.md) scenarios 2 & 3 |
 | `vps-caddy` | ✅ Yes — add Cloudflare in front of the VPS | See [Cloudflare Setup Guide](cloudflare-setup.md) scenario 1 |
-| `none` | ❌ No — LAN-only, no Cloudflare | N/A |
+| `none` | ❌ No — LAN-only, no trusted country proxy | N/A |
 | `vps-naked` | ⚠️ Only if your custom proxy injects `X-Country-Code` | Manual WAF configuration required |
 
 For step-by-step instructions, see **[docs/cloudflare-setup.md](cloudflare-setup.md)**.

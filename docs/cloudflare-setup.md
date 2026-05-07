@@ -1,24 +1,31 @@
-# TicketBrainy — Cloudflare Setup Guide
+# TicketBrainy — Cloudflare / WAF Geo Setup Guide
 
-> Cloudflare (plan gratuit) est **requis** pour activer la
-> fonctionnalité **Geo Block** (blocage par pays). Sans Cloudflare,
-> le Geo Block est désactivé et la page Settings → Deploy & Security
-> → Geo Block affiche un bandeau "Cloudflare requis".
+> Geo Block nécessite une source de pays fiable injectée par un proxy
+> de confiance : Cloudflare (`CF-IPCountry`) ou un WAF professionnel
+> comme Sophos XGS (`X-Country-Code`). Sans header de pays fiable,
+> Geo Block fail-open pour éviter de bloquer les utilisateurs légitimes.
 
-## Pourquoi Cloudflare ?
+## Pourquoi Cloudflare ou un WAF ?
 
 TicketBrainy utilise le header `CF-IPCountry` que Cloudflare injecte
 automatiquement dans chaque requête passant par son réseau. Ce header
 contient le code pays ISO du visiteur (ex: `FR`, `LU`, `DE`) avec
 une fiabilité de ~99.9%, alimenté par le plus grand réseau CDN mondial.
 
+En mode production locale derrière Sophos XGS, TicketBrainy peut aussi
+lire `X-Country-Code`, à condition que le WAF supprime les headers
+entrants forgeables et ajoute un header secret partagé prouvant que la
+requête est passée par le WAF.
+
 La base GeoLite2 gratuite de MaxMind (précédemment utilisée) a été
 retirée car elle classifiait incorrectement trop d'IPs européennes.
 
 ## Prérequis
 
-- Un compte Cloudflare (plan **Free** suffit)
-- Accès à votre registrar DNS pour changer les nameservers
+- Pour le scénario Cloudflare : un compte Cloudflare (plan **Free** suffit)
+  et accès au registrar DNS pour changer les nameservers
+- Pour le scénario WAF seul : un WAF capable de supprimer/réinjecter des
+  headers HTTP, par exemple Sophos XGS, F5 ou Traefik
 
 ## Scénario 1 — VPS avec Caddy (pas de WAF)
 
@@ -80,6 +87,21 @@ curl -sI https://votre-domaine.example/login | grep "server:"
 3. Choisissez votre mode (Denylist ou Allowlist) et les pays
 4. Sauvegardez
 
+### Étape 7 : Activer la trust policy stricte (optionnel mais recommandé)
+
+Si vous utilisez Caddy + Cloudflare, ajoutez dans `.env` :
+
+```env
+TRUSTED_PROXY_MODE=cloudflare
+TRUSTED_PROXY_HEADER_VALUE=<long-random-shared-secret>
+```
+
+Caddy injecte `X-TicketBrainy-Trusted-Proxy` vers l'application. Cette
+preuve protège le hop Caddy → app. Pour garantir que les headers
+Cloudflare ne peuvent pas être forgés en arrivant directement sur Caddy,
+verrouillez aussi le firewall d'origine pour n'accepter 80/443 que depuis
+les IP Cloudflare.
+
 ## Scénario 2 — Derrière un WAF + Cloudflare
 
 Si vous avez déjà un WAF (Sophos XGS, F5, Traefik) devant
@@ -95,7 +117,7 @@ Visiteur → Cloudflare → Votre WAF → Caddy/App
 Suivez les mêmes étapes 1 à 5 du Scénario 1. Cloudflare injecte
 `CF-IPCountry` dans la requête, votre WAF la forwarde à l'app.
 
-### Whitelisting IPs Cloudflare sur le WAF (optionnel)
+### Whitelisting IPs Cloudflare sur le WAF
 
 Pour empêcher un attaquant de contourner Cloudflare en se connectant
 directement à l'IP de votre WAF, vous pouvez restreindre le trafic
@@ -105,10 +127,9 @@ HTTPS entrant aux seules IPs Cloudflare :
 - IPv6 : https://www.cloudflare.com/ips-v6
 - API : `curl -s https://api.cloudflare.com/client/v4/ips`
 
-**Cette étape est optionnelle.** Sans elle, le Geo Block fonctionne
-à 100% pour le trafic passant par le domaine (= la quasi-totalité
-des visiteurs). Le seul "bypass" serait un attaquant connaissant
-l'IP directe de votre WAF ET s'y connectant explicitement.
+Cette étape est recommandée en production. Sans elle, le Geo Block
+fonctionne pour le trafic passant par le domaine, mais un attaquant qui
+connait l'IP directe du WAF peut tenter de contourner Cloudflare.
 
 ## Scénario 3 — WAF seul (sans Cloudflare)
 
@@ -124,6 +145,25 @@ potentiellement injecter un header de pays lui-même :
 TicketBrainy lit le header `X-Country-Code` en priorité 3 (après
 `CF-IPCountry` et `X-Vercel-IP-Country`). Si votre WAF l'injecte,
 le Geo Block fonctionnera sans Cloudflare.
+
+Configuration TicketBrainy recommandée :
+
+```env
+TRUSTED_PROXY_MODE=sophos
+TRUSTED_PROXY_HEADER_NAME=x-ticketbrainy-trusted-proxy
+TRUSTED_PROXY_HEADER_VALUE=<long-random-shared-secret>
+TRUST_X_COUNTRY_CODE=true
+```
+
+Configuration WAF requise :
+
+1. Supprimer les headers entrants forgeables :
+   `CF-Connecting-IP`, `CF-IPCountry`, `X-Forwarded-For`,
+   `X-Real-IP`, `X-Country-Code`, `X-TicketBrainy-Trusted-Proxy`.
+2. Réinjecter les valeurs validées par le WAF :
+   `X-Forwarded-For`, `X-Country-Code`.
+3. Ajouter le header secret :
+   `X-TicketBrainy-Trusted-Proxy: <long-random-shared-secret>`.
 
 **Limitation** : la précision dépend de la base GeoIP de votre WAF.
 Les WAF commerciaux (Sophos, F5) utilisent généralement des bases
@@ -152,9 +192,9 @@ R: Oui. Le header `CF-IPCountry` est inclus dans tous les plans,
 y compris Free.
 
 **Q: Le Geo Block fonctionne-t-il sans Cloudflare ?**
-R: Non (sauf si votre WAF injecte `X-Country-Code`). Sans header
-de pays, le Geo Block fail-open (autorise tout le monde) et la page
-Settings affiche un bandeau rouge "Cloudflare requis".
+R: Oui si votre WAF injecte un `X-Country-Code` fiable et que
+`TRUSTED_PROXY_MODE=sophos` ou `custom` est configuré. Sans Cloudflare
+ni WAF de confiance, le Geo Block fail-open.
 
 **Q: Les certificats Let's Encrypt de Caddy vont-ils continuer
 à fonctionner ?**

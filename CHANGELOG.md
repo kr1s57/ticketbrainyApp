@@ -2,6 +2,86 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1450] — 2026-05-07
+
+### Added
+
+- **Per-agent email signatures with cascade resolution.** Each agent can
+  now manage their own signatures from `/profile` → "Signatures" tab:
+  - One default signature reused across every mailbox the agent has access to.
+  - Optional per-mailbox overrides for agents who need a different sign-off.
+  - Cascade at reply time: per-(user, mailbox) override → user default →
+    legacy mailbox signature + auto-injected agent name.
+  - The mailbox logo is reused (no extra upload UI). Tiptap rich editor
+    with HTML sanitization on save and on render. 30 new i18n keys in
+    5 locales. New table `UserMailboxSignature` and a new nullable
+    `User.defaultSignature` column.
+
+- **Senior-engineer AI prompts** with prompt-injection guardrails: the
+  Expert and Engineer agents now treat ticket content as untrusted input
+  and ignore role-override instructions hidden in emails or quoted text.
+
+- **Expert-skill weighted matching.** Skills triggered by subject hits
+  rank above body hits, multi-word triggers above single-word; loaded
+  skill names propagate into the resolution metadata for traceability.
+
+- **Trusted-proxy mode** (`TRUSTED_PROXY_MODE` env: legacy/none/cloudflare/
+  sophos/custom). Cloudflare and custom WAF country/IP headers are now
+  trusted only when an explicit Caddy-injected proof header is present
+  (`X-TicketBrainy-Trusted-Proxy`), preventing direct-origin spoofing.
+  Cloudflare IPv6 ranges added to Caddy's `trusted_proxies`.
+
+- **Geo-block auto-persistence.** Geo-blocked IPs are written to
+  `IpBlocklist` for 24 h with structured metadata; admins can later
+  remove them via the dashboard.
+
+- **Security dashboard period filter** (24h / 48h / 7d / 30d) drives
+  all KPIs, the timeline, and the country chart. Blocked-IPs KPI gets
+  a dialog showing live blocklist rows with a one-click unban action.
+
+- **Inbound email security.** New module classifies dangerous attachments
+  (executables, macros, archives) and sanitizes inbound HTML before
+  persistence.
+
+### Fixed
+
+- **Cloudflare email obfuscation no longer breaks hydration.** Email
+  addresses now render via a delayed-mount component, and the root
+  layout is wrapped in `<!--email_off-->` markers (the official CF
+  opt-out comment). The public-email-domains section was rewritten as
+  a Server Component using native `<form action>` POSTs so the delete
+  button keeps working when CF email-decode breaks React hydration.
+
+- **Public email domains can now be deleted** by ADMIN or SUPERVISOR.
+
+- **Manual deep-analysis enforced.** `updateMailbox` always sets
+  `autoDeepAnalysis=false` so legacy rows or stale clients can't
+  re-enable automatic deep analysis behind the operator's back.
+
+- **Claude CLI auth fallback.** When Claude CLI returns 401 /
+  authentication errors, the AI service transparently falls back to
+  Codex CLI instead of failing the analysis.
+
+### Security
+
+- **Keycloak device-flow + dynamic client-registration blocked at the
+  edge.** Caddy now responds 404 on `/realms/*/device` and
+  `/realms/*/clients-registrations` (defense-in-depth, IT-Secure
+  pentest finding).
+
+- Tighter CSP: `script-src-elem` allows only the official Cloudflare
+  email-decode script; `Cache-Control: no-transform` defeats CDN HTML
+  rewriting that previously corrupted nonce-protected scripts.
+
+### Upgrade notes
+
+If your instance is fronted by Cloudflare and you want to harden
+header trust, set `TRUSTED_PROXY_MODE=cloudflare` and
+`TRUSTED_PROXY_HEADER_VALUE=$(openssl rand -hex 32)` in `.env`, then
+`docker compose up -d --force-recreate`. The default `legacy` mode
+keeps the previous header-trust behavior so existing installs
+upgrade without configuration changes.
+
 ## [1.10.144923] — 2026-05-06
 
 ### Added — Customer salutation in auto-reply emails

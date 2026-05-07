@@ -192,6 +192,10 @@ services:
       KC_BASE_URL: http://keycloak:8080
       CADDY_DATA_DIR: /data/caddy
       SECURITY_ALLOWLIST_BYPASS: ${SECURITY_ALLOWLIST_BYPASS:-}
+      TRUSTED_PROXY_MODE: ${TRUSTED_PROXY_MODE:-legacy}
+      TRUSTED_PROXY_HEADER_NAME: ${TRUSTED_PROXY_HEADER_NAME:-x-ticketbrainy-trusted-proxy}
+      TRUSTED_PROXY_HEADER_VALUE: ${TRUSTED_PROXY_HEADER_VALUE:-}
+      TRUST_X_COUNTRY_CODE: ${TRUST_X_COUNTRY_CODE:-}
       # v1.10.03: pass deployment topology through to the web container so
       # Settings → Deployment (getLiveConfig) and the activate wizard (mode
       # auto-detection) can read the actual installed topology instead of
@@ -316,6 +320,7 @@ services:
       APP_DOMAIN: ${APP_DOMAIN}
       KEYCLOAK_DOMAIN: ${KEYCLOAK_DOMAIN:-}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+      TRUSTED_PROXY_HEADER_VALUE: ${TRUSTED_PROXY_HEADER_VALUE:-}
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./proxy/caddy-entrypoint.sh:/usr/local/bin/caddy-entrypoint.sh:ro

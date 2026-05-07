@@ -14,9 +14,9 @@
     # admin allowlist) see the actual visitor IP.
     # Safe for non-Cloudflare installs: if no CF proxy is present,
     # no XFF header is injected and remote_ip falls back to TCP IP.
-    # Source: https://www.cloudflare.com/ips-v4
+    # Source: https://www.cloudflare.com/ips-v4 + /ips-v6
     servers {
-        trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
+        trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
     }
 }
 
@@ -25,6 +25,11 @@
     reverse_proxy web:3000 {
         # Required for AI streaming (Server-Sent Events)
         flush_interval -1
+        # Optional Caddy-to-app proof consumed by the web app when
+        # TRUSTED_PROXY_MODE=cloudflare. In production, pair this with
+        # origin firewall rules that allow 80/443 only from Cloudflare.
+        # Leave TRUSTED_PROXY_HEADER_VALUE empty for legacy behavior.
+        header_up X-TicketBrainy-Trusted-Proxy "{$TRUSTED_PROXY_HEADER_VALUE:}"
     }
 
     # Upload size limit
@@ -70,6 +75,11 @@
         path /admin/* /admin /realms/master/*
     }
     respond @kc_admin_hidden 404
+
+    # Block Keycloak device-flow phishing and dynamic client registration
+    # before the request reaches Keycloak.
+    @kc_dangerous_flows path_regexp dangerous_flow ^/realms/[^/]+/(device|clients-registrations)(/.*)?$
+    respond @kc_dangerous_flows 404
 
     # v1.10.131 fix H-03 : retirer les headers CORS réfléchis par
     # Keycloak avant d'appliquer notre propre whitelist.
