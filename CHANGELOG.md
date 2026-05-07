@@ -2,6 +2,17 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14501] — 2026-05-07
+
+### Fixed
+
+- **Language picker now reachable from `/profile`.** Agents without ADMIN
+  role couldn't access `/settings/language` (settings tree is admin-only),
+  so they had no way to change the WebUI language. The existing picker is
+  now mounted as a new card under the Profile tab, available to every
+  authenticated agent. 10 new i18n keys added across the 5 supported
+  locales.
+
 ## [1.10.1450] — 2026-05-07
 
 ### Added
