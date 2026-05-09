@@ -451,7 +451,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 8 (v1.10.1447 pentest fix) — disable ROPC on default realm clients
+# Step 8 (v1.10.1447 pentest fix) — disable legacy grants on default realm clients
 # ---------------------------------------------------------------------------
 # Finding pentest 2026-04-13 : le grant type password (ROPC) est annoncé
 # dans le .well-known/openid-configuration ET les clients par défaut de
@@ -464,7 +464,7 @@ fi
 # ticketbrainy. Le admin-cli du realm MASTER reste intact (nécessaire
 # pour ce script lui-même et keycloak-reset-admin.sh — mitigé par la
 # brute-force protection du Step 7).
-echo "[apply-config] disabling ROPC (Direct Access Grants) on default clients..."
+echo "[apply-config] disabling ROPC and implicit flow on default clients..."
 
 for DEFAULT_CLIENT_ID in admin-cli account account-console broker security-admin-console; do
   DC_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
@@ -476,9 +476,9 @@ for DEFAULT_CLIENT_ID in admin-cli account account-console broker security-admin
       -X PUT "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${DC_UUID}" \
       -H "Authorization: Bearer ${TOKEN}" \
       -H "Content-Type: application/json" \
-      -d "{\"clientId\":\"${DEFAULT_CLIENT_ID}\",\"directAccessGrantsEnabled\":false}")
+      -d "{\"clientId\":\"${DEFAULT_CLIENT_ID}\",\"directAccessGrantsEnabled\":false,\"implicitFlowEnabled\":false}")
     if [ "$DC_PUT_STATUS" = "204" ]; then
-      echo "[apply-config]   ${DEFAULT_CLIENT_ID}: ROPC disabled"
+      echo "[apply-config]   ${DEFAULT_CLIENT_ID}: ROPC/implicit disabled"
     else
       echo "[apply-config]   ${DEFAULT_CLIENT_ID}: PUT returned HTTP ${DC_PUT_STATUS} (non-fatal)" >&2
     fi

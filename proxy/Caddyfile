@@ -78,7 +78,7 @@
 
     # Block Keycloak device-flow phishing and dynamic client registration
     # before the request reaches Keycloak.
-    @kc_dangerous_flows path_regexp dangerous_flow ^/realms/[^/]+/(device|clients-registrations)(/.*)?$
+    @kc_dangerous_flows path_regexp dangerous_flow ^/realms/[^/]+/(device|clients-registrations)(/.*)?$|^/realms/[^/]+/protocol/openid-connect/auth/device$
     respond @kc_dangerous_flows 404
 
     # v1.10.131 fix H-03 : retirer les headers CORS réfléchis par

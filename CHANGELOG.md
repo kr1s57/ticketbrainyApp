@@ -2,6 +2,40 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.145041] — 2026-05-09
+
+### Fixed
+
+- **AI deep-analyze and triage no longer fail when Codex CLI is the
+  active AI provider.** Earlier builds passed the configured Claude
+  model id (`claude-sonnet-4-…`) directly to `codex exec --model …`.
+  Codex with a ChatGPT account only accepts OpenAI model ids, so the
+  request was rejected with `400 invalid_request_error: model is not
+  supported` and AI features silently failed when the provider was
+  set to Codex CLI (either explicitly in Settings → XpertTeamIA, or
+  via the automatic fallback when the Claude CLI session expires).
+  The AI service now detects `claude-*` ids and uses `CODEX_MODEL`
+  (env) or Codex's default model instead.
+
+  **Operator note:** if you run TicketBrainy with the Codex CLI
+  provider, set `CODEX_MODEL` in `.env` (e.g. `CODEX_MODEL=gpt-5`)
+  to pin the Codex-side model deterministically. Without it, the
+  Codex CLI default applies.
+
+### Hardening (rolled up from the development branch)
+
+- **Keycloak default clients now have implicit flow disabled** in
+  addition to ROPC. `keycloak/apply-config.sh` updates `admin-cli`,
+  `account`, `account-console`, `broker`, and `security-admin-console`
+  to disable both `directAccessGrantsEnabled` and `implicitFlowEnabled`.
+  The application client `ticketbrainy-web` already had implicit
+  flow disabled in the realm template; the realm JSON now declares
+  it explicitly.
+- **Caddy blocks the `/protocol/openid-connect/auth/device` Keycloak
+  device-authorization endpoint** in addition to `/device` and
+  `/clients-registrations`, closing a phishing-grade vector that
+  bypassed the previous regex.
+
 ## [1.10.14504] — 2026-05-07
 
 ### Changed

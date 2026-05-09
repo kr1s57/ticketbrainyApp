@@ -43,6 +43,7 @@
         "http://${LAN_HOST}:${APP_PORT}"
       ],
       "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": true,
