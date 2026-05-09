@@ -1,6 +1,10 @@
 services:
   db:
-    image: postgres:16-alpine
+    # v1.10.146: switched from postgres:16-alpine to pgvector/pgvector:pg16
+    # to provide the `vector` extension required by the RAG knowledge
+    # builder. Drop-in compatible with the existing pg-data volume —
+    # same Postgres 16 underneath, no manual migration needed.
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-ticketbrainy}
@@ -33,7 +37,9 @@ services:
 
   migrate:
     image: ghcr.io/kr1s57/ticketbrainy-migrate:latest
-    command: sh -c "cd apps/web && npx prisma db push"
+    # v1.10.146: raw-SQL migrations first (CREATE EXTENSION vector +
+    # AiKnowledgeChunk table), THEN prisma db push for the rest.
+    command: sh -c "cd apps/web && node prisma/run-raw-migrations.mjs && npx prisma db push"
     environment:
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
     depends_on:
@@ -248,6 +254,11 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
       APP_URL: ${APP_URL:-http://localhost:3000}
       AI_SERVICE_PORT: "3001"
+      # v1.10.146: RAG knowledge builder. The ai-service falls back
+      # gracefully when these are unreachable (skips the crawl, keeps
+      # the rest of the analysis flow working).
+      RAG_SEARXNG_URL: http://searxng:8080
+      RAG_EMBEDDINGS_URL: http://embeddings:80
     volumes:
       - claude-config:/home/appuser/.claude
       # Host Claude CLI creds, read-only. Synced into the persistent volume
@@ -305,6 +316,45 @@ services:
     networks:
       - internal
 
+  # v1.10.146: SearXNG meta-search aggregator for the RAG knowledge
+  # builder. Self-hosted, zero external API keys required, aggregates
+  # 70+ engines (Reddit, ServerFault, StackOverflow, GitHub, NVD,
+  # Microsoft Learn, Google, Bing, DuckDuckGo, Brave). Internal-only —
+  # never exposed publicly. The ai-service queries it via
+  # http://searxng:8080.
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+      SEARXNG_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+
+  # v1.10.146: HuggingFace Text Embeddings Inference for the RAG.
+  # Hosts BAAI/bge-m3 (1024 dims, multilingual FR/DE/IT/ES/EN). CPU
+  # mode by default — operators with a GPU can swap the image tag to
+  # a CUDA-enabled one (e.g. `:cuda-1.6`) and add `runtime: nvidia`.
+  # The named volume `tei-models` keeps the ~2 GB model across
+  # container rebuilds so customers don't re-download on every
+  # `docker compose up -d`.
+  embeddings:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.6
+    restart: unless-stopped
+    command: ["--model-id", "BAAI/bge-m3", "--port", "80"]
+    environment:
+      HF_HOME: /data
+      HUGGINGFACE_HUB_CACHE: /data
+    volumes:
+      - tei-models:/data
+    networks:
+      - internal
+
   # v1.10.1449: Caddy reverse proxy for Caddy-mode (VPS / public) installs.
   # Only starts when docker compose is invoked with --profile with-proxy
   # (done automatically by install.sh when the operator picks Mode B).
@@ -339,6 +389,7 @@ volumes:
   claude-config:
   caddy-data:
   kc-secrets:
+  tei-models:
 
 networks:
   internal:

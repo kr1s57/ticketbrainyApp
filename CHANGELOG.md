@@ -2,6 +2,59 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.146] — 2026-05-09
+
+### Added — RAG Knowledge Builder (XpertTeamIA)
+
+A topic-driven, just-in-time knowledge base that enriches Deep
+Analysis with public knowledge fetched on demand. **Self-hosted, zero
+external API keys required.**
+
+- **Two new sidecar containers** in `docker-compose.yml`:
+  - `searxng` (image `searxng/searxng:latest`) — privacy-first meta-
+    search aggregator over Reddit, ServerFault, StackOverflow,
+    GitHub, NVD, Microsoft Learn, Google, Bing, DuckDuckGo, Brave.
+    Internal-only on the docker network.
+  - `embeddings` (image `ghcr.io/huggingface/text-embeddings-inference:cpu-1.6`)
+    hosting `BAAI/bge-m3` (multilingual: FR/DE/IT/ES/EN). The model
+    (~2 GB) downloads on first start into a named volume
+    (`tei-models`) so it survives container rebuilds.
+- **Postgres** image switched from `postgres:16-alpine` to
+  `pgvector/pgvector:pg16` (drop-in compatible with the existing
+  `pg-data` volume) to enable the `vector` extension. The
+  `vector` extension is enabled and the `AiKnowledgeChunk` table
+  is created automatically by the migrate container at first boot.
+- **How it works**: when a new ticket is triaged, the AI service
+  queries SearXNG in the background using keywords derived from the
+  triage, fetches a handful of authoritative sources, embeds them
+  via the local TEI sidecar, and stores them in pgvector under the
+  detected topic. When an agent runs a Deep Analysis on a similar
+  ticket later, the top-K most relevant passages are injected into
+  the Expert prompt as `EXTERNAL KNOWLEDGE`. The base grows
+  organically with your real ticket flow — there is no upfront crawl.
+- **Settings UI** at `Settings → XpertTeamIA → RAG Knowledge Builder`:
+  master on/off, per-engine-category toggles (Tech / Vendor docs /
+  Security-CVE / Generalist), max results per search, max crawls
+  per topic per day, cache TTL, top-K, optional domain allowlist.
+  Health checks on both sidecars are surfaced live.
+- **Source attribution**: each Deep Analysis result lists the
+  external sources it used as `kb:<source>` badges in the "Skills
+  Used" row of the AI sidebar.
+
+### Operator notes
+
+- **RAM**: TEI with bge-m3 needs about 2 GB resident memory.
+  **Recommend 8 GB minimum** on the host (16 GB ideal). On 4 GB
+  hosts, disable the RAG (`Settings → XpertTeamIA → RAG enabled = OFF`).
+- **First boot**: TEI downloads the bge-m3 model (~2 GB) on its
+  first start. Subsequent restarts reuse the named volume.
+- **No external API keys**: SearXNG aggregates public engines and
+  TEI runs locally — neither needs a key. The `.env` file has zero
+  RAG-specific entries to fill in.
+- **Disable**: set `ai.rag.enabled=false` from the Settings UI. The
+  Deep Analysis flow then runs without external knowledge, exactly
+  like before.
+
 ## [1.10.145044] — 2026-05-09
 
 ### Fixed

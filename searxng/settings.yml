@@ -1,0 +1,135 @@
+# ──────────────────────────────────────────────────────────────────
+# TicketBrainy SearXNG configuration (v1.10.146)
+# Used by the RAG Knowledge Builder in apps/ai-service/src/rag.
+# Internal-only — never exposed publicly. ai-service queries it via
+# http://searxng:8080/search?format=json&q=...&categories=...
+# ──────────────────────────────────────────────────────────────────
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "TicketBrainy RAG search"
+  privacypolicy_url: false
+  donation_url: false
+  contact_url: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "all"
+  formats:
+    - html
+    - json
+
+server:
+  # Generated via `openssl rand -hex 32` at first run; rotated when the
+  # operator rebuilds the container with a fresh secret.
+  secret_key: "tb-rag-searxng-replace-on-deploy"
+  base_url: false
+  image_proxy: false
+  http_protocol_version: "1.0"
+  method: "POST"
+  default_http_headers:
+    X-Content-Type-Options: nosniff
+    X-Download-Options: noopen
+    X-Robots-Tag: noindex, nofollow
+    Referrer-Policy: no-referrer
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+  results_on_new_tab: false
+
+redis:
+  url: redis://${REDIS_PASSWORD}@redis:6379/2
+
+outgoing:
+  request_timeout: 6.0
+  max_request_timeout: 12.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+# ─── Engines ─────────────────────────────────────────────────────
+# Each engine maps to a search source. The ai-service picks
+# `categories: …` per RAG query depending on which engine groups the
+# admin enabled in Settings → XpertTeamIA → RAG. The categories below
+# match the four UI toggle groups: tech / vendor / security / general.
+engines:
+  # ── Tech communities ──
+  - name: reddit
+    engine: reddit
+    shortcut: re
+    categories: [tech]
+    timeout: 6.0
+    page_size: 25
+
+  - name: stackoverflow
+    engine: stackexchange
+    shortcut: so
+    api_site: stackoverflow
+    categories: [tech]
+    timeout: 6.0
+
+  - name: serverfault
+    engine: stackexchange
+    shortcut: sf
+    api_site: serverfault
+    categories: [tech]
+    timeout: 6.0
+
+  - name: github
+    engine: github
+    shortcut: gh
+    categories: [tech]
+    timeout: 6.0
+
+  # ── Vendor docs ──
+  # MS Learn, AWS docs, Cisco, Fortinet are queryable as generic web
+  # results — SearXNG does not have first-class engines for them.
+  # We rely on the `general` engines below + filter by domain in the
+  # ai-service crawler (allowlist enforcement).
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    categories: [general, vendor]
+    timeout: 6.0
+
+  # ── Security / CVE ──
+  # NVD: custom JSON engine. Shortcut renamed to avoid the conflict
+  # with SearXNG's built-in `nvd` shortcut binding.
+  - name: nvd cve
+    engine: json_engine
+    shortcut: nvdc
+    categories: [security]
+    paging: false
+    search_url: https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={query}&resultsPerPage=10
+    url_query: vulnerabilities/0/cve/id
+    title_query: vulnerabilities/0/cve/id
+    content_query: vulnerabilities/0/cve/descriptions/0/value
+    timeout: 8.0
+
+  # ── Generalist ──
+  - name: google
+    engine: google
+    shortcut: go
+    categories: [general]
+    timeout: 6.0
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    categories: [general]
+    timeout: 6.0
+
+  - name: brave
+    engine: brave
+    shortcut: br
+    categories: [general]
+    timeout: 6.0
+
+categories_as_tabs:
+  tech:
+  vendor:
+  security:
+  general:
