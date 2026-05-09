@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1467] — 2026-05-09
+
+### Fixed
+
+- **Deep Analysis "Proposed Resolutions" steps were truncated.**
+  Expanding a resolution showed the first few lines of steps but
+  the rest was clipped with no visible scrollbar. Long resolutions
+  are now fully scrollable, and multi-line model output renders
+  correctly with preserved line breaks.
+
 ## [1.10.1466] — 2026-05-09
 
 ### Fixed
