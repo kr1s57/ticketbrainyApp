@@ -2,6 +2,35 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1465] — 2026-05-09
+
+### Fixed — RAG Knowledge Builder now actually surfaces external sources
+
+The first end-to-end test on a real ticket (Sophos XGS Safe Failed
+Mode v22) showed the Deep Analysis ran but the "External sources
+used" card stayed empty even though the answer was 100% available
+on Sophos Community. Three layered failures fixed in this release:
+
+1. **SearXNG timeout was 8 s.** Querying 4 categories in parallel
+   regularly takes >10 s. Now 25 s + a single retry on empty
+   responses.
+2. **Crawl query was repeating tokens.** "Sophos XGS … XGS v22 …
+   SOPHOS XGS …" wasted the search budget. The query builder now
+   tokenises, dedups case-insensitively, drops FR + EN stopwords,
+   and preserves version strings (v22, v22.0.0).
+3. **Vendor forums behind anti-bot WAFs were silently skipped.**
+   community.sophos.com is behind Incapsula — it returns a
+   challenge page to any non-browser fetch. The crawler now keeps
+   the SearXNG snippet as the chunk content by default and only
+   overrides it with the article when extraction succeeds. Empty
+   fetches still contribute their snippet.
+4. **Deep Analysis re-runs now trigger an on-demand crawl** when
+   the RAG turns up empty for the topic, with a 60 s deadline.
+
+Manually validated on ticket #143: 8 Sophos-specific chunks indexed
+(Sophos Community threads + Sophos Support KBs incl. "Advisory:
+Sophos Firewall goes into failsafe mode when the firmware…").
+
 ## [1.10.1463] — 2026-05-09
 
 ### Changed
