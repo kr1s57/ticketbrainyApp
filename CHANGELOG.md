@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1462] — 2026-05-09
+
+### Fixed
+
+- **Triage error message is now diagnostic.** Generic "Triage request
+  failed. Try again." was hiding 401 (stale browser bundle), 429
+  (rate limit), 502 (ai-service down). The card now shows the
+  precise reason — including a "Hard-refresh the page" hint when
+  the browser bundle is out of sync with the server build.
+- **`/api/ai/*` proxy now logs upstream errors.** Operators can grep
+  the web container logs to correlate any UI failure with its
+  precise HTTP status + body preview, without digging into
+  ai-service logs.
+
 ## [1.10.1461] — 2026-05-09
 
 ### Added
