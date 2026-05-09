@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1463] — 2026-05-09
+
+### Changed
+
+- **RAG Knowledge Base now has its own sidebar entry** under
+  Settings → IA → Compétences IA. The RAG settings (toggles, quotas,
+  allowlist, sidecar health checks) and the chunk explorer are
+  grouped on the same dedicated page at `/settings/ai/rag`.
+  Translated to FR / EN / DE / ES / IT.
+
 ## [1.10.1462] — 2026-05-09
 
 ### Fixed
