@@ -2,6 +2,18 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.145044] — 2026-05-09
+
+### Fixed
+
+- **Deep Analysis "via &lt;model&gt;" attribution now displays.** The
+  SSE handler was prematurely closing the stream on the writer
+  stage's intermediate event, before the terminal event carrying the
+  model id arrived. Triage and Summary cards were unaffected because
+  they read attribution directly from the database. Only Deep
+  Analysis was relying on the stream. Now the handler waits for the
+  actual completion event before closing.
+
 ## [1.10.145043] — 2026-05-09
 
 ### Added
