@@ -2,6 +2,43 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.145043] — 2026-05-09
+
+### Added
+
+- **Model attribution everywhere in the AI sidebar.** The Summary card
+  now shows "via &lt;model&gt;" under the generated text, matching the
+  Triage and Deep Analysis cards. The model used is persisted on the
+  ticket so it survives reloads.
+- **Triage model is now configurable.** Admins can set
+  `ai.triageModel` from the Settings UI. Defaults to Haiku as before.
+
+### Fixed
+
+- **The model attribution now reflects the model that ACTUALLY ran.**
+  When the AI provider was set to Codex CLI, the sidebar still showed
+  the requested Claude id (e.g. "claude-haiku-4-5-…") even though
+  Codex was running an OpenAI model under the hood. The service now
+  resolves the effective model from the active provider — Codex CLI
+  reports `CODEX_MODEL` (env) or `codex-default`, so agents see the
+  correct attribution.
+
+### Changed
+
+- **Top action bar uses an equal-width 4-column grid** for Billing,
+  CSAT, Merge and Delete/Restore. The Merge button no longer
+  stretches the row; all four controls keep matching widths. CSAT is
+  disabled (greyed out) instead of hidden when the ticket is still
+  open, so the layout stays stable as the ticket lifecycle progresses.
+- **Time tracking is now in the right metadata sidebar** under the
+  Status card, where it has full sidebar width and never wraps. It
+  used to live in the top action bar and wrapped to multiple lines on
+  narrow viewports.
+
+### Migrations
+
+- Adds `Ticket.aiSummaryModel TEXT` (idempotent).
+
 ## [1.10.145042] — 2026-05-09
 
 ### Added
