@@ -2,6 +2,29 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1471] — 2026-05-10
+
+### Fixed
+
+- **Global branding logo + favicon now load for unauthenticated
+  recipients.** Two new public endpoints `/api/branding-logo` and
+  `/api/branding-favicon` serve the white-label assets without a
+  TicketBrainy session, so the CSAT survey page (external customer
+  clicking the rating link) and outbound email templates (recipient
+  in Gmail/Outlook) no longer show a broken image. Filename is
+  resolved server-side from the `Setting` table, never from the
+  URL — strict pattern + path-containment defenses identical to
+  the auth-gated `/api/uploads/<file>` route. Same pattern as the
+  per-mailbox logo fix in v1.10.1468/1469, now extended to the
+  global brand.
+- **Raw migration failures are now fatal.** `run-raw-migrations.mjs`
+  used to log SQL errors and continue, letting `prisma db push`
+  run on a half-applied schema. A failing `CREATE EXTENSION
+  vector` or `AiKnowledgeChunk` migration would yield a green
+  deploy with silently-broken RAG / Deep Analysis at runtime.
+  Errors now propagate, the migrate container exits non-zero,
+  and the rollout halts before the app comes up on a broken DB.
+
 ## [1.10.147] — 2026-05-09
 
 ### Added
