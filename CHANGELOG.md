@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1466] — 2026-05-09
+
+### Fixed
+
+- **Dashboard search now matches ticket number.** Typing a bare
+  number (e.g. "143") used to return "No tickets found" because
+  the search query never looked at the `number` column. Numeric
+  searches now match the ticket number and the exact match is
+  sorted to the top.
+
 ## [1.10.1465] — 2026-05-09
 
 ### Fixed — RAG Knowledge Builder now actually surfaces external sources
