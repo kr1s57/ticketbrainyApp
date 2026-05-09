@@ -2,6 +2,40 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.145042] — 2026-05-09
+
+### Added
+
+- **Deep Analysis runs in the background and resumes on remount.** The
+  three-stage analyzer (Expert → Engineer → Writer) now persists each
+  stage to the database as it advances. Agents can refresh the page,
+  switch tabs, or navigate away during a long analysis and find it
+  completed (or still progressing) when they return — instead of
+  having to start over. The XpertTeamIA sidebar polls the analysis
+  state every 1.5 s while it is in flight and reattaches transparently.
+- **AI model attribution surfaced in the sidebar.** Both the Auto
+  Triage card and the Deep Analysis result block now show "via
+  &lt;model&gt;" under the content. For Deep Analysis the value is
+  composite (`expert:… | engineer:… | writer:…`) so agents see exactly
+  which model produced each stage. Each agent reads its model from a
+  Setting key (`ai.expertModel`, `ai.engineerModel`, `ai.writerModel`)
+  with the previous defaults (Sonnet/Sonnet/Haiku) as fallbacks —
+  meaning admins can swap models from Settings without a redeploy.
+
+### Changed
+
+- **Manual ticket creation closes the modal instantly.** Previously the
+  modal stayed open until auto-triage finished, which could take 5-15 s
+  on Claude/Codex CLI providers. The modal now closes as soon as the
+  ticket row is saved, and the triage runs in the background and shows
+  up in the sidebar a few seconds later.
+
+### Migrations
+
+- Adds two nullable columns to `AiAnalysis`: `currentStage TEXT`,
+  `stageProgress JSONB`. The migration is idempotent (`IF NOT EXISTS`)
+  so existing installs upgrade cleanly without manual intervention.
+
 ## [1.10.145041] — 2026-05-09
 
 ### Fixed
