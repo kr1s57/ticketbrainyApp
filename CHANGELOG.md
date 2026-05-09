@@ -2,6 +2,37 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1461] — 2026-05-09
+
+### Added
+
+- **RAG Knowledge Explorer** at `Settings → XpertTeamIA → RAG → Explorer
+  la base`. Lists every chunk indexed by the topic-driven crawler with
+  filters (topic, source, full-text search), pagination, per-chunk
+  delete, per-topic delete. Includes a **manual crawl form** so
+  admins can pre-warm the RAG for a vendor + product + query before
+  any matching ticket arrives.
+- **Sources visible in the AI sidebar.** Each Deep Analysis now lists
+  the external pages it consulted in a dedicated "External sources
+  used" card — clickable URL + source badge + similarity score.
+  Persisted on the analysis row so the information survives reloads.
+
+### Fixed
+
+- **RAG queries used to be too generic.** A "Sophos XGS firewall safe
+  failed mode" ticket would search for "firewall" alone — too broad.
+  The triage now extracts vendor + product + error keywords as
+  separate fields, and the crawler builds a precise query
+  ("Sophos XGS safe failed mode cluster") leading to far better
+  Reddit / ServerFault / vendor-doc hits.
+- **Crawler resilience.** Embed timeout raised to 90 s, work sliced
+  into independent sub-batches so a single TEI hiccup (e.g. CPU lag
+  on bge-m3) no longer kills the whole crawl.
+
+### Migrations
+
+- Adds `AiAnalysis.knowledgeSources JSONB` (idempotent).
+
 ## [1.10.146] — 2026-05-09
 
 ### Added — RAG Knowledge Builder (XpertTeamIA)
