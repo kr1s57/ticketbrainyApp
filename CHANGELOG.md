@@ -2,6 +2,18 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1469] — 2026-05-09
+
+### Fixed
+
+- **Mailbox logos now display in outbound email headers.** Outlook
+  / Gmail / Mac Mail showed a "TicketBrainy" placeholder instead of
+  the operator's mailbox logo because the route serving the logos
+  required a TicketBrainy session — but the customer's mail client
+  has no session. The route + middleware now allow `/api/uploads/
+  mailboxes/<file>` publicly, with a strict filename pattern
+  bounding the asset surface to operator-uploaded branding logos.
+
 ## [1.10.1467] — 2026-05-09
 
 ### Fixed
