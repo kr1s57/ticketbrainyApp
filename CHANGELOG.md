@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147] — 2026-05-09
+
+### Added
+
+- **Dashboard auto-refresh.** Counters and Recent Tickets list
+  refresh in place every 30 s without a full page reload. Pauses
+  while the browser tab is hidden and resumes on focus.
+- **"Refresh mailboxes" button in the left sidebar** (next to the
+  Mailboxes header). Forces an immediate IMAP poll instead of
+  waiting for the next 30 s interval. Useful when an operator
+  knows a customer just sent an email and wants the ticket to
+  appear right away. Server-side debounce (5 s) prevents fan-out
+  on multiple concurrent clicks. Translated to FR / EN / DE / ES /
+  IT.
+
 ## [1.10.1469] — 2026-05-09
 
 ### Fixed
