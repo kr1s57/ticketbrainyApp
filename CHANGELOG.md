@@ -2,6 +2,26 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1472] — 2026-05-10
+
+### Security
+
+- **`fast-uri` bumped past <=3.1.1.** Closes two HIGH advisories
+  (CVSS 7.5) on the Fastify URL parser used by `ai-service`:
+  GHSA-q3j6-qgpj-74h6 (path traversal via percent-encoded dot
+  segments) and GHSA-v39h-62p7-jpjc (host confusion via
+  percent-encoded authority delimiters). Pure transitive bump,
+  no API change.
+
+### Changed
+
+- **`postcss` spec aligned to `^8.5.10`.** The installed module
+  was already 8.5.10 (covering GHSA-qx2v-qp2m-jg93,
+  XSS via unescaped `</style>`), but the spec still pointed at
+  `^8.5.8`, so `npm audit` flagged the package as a false
+  positive on every run. Spec bumped to silence it without any
+  code change.
+
 ## [1.10.1471] — 2026-05-10
 
 ### Fixed
