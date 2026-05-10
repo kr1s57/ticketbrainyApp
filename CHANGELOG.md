@@ -2,6 +2,22 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1475] — 2026-05-10
+
+### Changed
+
+- **Slack / Teams Connect and Telegram Bot switch from one-shot
+  to annual subscription.** Listed prices unchanged at 29 € each
+  — now per year. Existing one-shot purchases are grandfathered:
+  the licences already issued have no expiry, so the gating layer
+  keeps granting them indefinitely.
+- **Enterprise Pack price raised from 89 € to 99 €** (still
+  one-shot). Applies to new checkouts only; customers who bought
+  at 89 € are unaffected.
+
+After this release every premium plugin except Enterprise Pack is
+on annual subscription.
+
 ## [1.10.1474] — 2026-05-10
 
 ### Changed
