@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1474] — 2026-05-10
+
+### Changed
+
+- **BackupMonitor switches from one-shot to annual subscription.**
+  Listed price unchanged at 49 € — now per year. Existing one-shot
+  purchases are grandfathered: licences already issued have no
+  expiry, so the gating layer keeps granting them indefinitely.
+  Same flip pattern as v1.10.1473.
+
 ## [1.10.1473] — 2026-05-10
 
 ### Changed
