@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1476] — 2026-05-10
+
+### Added
+
+- **Clickable Dashboard KPI cards.** Click any of the four KPI cards
+  (Open / New today / Unassigned / Resolved today) to open a modal
+  listing the matching tickets. Each row links to the ticket page.
+  Filter strictly mirrors the counter for consistency. Cap of 200
+  per modal with a banner that points to the full tickets list when
+  exceeded. 5 locales supported (FR / EN / ES / IT / DE).
+
+App image change only — pull `:latest` (or `:v1.10.1476`) on the
+`web` service to receive the feature. No deployment-file changes.
+
 ## [1.10.14751] — 2026-05-10
 
 ### Security
