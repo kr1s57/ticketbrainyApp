@@ -22,8 +22,14 @@ search:
     - json
 
 server:
-  # Generated via `openssl rand -hex 32` at first run; rotated when the
-  # operator rebuilds the container with a fresh secret.
+  # IMPORTANT: this placeholder MUST be replaced with a unique 32-byte
+  # hex secret before SearXNG is exposed to anything beyond the internal
+  # docker network. `scripts/generate-secrets.sh` does this automatically
+  # on first run by sed-replacing the literal string below with a fresh
+  # `openssl rand -hex 32` value. If you copied this repo manually,
+  # re-run that script (or replace this line by hand) BEFORE starting
+  # the searxng service. Leaving the placeholder in production makes
+  # session signatures predictable.
   secret_key: "tb-rag-searxng-replace-on-deploy"
   base_url: false
   image_proxy: false

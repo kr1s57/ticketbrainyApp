@@ -2,6 +2,65 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14751] — 2026-05-10
+
+### Security
+
+Hardening pass on the deployment kit (no app image changes, no GHCR
+re-tag — public repo files only). Driven by an external audit of the
+install/secrets/proxy surface.
+
+- **`install.sh` writes `.env` (and `.env.backup.*`) with
+  `umask 077` + explicit `chmod 600`.** Previously the file inherited
+  the operator's default umask; on a fresh VPS that is usually `0022`,
+  i.e. world-readable secrets. Other local users on the host could
+  read `DB_PASSWORD`, `NEXTAUTH_SECRET`, `ENCRYPTION_MASTER_KEY`, etc.
+- **`scripts/generate-secrets.sh` adopts the same posture** (`umask
+  077`, `chmod 600` before AND after the sed pass) and is now
+  protected by an `flock`-based single-writer lock. Two concurrent
+  runs racing on `sed -i` could otherwise corrupt secrets silently.
+- **SearXNG `secret_key` is now generated, not shipped.**
+  `scripts/generate-secrets.sh` produces a fresh `openssl rand -hex
+  32` value and replaces the placeholder
+  (`tb-rag-searxng-replace-on-deploy`) in
+  `searxng/settings.yml` on first run. Sessions and form signatures
+  in the internal SearXNG instance are no longer predictable across
+  installs.
+
+  *Existing installs:* re-run `bash scripts/generate-secrets.sh` and
+  `docker compose up -d --force-recreate searxng` to rotate the key.
+
+- **`scripts/keycloak-reset-admin.sh` no longer accepts the new
+  password as a command-line argument.** It is read from a masked
+  `read -rs` prompt (or from the `KC_NEW_ADMIN_PASSWORD` env var for
+  non-interactive use), validated for ≥ 12 chars, and is never echoed
+  back. Argv leaks via `ps`, shell history, and terminal logs are
+  closed.
+
+  *Migration:* drop the trailing positional `<NEW_PASSWORD>` from any
+  automation. CI callers should set `KC_NEW_ADMIN_PASSWORD` from a
+  secret store and unset it after the call.
+
+- **`README.md` Quick Start replaces `curl … get.docker.com | sh`
+  with the official Docker APT repository install** (signed by the
+  `download.docker.com` GPG key, package-manager checksum verified).
+  The previous one-liner ran an unsigned remote script as root.
+- **`docs/INSTALL.md` § Firewall split mode-aware.** Mode B (built-in
+  Caddy) and mode C (external reverse proxy) now show 80/443-only
+  rules; mode A (direct exposure) is documented as LAN/VPN-only with
+  source-IP-restricted UFW / firewalld snippets. The previous text
+  recommended opening 4000/8180 to the public internet, which contradicted
+  the Caddy hardening and exposed the Keycloak admin console
+  (`:8180/admin/`) over plain HTTP.
+
+No findings classified as **High** in the audit but deemed deliberate
+trade-offs were changed in this pass: image `:latest` tags
+(documented upgrade path), `KC_PORT` default bind, `TRUSTED_PROXY_MODE`
+default, root-uid containers + bind-mounted Claude credentials, and
+the Caddy admin API on `0.0.0.0:2019` (origin allowlist already in
+place; localhost would break in-network reload from `web:`). Those
+require larger design discussions and are tracked separately.
+
 ## [1.10.1475] — 2026-05-10
 
 ### Changed

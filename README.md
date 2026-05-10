@@ -61,17 +61,35 @@ doesn't resolve to the server yet, it warns you but lets you continue
 The fastest way to deploy: use the built-in install script.
 
 ```bash
-# 1. Install Docker & Git (if not already installed)
+# 1. Install Git
 sudo apt update && sudo apt install -y ca-certificates curl gnupg git
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-# Log out and log back in
 
-# 2. Clone and run the installer
+# 2. Install Docker Engine from Docker's official APT repository
+#    (signed with the docker.com GPG key — do NOT pipe `get.docker.com`
+#    through `sh`, that runs an unsigned remote script as root).
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+# Log out and log back in (or `newgrp docker`) so group membership applies.
+
+# 3. Clone and run the installer
 git clone https://github.com/kr1s57/ticketbrainyApp.git
 cd ticketbrainyApp
 bash install.sh
 ```
+
+> **On Debian / RHEL?** The same APT/DNF instructions live at
+> [docs.docker.com/engine/install](https://docs.docker.com/engine/install/).
+> We deliberately avoid the `curl … | sh` convenience script because it
+> bypasses package-manager signature checks and runs as root.
 
 The installer will guide you through:
 - Server IP and LAN access configuration

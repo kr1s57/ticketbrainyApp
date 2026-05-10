@@ -396,10 +396,17 @@ print_header "Writing configuration"
 
 if [ -f .env ]; then
   TS=$(date +%s)
-  cp .env ".env.backup.${TS}"
+  # Inherit owner-only perms on the backup so we don't leak yesterday's
+  # secrets while the freshly generated .env is still being written.
+  (umask 077 && cp -p .env ".env.backup.${TS}")
+  chmod 600 ".env.backup.${TS}" 2>/dev/null || true
   print_warning "Existing .env backed up to .env.backup.${TS}"
 fi
-cp .env.example .env
+# Tighten umask before any .env write so the file is born 0600. We
+# cannot rely on the operator's default umask — fresh VPS images often
+# ship with 0022, which would create a world-readable secrets file.
+(umask 077 && cp .env.example .env)
+chmod 600 .env 2>/dev/null || true
 
 # Delegate secret generation to the dedicated, tested, CRLF-safe script.
 # This is the single source of truth for secret generation — install.sh

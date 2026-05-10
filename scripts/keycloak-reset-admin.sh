@@ -5,14 +5,14 @@
 # Recovery toolkit for the Keycloak master-realm admin user. Three modes
 # depending on whether the current admin password is known:
 #
-#   ./keycloak-reset-admin.sh --mode api      <NEW_PASSWORD>
+#   ./keycloak-reset-admin.sh --mode api
 #       Logs in to Keycloak's master realm with the existing
 #       KC_ADMIN_PASSWORD from .env and resets the admin user's password
 #       via the admin REST API.
 #       Use when: admin is locked by brute force, or you simply want to
 #       rotate the password while you still have valid credentials.
 #
-#   ./keycloak-reset-admin.sh --mode recovery <NEW_PASSWORD>
+#   ./keycloak-reset-admin.sh --mode recovery
 #       Spawns a temporary recovery admin via KC_BOOTSTRAP_ADMIN_* env
 #       vars on a one-shot Keycloak container, then uses that account to
 #       reset the real admin password and disables/deletes the temporary
@@ -23,6 +23,12 @@
 #       Clears brute-force lockout state for the admin user without
 #       changing the password. Use when admin is locked but the password
 #       is still known.
+#
+# The new password is read from a masked stdin prompt (or from the
+# KC_NEW_ADMIN_PASSWORD env var for non-interactive use). It is NEVER
+# accepted on the command line — argv is visible in `ps`, shell history
+# and terminal logs, which is exactly the leak vector this script must
+# avoid.
 #
 # Run this script from the directory containing your docker-compose.yml.
 # It auto-detects the Keycloak container and Docker network — no need to
@@ -96,15 +102,53 @@ echo -e "${GREEN}✓ Detected Docker network: $NETWORK${NC}"
 # Parse args
 # ---------------------------------------------------------------------------
 MODE=""
-NEW_PASSWORD=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --mode) MODE="$2"; shift 2 ;;
     -h|--help) usage ;;
-    *) NEW_PASSWORD="$1"; shift ;;
+    *)
+      # Reject positional args entirely. Older versions of this script
+      # accepted the new password as $1, which leaks via `ps`/history/
+      # terminal logs. Force callers onto the masked-prompt path.
+      echo -e "${RED}Unexpected argument: $1${NC}" >&2
+      echo -e "${YELLOW}Passwords must not be passed on the command line.${NC}" >&2
+      echo -e "${YELLOW}You will be prompted (or set KC_NEW_ADMIN_PASSWORD env var).${NC}" >&2
+      exit 1
+      ;;
   esac
 done
 [ -z "$MODE" ] && usage
+
+# Read the new password from a masked prompt or the KC_NEW_ADMIN_PASSWORD
+# env var. Only modes that actually rotate the password need it.
+NEW_PASSWORD=""
+read_new_password() {
+  if [ -n "${KC_NEW_ADMIN_PASSWORD:-}" ]; then
+    NEW_PASSWORD="$KC_NEW_ADMIN_PASSWORD"
+    # Wipe the env var so a curious child process can't `env`-dump it.
+    unset KC_NEW_ADMIN_PASSWORD
+    return
+  fi
+  if [ ! -t 0 ]; then
+    echo -e "${RED}FATAL: stdin is not a TTY and KC_NEW_ADMIN_PASSWORD is unset.${NC}" >&2
+    echo -e "${YELLOW}For non-interactive use: KC_NEW_ADMIN_PASSWORD=... $0 --mode $MODE${NC}" >&2
+    exit 1
+  fi
+  local pw1 pw2
+  printf "New admin password: " >&2
+  IFS= read -rs pw1; echo >&2
+  printf "Confirm: " >&2
+  IFS= read -rs pw2; echo >&2
+  if [ "$pw1" != "$pw2" ]; then
+    echo -e "${RED}FATAL: passwords do not match${NC}" >&2
+    exit 1
+  fi
+  if [ ${#pw1} -lt 12 ]; then
+    echo -e "${RED}FATAL: password must be at least 12 characters${NC}" >&2
+    exit 1
+  fi
+  NEW_PASSWORD="$pw1"
+}
 
 # ---------------------------------------------------------------------------
 # Helpers — all curl calls run inside an ephemeral curlimages/curl container
@@ -155,7 +199,7 @@ reset_password_via_api() {
 case "$MODE" in
 
   api)
-    [ -z "$NEW_PASSWORD" ] && { echo -e "${RED}--mode api requires <NEW_PASSWORD>${NC}" >&2; exit 1; }
+    read_new_password
     if [ -z "${KC_ADMIN_PASSWORD:-}" ]; then
       echo -e "${RED}FATAL: KC_ADMIN_PASSWORD not in .env — try --mode recovery${NC}" >&2
       exit 5
@@ -176,7 +220,7 @@ case "$MODE" in
     ;;
 
   recovery)
-    [ -z "$NEW_PASSWORD" ] && { echo -e "${RED}--mode recovery requires <NEW_PASSWORD>${NC}" >&2; exit 1; }
+    read_new_password
     echo -e "${YELLOW}→ Recovery mode: spawning temporary bootstrap admin${NC}"
     TEMP_USER="recovery-$(date +%s)"
     TEMP_PASS="Recovery!$(openssl rand -base64 12 | tr -d '/+=' | head -c 16)"
@@ -265,8 +309,8 @@ case "$MODE" in
 
     echo -e "${GREEN}✓ Admin password reset via recovery mode${NC}"
     echo -e "${YELLOW}Next steps:${NC}"
-    echo -e "  1. Update KC_ADMIN_PASSWORD in $PROJECT_DIR/.env to:"
-    echo -e "     ${NEW_PASSWORD}"
+    echo -e "  1. Update KC_ADMIN_PASSWORD in $PROJECT_DIR/.env with the password you just typed"
+    echo -e "     (it is intentionally NOT echoed here — store it in a secrets manager now)"
     echo -e "  2. docker compose up -d --no-deps keycloak-init"
     ;;
 

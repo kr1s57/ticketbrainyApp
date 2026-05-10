@@ -272,14 +272,38 @@ Each line should have a value after the `=`. If any is empty, re-run `bash scrip
 
 ## 6. Firewall Rules
 
-TicketBrainy needs these network rules:
+TicketBrainy needs these network rules. **The right inbound rules
+depend on which deployment mode you picked in section 4.**
 
-### Inbound (allow from your users)
+### Inbound — recommended (Caddy or external reverse proxy)
 
-| Port | Service | Required |
-|------|---------|----------|
-| **4000** (or APP_PORT) | TicketBrainy web app | Yes |
-| **8180** (or KC_PORT) | Keycloak SSO | Only if using SSO |
+In **mode B (built-in Caddy)** or **mode C (external reverse proxy
+like nginx, Traefik, Sophos XGS, Cloudflare Tunnel)**, only HTTP/HTTPS
+should be reachable from the public internet. Ports 4000 and 8180 must
+**not** be exposed — Caddy/the reverse proxy talks to them over the
+local Docker network.
+
+| Port | Source | Service | Required |
+|------|--------|---------|----------|
+| **80** | public | Caddy / reverse proxy (Let's Encrypt HTTP-01 + redirect) | Yes (mode B/C) |
+| **443** | public | Caddy / reverse proxy (HTTPS) | Yes (mode B/C) |
+| **4000** | localhost / VPN / admin IPs only | TicketBrainy web app | No public exposure |
+| **8180** | localhost / VPN / admin IPs only | Keycloak SSO | No public exposure |
+
+### Inbound — only if you run mode A (no proxy, direct exposure)
+
+Mode A serves the app and Keycloak directly on plain HTTP. This is
+intended for **LAN / VPN-only** installs (no public internet exposure).
+If you must use mode A on a public host, restrict the source IPs:
+
+| Port | Source | Service | Required |
+|------|--------|---------|----------|
+| **4000** (or APP_PORT) | trusted source IPs only | TicketBrainy web app | Yes |
+| **8180** (or KC_PORT) | trusted source IPs only | Keycloak SSO | Only if using SSO |
+
+> **Do not** open 4000 / 8180 to `0.0.0.0/0` on a public host. The
+> Keycloak admin console at `:8180/admin/` and the token endpoint speak
+> plain HTTP — exposing them publicly leaks credentials in transit.
 
 ### Outbound (allow from server)
 
@@ -291,18 +315,39 @@ TicketBrainy needs these network rules:
 | Your SMTP server | 587 or 465 | Email sending | If using email |
 | `api.anthropic.com` | 443 (HTTPS) | Claude AI analysis | If using AI features |
 
-### UFW (Ubuntu)
+### UFW (Ubuntu) — mode B/C (recommended)
 
 ```bash
-sudo ufw allow 4000/tcp comment "TicketBrainy"
-sudo ufw allow 8180/tcp comment "Keycloak SSO"  # Only if using SSO
+# Public ingress: HTTPS only (HTTP for ACME + redirect to HTTPS)
+sudo ufw allow 80/tcp  comment "Caddy / proxy — ACME HTTP-01 + redirect"
+sudo ufw allow 443/tcp comment "Caddy / proxy — HTTPS"
+# 4000 / 8180 are NOT opened — they stay on the loopback / docker network.
 ```
 
-### firewalld (RHEL/Rocky)
+### UFW (Ubuntu) — mode A (LAN/VPN only)
 
 ```bash
-sudo firewall-cmd --permanent --add-port=4000/tcp
-sudo firewall-cmd --permanent --add-port=8180/tcp  # Only if using SSO
+# Allow only from your LAN / VPN range. Replace 10.0.0.0/8 with yours.
+sudo ufw allow from 10.0.0.0/8 to any port 4000 proto tcp comment "TicketBrainy (LAN)"
+sudo ufw allow from 10.0.0.0/8 to any port 8180 proto tcp comment "Keycloak (LAN)"
+```
+
+### firewalld (RHEL/Rocky) — mode B/C (recommended)
+
+```bash
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+```
+
+### firewalld (RHEL/Rocky) — mode A (LAN/VPN only)
+
+```bash
+# Restrict to a trusted zone / source. Replace 10.0.0.0/8 with yours.
+sudo firewall-cmd --permanent --new-zone=tb-lan
+sudo firewall-cmd --permanent --zone=tb-lan --add-source=10.0.0.0/8
+sudo firewall-cmd --permanent --zone=tb-lan --add-port=4000/tcp
+sudo firewall-cmd --permanent --zone=tb-lan --add-port=8180/tcp
 sudo firewall-cmd --reload
 ```
 

@@ -13,7 +13,13 @@
 
 set -euo pipefail
 
+# Any file we create from now on inherits owner-only perms. Critical
+# because we are about to write secrets into .env — a world-readable
+# .env on a shared host is a credential disclosure.
+umask 077
+
 ENV_FILE=".env"
+SEARXNG_SETTINGS="searxng/settings.yml"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "ERROR: $ENV_FILE not found in current directory." >&2
@@ -25,6 +31,24 @@ if ! command -v openssl >/dev/null 2>&1; then
   echo "ERROR: openssl is required but not installed." >&2
   exit 1
 fi
+
+# Single-writer lock. Two concurrent runs racing on `sed -i` against the
+# same .env can corrupt secrets silently — enforce mutual exclusion.
+LOCK_FILE="${ENV_FILE}.lock"
+exec 9>"$LOCK_FILE"
+if command -v flock >/dev/null 2>&1; then
+  if ! flock -n 9; then
+    echo "ERROR: another generate-secrets.sh is already writing $ENV_FILE." >&2
+    echo "       Wait for it to finish or remove $LOCK_FILE if stale." >&2
+    exit 1
+  fi
+fi
+trap 'rm -f "$LOCK_FILE"' EXIT
+
+# Tighten .env perms before we write any secret. If the operator copied
+# .env from .env.example with default umask 022, the file is currently
+# 0644 (world-readable) — close that window first.
+chmod 600 "$ENV_FILE" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # 1. Normalise line endings. Git clients with core.autocrlf=true (common on
@@ -63,6 +87,7 @@ INTERNAL_SERVICE_TOKEN=$(openssl rand -hex 32)
 SEED_ADMIN_PASSWORD=$(alnum 16)
 KEYCLOAK_CLIENT_SECRET=$(openssl rand -hex 16)
 KC_ADMIN_PASSWORD=$(alnum 16)
+SEARXNG_SECRET_KEY=$(openssl rand -hex 32)
 
 # ---------------------------------------------------------------------------
 # 3. Robust set-or-insert. Replaces the ENTIRE line for the given key, no
@@ -117,6 +142,20 @@ verify "KEYCLOAK_CLIENT_SECRET"
 verify "KC_ADMIN_PASSWORD"
 
 # ---------------------------------------------------------------------------
+# 4b. Replace the SearXNG secret_key placeholder with the freshly generated
+#     value. settings.yml is bind-mounted RO into the searxng container, so
+#     SearXNG's own entrypoint substitution (`SEARXNG_SECRET` env →
+#     `ultrasecretkey`) cannot run. We patch the file on the host instead.
+#     Idempotent: only replaces the literal placeholder.
+# ---------------------------------------------------------------------------
+if [ -f "$SEARXNG_SETTINGS" ]; then
+  if grep -q 'tb-rag-searxng-replace-on-deploy' "$SEARXNG_SETTINGS"; then
+    sed -i "s@tb-rag-searxng-replace-on-deploy@${SEARXNG_SECRET_KEY}@" "$SEARXNG_SETTINGS"
+    echo "  ${SEARXNG_SETTINGS}: secret_key rotated (placeholder replaced)"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 5. Display summary by reading values back FROM THE FILE (not from shell
 #    variables). The previous script echoed shell variables, which meant
 #    a silent sed failure would show the operator a "successful" summary
@@ -131,6 +170,9 @@ show() {
   local len=${#value}
   printf "  %-23s = %s… (%d chars)\n" "$key" "$preview" "$len"
 }
+
+# Final perm tightening — sed -i wrote a fresh inode in some cases.
+chmod 600 "$ENV_FILE" 2>/dev/null || true
 
 echo "Secrets generated successfully (values read back from ${ENV_FILE}):"
 echo ""
