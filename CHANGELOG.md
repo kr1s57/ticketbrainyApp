@@ -2,6 +2,22 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14761] — 2026-05-10
+
+### Security
+
+- **AGENT users are now properly scoped on the dashboard.** Before
+  this release, an AGENT could see KPI counters, recent tickets, the
+  7-day activity chart, the "Connected mailboxes" list, AND the new
+  KPI modal for ALL mailboxes — including ones they were not assigned
+  to. Now, every dashboard query is scoped to the user's `UserMailbox`
+  memberships when `role === "AGENT"`. ADMIN and SUPERVISOR roles see
+  everything (unchanged). Same scoping pattern already in use on the
+  `/tickets` page.
+
+App image change only — pull `:latest` (or `:v1.10.14761`) on the
+`web` service to receive the fix. No deployment-file changes.
+
 ## [1.10.1476] — 2026-05-10
 
 ### Added
