@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14762] — 2026-05-11
+
+### Changed
+
+- **AI rate limit per user raised from 60/h to 200/h.** The single
+  bucket is shared across every AI feature (triage, deep analysis,
+  email assistant, AI skills). 60/h was tripping during normal
+  multi-ticket work. Default raised to 200/h. Instances that need
+  a lower limit can still narrow it via Settings → Security UI
+  (no rebuild required).
+
+App image change only — pull `:latest` (or `:v1.10.14762`) on the
+`web` service to receive the change.
+
 ## [1.10.14761] — 2026-05-10
 
 ### Security
