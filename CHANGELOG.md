@@ -2,6 +2,18 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.1473] — 2026-05-10
+
+### Changed
+
+- **Time Tracking Pro, Email Templates Pro and CSAT & Feedback
+  switch from one-shot to annual subscription.** Listed prices
+  unchanged: 39 € / 39 € / 29 € — now per year. Existing one-shot
+  purchases are grandfathered: licences already issued have no
+  expiry, so the gating layer keeps granting them indefinitely.
+  The plugin storefront UI updates the badge from "/once" to
+  "/perYear" automatically based on the new pricing model.
+
 ## [1.10.1472] — 2026-05-10
 
 ### Security
