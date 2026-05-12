@@ -2,6 +2,92 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14766] — 2026-05-12
+
+### Fixed
+
+- **"Assignés" no longer shows the current user's own tickets.** The
+  Tickets sidebar separates "Mes conversations" (assigned to me) from
+  "Assignés" (assigned to someone else). The "Assignés" query was
+  `assignedToId != null`, which included my own tickets once I auto-
+  assigned myself by replying to an unassigned ticket. The query is
+  now `assignedToId != null AND assignedToId != currentUserId`. A
+  ticket belongs to exactly one of: "Non assignés", "Mes
+  conversations", "Assignés" — no overlap.
+- **AGENT role no longer sees mailboxes outside their access.** The
+  mailbox filter dropdown on `/tickets` loaded every active mailbox
+  regardless of `UserMailbox` scoping. The dropdown is now scoped to
+  the agent's assigned mailboxes (same rule already enforced on the
+  ticket data side).
+
+### Removed
+
+- **"Tous les tickets" global sidebar entry.** The cross-mailbox
+  catch-all view is removed from the navigation. Per-mailbox folders
+  (Non assignés / Mes conversations / Assignés / Closed / Spam) and
+  the Favorites / Deleted global views remain.
+
+App image change only — pull `:latest` (or `:v1.10.14766`) on the
+`web` service to receive the fixes.
+
+## [1.10.14765] — 2026-05-11
+
+### Fixed
+
+- **AI Assistant draft no longer adds "Cordialement / Agent name".**
+  The drafter prompt explicitly instructed the model to sign the email
+  with the agent's name, which produced a duplicate because the mail
+  system already appends the agent's signature block (name + mailbox
+  signature + logo) on send. The prompt now forbids any closing
+  salutation, agent name, team name or company name in both the
+  Assistant AI draft and the "Generate email from resolution" path.
+- **CSAT thank-you page redirected customers to /login.** The
+  middleware whitelisted `/api/csat` (the rating endpoint) but not
+  the `/csat/[ticketId]` confirmation page, so after submitting their
+  rating customers were bounced to the staff login screen. The
+  middleware now lets `/csat/*` through.
+
+App image change only — pull `:latest` (or `:v1.10.14765`) on the
+`web` service to receive the fixes.
+
+## [1.10.14764] — 2026-05-11
+
+### Changed
+
+- **Auto-triage no longer sends an email notification.** Auto-triage
+  runs on every inbound ticket and was queuing a `[AI Auto-Triage]`
+  email to every subscriber on the mailbox, which agents found noisy
+  (the triage summary is already visible in the ticket UI and in the
+  Telegram alert when enabled). Email notifications are now reserved
+  for **Deep Analysis** (a manual agent action). Telegram
+  notifications for auto-triage are unchanged.
+
+App image change only — pull `:latest` (or `:v1.10.14764`) on the
+`web` service to receive the change.
+
+## [1.10.14763] — 2026-05-11
+
+### Fixed
+
+- **Mailbox logo oversized in reply email signatures.** Outlook and
+  many corporate mail clients ignore CSS `max-height`/`max-width` on
+  `<img>` tags; the per-mailbox logo injected at the top of agent
+  reply signatures was rendered at its native size in those clients.
+  The logo now ships with an explicit HTML `height="48"` attribute
+  alongside the existing CSS constraints, so it renders at ~48px tall
+  everywhere.
+- **DMARC badge falsely showing "valid" on senders with no DMARC
+  record.** Microsoft 365 emits `dmarc=bestguesspass` in the
+  `Authentication-Results` header when the sender domain publishes no
+  DMARC record but SPF/DKIM pass — it is a heuristic guess, not a
+  real DMARC pass. The parser was mapping `bestguesspass` to `pass`,
+  causing inbound tickets from domains without published DMARC to
+  display a misleading green "valid" badge. We now map
+  `bestguesspass` to `none`.
+
+App image change only — pull `:latest` (or `:v1.10.14763`) on the
+`web` and `mail-service` services to receive the fixes.
+
 ## [1.10.14762] — 2026-05-11
 
 ### Changed
