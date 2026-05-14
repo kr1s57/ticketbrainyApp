@@ -2,6 +2,26 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14767] — 2026-05-14
+
+### Removed
+
+- **Slack / Teams Connect plugin retired.** The webhook-based notification
+  integration for Slack and Microsoft Teams is removed from TicketBrainy.
+  Telegram remains the only first-class chat integration. Microsoft has
+  been retiring the Office 365 Connectors (MessageCard format) since 2024
+  and the limited one-way notification surface no longer matched the
+  product direction. Removed: the `Settings → Integrations` page, the
+  `WebhookIntegration` Prisma model (dropped by migration
+  `20260514_drop_webhook_integration`), the webhook dispatcher, and the
+  `slack_connect` plugin entry in the marketplace registry.
+
+App image change only — pull `:latest` (or `:v1.10.14767`) on the
+`web`, `ai-service`, `mail-service`, `telegram-bot`, and `migrate`
+services. The migrate container drops the now-orphaned
+`WebhookIntegration` table automatically on first run; the table holds
+no production data on any known deployment.
+
 ## [1.10.14766] — 2026-05-12
 
 ### Fixed
