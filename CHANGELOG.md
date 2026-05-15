@@ -2,6 +2,23 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14770] — 2026-05-15
+
+### Fixed
+
+- **Re-fetcher un mail dont le ticket parent est dans la corbeille
+  ne créait pas de nouveau ticket.** Si l'opérateur supprimait un
+  ticket (soft-delete) puis remettait le mail en non-lu sur le
+  serveur IMAP pour le re-pousser, le mail-service le marquait
+  `\Seen` sans créer de nouveau ticket : la dedup `messageId` et le
+  threading par `In-Reply-To` / `[#N]` se ré-attachaient
+  silencieusement au ticket en corbeille. Les requêtes ignorent
+  désormais `Ticket.deletedAt != null`. Le mail "ressuscité"
+  produit maintenant un nouveau ticket comme attendu.
+
+App image change uniquement — pull `:latest` (ou `:v1.10.14770`)
+sur les 5 services. Pas de migration.
+
 ## [1.10.14769] — 2026-05-15
 
 ### Fixed
