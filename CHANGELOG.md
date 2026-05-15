@@ -2,6 +2,25 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14771] — 2026-05-16
+
+### Fixed
+
+- **Numéro de ticket désormais présent dans le sujet de tous les
+  mails sortants.** Réponses agents, notifications de résolution,
+  auto-close, enquêtes CSAT, auto-replies et notifications de
+  changement de client utilisent désormais le format canonique
+  `[Ticket #N] <subject>` ou `Re: [Ticket #N] <subject>`. Le helper
+  unifié nettoie aussi les `Re:` et `[#N]` accumulés au fil des
+  échanges. Le client peut maintenant identifier le ticket
+  concerné dès l'aperçu de la boîte de réception.
+- **Threading par sujet : reconnaît `[Ticket #N]`** en plus du
+  legacy `[#N]`, pour les gateways qui strippent les headers
+  `In-Reply-To` / `References`.
+
+App image change uniquement — pull `:latest` (ou `:v1.10.14771`)
+sur les 5 services. Aucune migration.
+
 ## [1.10.14770] — 2026-05-15
 
 ### Fixed
