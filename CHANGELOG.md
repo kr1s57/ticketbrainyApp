@@ -2,6 +2,42 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14768] — 2026-05-15
+
+### Fixed
+
+- **RAG Knowledge Builder : sur-fragmentation et accumulation sans
+  plafond.** Avant ce fix, un seul article web pouvait remplir un
+  topic avec 13 chunks redondants (cas observé sur un article
+  `acronis.com` dans le topic `data-recovery`), et chaque nouveau
+  ticket déclenchait un nouveau crawl qui ajoutait des chunks **sans
+  jamais purger** : l'index grimpait à 210+ chunks répartis sur 9
+  topics, avec énormément de doublons sémantiques et de sources peu
+  pertinentes.
+  - Le découpage `chunkText()` plafonne désormais à **2 chunks
+    maximum par article** (au lieu d'autant de chunks de 2400 chars
+    qu'en contient l'article — jusqu'à 13 sur les articles longs).
+  - Nouvelle fonction `pruneTopic()` appelée après chaque crawl :
+    maintient l'invariant *au plus 5 URLs par topic, 1 chunk par URL
+    (le premier = intro de l'article)*, en privilégiant les sources
+    les plus récentes.
+
+### Added
+
+- **`docs/ops/rag-cleanup-v1.10.14768.sql`** — script SQL idempotent
+  à exécuter une fois sur les instances existantes pour aligner la
+  table `AiKnowledgeChunk` avec le nouvel invariant (sans attendre
+  qu'un nouveau ticket re-déclenche un crawl). Voir l'en-tête du
+  fichier pour les commandes `docker cp` + `psql`.
+
+### Upgrade
+
+Pull `:latest` (ou `:v1.10.14768`) sur les 5 services (`web`,
+`ai-service`, `mail-service`, `telegram-bot`, `migrate`). Pas de
+migration Prisma. Recommandé après `up -d` : exécuter
+`docs/ops/rag-cleanup-v1.10.14768.sql` une seule fois pour purger
+les chunks accumulés avant ce fix.
+
 ## Installer hotfix — 2026-05-15
 
 ### Fixed
