@@ -2,6 +2,38 @@
 
 All notable releases of TicketBrainy.
 
+## Installer hotfix — 2026-05-15
+
+### Fixed
+
+- **`install.sh` Mode A : prompt manquant pour l'URL HTTPS publique.**
+  En Mode A (reverse proxy externe — Sophos XGS, nginx, Traefik…), le
+  wizard écrivait `APP_URL=http://${SERVER_IP}:4000` sans demander le
+  FQDN HTTPS public devant le proxy. Conséquences :
+    * **Microsoft 365 / Google Workspace OAuth refusait d'ajouter les
+      mailboxes** — Azure AD et Google rejettent les redirect URIs HTTP
+      hors `localhost`. L'écran d'erreur Microsoft générique *"Désolé,
+      nous rencontrons des problèmes pour vous connecter"* après le 2FA
+      vient quasi exclusivement de là.
+    * Cookies de session NextAuth non marqués `Secure` (vol de session
+      possible sur réseau partagé / hotspot).
+    * Redirect URI Keycloak SSO pointait sur l'IP LAN HTTP — KO pour
+      les clients qui se connectent depuis Internet.
+  Le wizard demande désormais l'**URL HTTPS publique optionnelle** en
+  Mode A. Si renseignée, elle alimente `APP_URL`, et donc par effet
+  d'héritage `NEXTAUTH_URL` et `KEYCLOAK_URL`. Si vide, comportement
+  identique à avant (LAN-only direct).
+- **Docs `INSTALL.md` + `deployment-modes.md` + `DEPLOYMENT-MODES.md` :**
+  notes dédiées au scénario Mode A + reverse proxy externe avec OAuth.
+  Précise explicitement la contrainte Azure / Google sur le HTTP
+  non-localhost et la procédure de rattrapage si le prompt n'a pas été
+  saisi à l'install (`.env` + `docker compose up -d --force-recreate
+  web keycloak`).
+
+Pas de changement d'image — installer script et documentation
+uniquement, aucun rebuild Docker requis. Les déploiements existants
+qui ont déjà patché manuellement `APP_URL` n'ont rien à faire.
+
 ## [1.10.14767] — 2026-05-14
 
 ### Removed

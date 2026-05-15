@@ -305,6 +305,19 @@ If you must use mode A on a public host, restrict the source IPs:
 > Keycloak admin console at `:8180/admin/` and the token endpoint speak
 > plain HTTP — exposing them publicly leaks credentials in transit.
 
+> ⚠ **Mode A + OAuth mailboxes (Microsoft 365 / Google Workspace).**
+> Azure AD and Google refuse HTTP redirect URIs outside of `localhost`,
+> so a pure mode A install (`APP_URL=http://<ip>:4000`) **cannot** add
+> M365 or Google mailboxes — the OAuth callback fails with a generic
+> *"Sorry, we ran into a problem signing you in"* page. If you front
+> the app with an external reverse proxy / WAF (Sophos, Cloudflare,
+> nginx, Traefik, …) serving HTTPS, supply that public URL when
+> `install.sh` asks for the **Public HTTPS URL** in mode A. The wizard
+> writes it to `APP_URL`, `NEXTAUTH_URL` and `KEYCLOAK_URL`, which is
+> enough to make OAuth, off-LAN SSO and `Secure` cookies work. If you
+> skipped the prompt, you can edit `.env` after install and run
+> `docker compose up -d --force-recreate web keycloak`.
+
 ### Outbound (allow from server)
 
 | Destination | Port | Purpose | Required |

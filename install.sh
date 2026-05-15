@@ -303,8 +303,51 @@ We default to your license email — press [Enter] to accept.
 EOF
   LETSENCRYPT_EMAIL=$(prompt_validated "Notification email [${LICENSE_EMAIL}]: " "$LICENSE_EMAIL" is_valid_email "Invalid email.")
   print_success "Notification email: ${LETSENCRYPT_EMAIL}"
+else
+  # Mode A — optional public HTTPS FQDN fronted by an external reverse
+  # proxy / WAF (Sophos, Cloudflare, nginx, Traefik, …). Without this,
+  # APP_URL stays http://${SERVER_IP}:4000 and:
+  #   * M365 / Google Workspace OAuth refuse HTTP redirect URIs outside
+  #     of localhost — impossible to add mailboxes
+  #   * Browser SSO via Keycloak from off-LAN clients fails
+  #   * NextAuth session cookies are not marked Secure
+  echo ""
+  print_step "Public HTTPS URL (optional, recommended)"
+  cat <<EOF
+If a reverse proxy / WAF (Sophos, Cloudflare, nginx, Traefik…) fronts
+this server with a public FQDN over HTTPS, enter it here:
+    Example: https://support.yourcompany.com
+
+REQUIRED for:
+  * Microsoft 365 / Google Workspace OAuth on mailboxes
+    (Azure AD and Google refuse HTTP redirect URIs outside localhost)
+  * Keycloak SSO from browsers off-LAN
+  * NextAuth session cookies marked Secure (mitigates session theft
+    on shared / hotspot networks)
+
+Leave empty for direct LAN-only access — the wizard will use
+http://${SERVER_IP}:4000 and you can edit APP_URL / NEXTAUTH_URL /
+KEYCLOAK_URL in .env later, then run:
+    docker compose up -d --force-recreate web keycloak
+
+EOF
+  PUBLIC_URL=""
+  while true; do
+    printf 'Public HTTPS URL [empty = http://%s:4000]: ' "$SERVER_IP" >&2
+    read -r PUBLIC_URL || PUBLIC_URL=""
+    PUBLIC_URL=$(sanitize_input "$PUBLIC_URL")
+    [ -z "$PUBLIC_URL" ] && break
+    [[ "$PUBLIC_URL" =~ ^https://[a-zA-Z0-9.-]+(:[0-9]+)?(/.*)?$ ]] && break
+    print_error "Invalid URL. Expected https://your-domain (or leave empty)."
+  done
+  if [ -n "$PUBLIC_URL" ]; then
+    APP_URL="$PUBLIC_URL"
+    print_success "Public URL: ${APP_URL}"
+  else
+    print_success "Direct access: http://${SERVER_IP}:4000"
+  fi
 fi
-print_success "Mode: $([ "$USE_CADDY" = true ] && echo "Caddy + Let's Encrypt (${APP_DOMAIN})" || echo "Direct (http://${SERVER_IP}:4000)")"
+print_success "Mode: $([ "$USE_CADDY" = true ] && echo "Caddy + Let's Encrypt (${APP_DOMAIN})" || echo "Direct (${APP_URL})")"
 
 # v1.10.05: DNS pre-check (non-blocking) — if the operator entered a
 # domain that doesn't resolve to this server yet, print a clear warning

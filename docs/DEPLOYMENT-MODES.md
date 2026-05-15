@@ -136,6 +136,15 @@ docker compose restart caddy keycloak-init
 - 💡 Admin IP allowlist (optional — your WAF may already do this)
 - ❌ Upload rate-limit (WAF should already rate-limit)
 
+> ⚠️ **OAuth mailboxes (M365 / Google) need APP_URL on your public
+> HTTPS FQDN**, not on the LAN IP. Azure AD and Google reject HTTP
+> redirect URIs outside of `localhost`, so the OAuth callback
+> `${APP_URL}/api/mailbox/oauth` must use `https://your.public.fqdn`.
+> The `install.sh` wizard prompts for this in mode A — supply your
+> WAF-fronted FQDN there. Same for `NEXTAUTH_URL` (Secure cookies) and
+> `KEYCLOAK_URL` (off-LAN SSO). If you skipped the prompt, edit
+> `.env`, then `docker compose up -d --force-recreate web keycloak`.
+
 ## Mode `vps-caddy` — VPS with managed Caddy
 
 **Pre-requisites:**
