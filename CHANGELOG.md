@@ -2,6 +2,30 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14772] — 2026-05-16
+
+### Fixed
+
+- **Logos clients dans les signatures de mails entrants ne
+  s'affichaient plus** quand l'URL était en HTTP simple. Le
+  navigateur bloque les images HTTP sur une page HTTPS (mixed
+  content) sans aucun message UI. Nouvelle route serveur
+  `/api/proxy-image?url=…` qui ramène l'image en HTTPS via TB. Le
+  rendu réécrit automatiquement chaque `<img src="http://...">`
+  vers le proxy — fix rétroactif, les anciens messages déjà en
+  base bénéficient aussi du correctif sans migration.
+
+### Security
+
+- Proxy d'images strictement défensif : session agent requise,
+  scheme `http`/`https` uniquement, blocage de toute IP privée /
+  loopback / link-local / multicast (anti-SSRF), 5 MB max,
+  timeout 5 s, max 3 redirects revalidés, aucun cookie ni Referer
+  transmis upstream, réponse `image/*` only.
+
+App image change uniquement — pull `:latest` (ou `:v1.10.14772`)
+sur les 5 services. Pas de migration.
+
 ## [1.10.14771] — 2026-05-16
 
 ### Fixed
