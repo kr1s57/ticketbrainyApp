@@ -2,6 +2,58 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14769] — 2026-05-15
+
+### Fixed
+
+- **Modale "Nouveau ticket" : scroll cassé quand le message est
+  long.** La modale et l'éditeur n'avaient ni `max-height` ni
+  `overflow`, un message volumineux poussait la modale au-delà du
+  viewport et masquait les boutons. Modale en flex column avec corps
+  scrollable + footer collant, éditeur plafonné à 260px avec scroll
+  interne.
+- **Logos / images de signature absents dans les emails entrants.**
+  Le sanitizer mail strippait tous les `src="https://…"` (anti
+  pixel-tracker), supprimant aussi les logos CDN légitimes des
+  signatures. Le strip ne touche désormais plus les `<img>` ; en
+  contrepartie chaque `<img>` reçoit automatiquement
+  `referrerpolicy="no-referrer" loading="lazy"` — le navigateur ne
+  fuit pas la page TB au serveur image et ne charge l'image que si
+  elle entre dans le viewport.
+- **Images inline `<img src="cid:…">` cassées (placeholders dans le
+  ticket).** Les images RFC 2392 Content-ID des mails entrants
+  n'étaient pas résolues vers les attachments stockés. Le parser
+  capture désormais le `cid` de chaque pièce inline et le
+  mail-service réécrit `src="cid:xxx"` en `/api/attachments/<id>`
+  après création du message.
+- **Pièces jointes d'emails entrants : 404 à l'ouverture.** Le
+  composant de conversation construisait
+  `/api/uploads/${att.storagePath}` alors que `storagePath` est un
+  chemin absolu sur disque (`/data/attachments/…`). Nouvelle route
+  `/api/attachments/[id]` qui résout par ID Attachment, vérifie
+  l'auth ticket parent, et stream le fichier (inline pour images /
+  PDF, attachment pour le reste).
+- **Création manuelle d'un ticket : aucun mail au client.** Quand
+  un agent ouvre un ticket pour un client par téléphone ou walk-in,
+  aucun email de confirmation n'était envoyé. Le ticket de création
+  manuelle envoie désormais le même email d'acquittement *"Votre
+  demande a bien été enregistrée sous le numéro #N"* que pour un
+  ticket entrant, avec le logo et la signature de la mailbox.
+
+### Added
+
+- **Migration Prisma : `Attachment.contentId`.** Colonne TEXT
+  nullable. Le container `migrate` l'applique automatiquement au
+  prochain démarrage — pas de migration manuelle à exécuter.
+
+### Upgrade
+
+Pull `:latest` (ou `:v1.10.14769`) sur les 5 services (`web`,
+`ai-service`, `mail-service`, `telegram-bot`, `migrate`). Migration
+Prisma automatique au boot. Les anciens messages avec des CID
+cassés restent inchangés (le rewrite ne s'applique qu'aux nouveaux
+emails entrants).
+
 ## [1.10.14768] — 2026-05-15
 
 ### Fixed
