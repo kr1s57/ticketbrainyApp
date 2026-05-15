@@ -258,6 +258,122 @@ a:hover {
   color: var(--tb-text-secondary) !important;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   v1.8.2 — Enrollment & flow pages text contrast fix
+   ═══════════════════════════════════════════════════════════
+   Keycloak's info.ftl / update-password.ftl / login-verify-email.ftl /
+   login-config-totp.ftl / login-reset-password.ftl render body copy
+   through Patternfly content blocks (`pf-v5-c-content`, `.instruction`,
+   `#kc-info-message`, ...) that our earlier theme didn't override.
+   The parent keycloak.v2 stylesheet sets their color to a dark neutral
+   (#151515-ish) which becomes invisible on our dark card.
+   This block forces every body-text slot inside the login card to the
+   primary text color, while keeping links and inputs on their own vars.
+   ═══════════════════════════════════════════════════════════ */
+.pf-v5-c-login__main-body,
+.pf-v5-c-login__main-body p,
+.pf-v5-c-login__main-body span,
+.pf-v5-c-login__main-body li,
+.pf-v5-c-login__main-body ul,
+.pf-v5-c-login__main-body ol,
+.pf-v5-c-login__main-body strong,
+.pf-v5-c-login__main-body em,
+.pf-v5-c-login__main-body small,
+.pf-v5-c-login__main-body div,
+.pf-v5-c-login__main-body label,
+.pf-v5-c-login__main-body dd,
+.pf-v5-c-login__main-body dt {
+  color: var(--tb-text-primary) !important;
+}
+
+/* Patternfly v5 content block — used by Keycloak info.ftl, error.ftl,
+   terms.ftl and most flow-completion pages. */
+.pf-v5-c-content,
+.pf-v5-c-content > *,
+.pf-v5-c-content p,
+.pf-v5-c-content li,
+.pf-v5-c-content ul,
+.pf-v5-c-content ol,
+.pf-v5-c-content h1,
+.pf-v5-c-content h2,
+.pf-v5-c-content h3,
+.pf-v5-c-content h4,
+.pf-v5-c-content h5,
+.pf-v5-c-content h6,
+.pf-v5-c-content strong,
+.pf-v5-c-content em {
+  color: var(--tb-text-primary) !important;
+}
+
+/* Info/feedback blocks — these are the specific IDs Keycloak emits on
+   the enrollment pages (execute-actions, update-password success, etc). */
+#kc-info,
+#kc-info-wrapper,
+#kc-info-message,
+#kc-info-message *,
+#kc-feedback-text,
+.kc-feedback-text,
+.feedback,
+.feedback *,
+.instruction,
+.subtitle,
+.subtitle-hint,
+#kc-page-title,
+#kc-current-locale-link {
+  color: var(--tb-text-primary) !important;
+}
+
+/* Secondary / muted lines stay a bit dimmer for hierarchy. */
+.pf-v5-c-login__main-body .pf-v5-c-login__main-footer-links,
+.pf-v5-c-login__main-body .pf-v5-c-login__main-footer-links a,
+.pf-v5-c-login__main-body .pf-v5-c-login__signup,
+.instruction .pf-v5-c-login__main-header-desc,
+.subtitle-hint,
+#kc-locale-dropdown,
+#kc-select-try-another-way-form {
+  color: var(--tb-text-secondary) !important;
+}
+
+/* Preserve the brand accent on all links inside the body, overrides
+   the blanket rule above. */
+.pf-v5-c-login__main-body a,
+.pf-v5-c-content a,
+#kc-info-message a {
+  color: var(--tb-accent) !important;
+}
+.pf-v5-c-login__main-body a:hover,
+.pf-v5-c-content a:hover,
+#kc-info-message a:hover {
+  color: var(--tb-accent-hover) !important;
+}
+
+/* Description labels under inputs (e.g. password policy hints). */
+.pf-v5-c-helper-text,
+.pf-v5-c-helper-text__item,
+.pf-v5-c-helper-text__item-text,
+.kc-password-policy,
+.kc-password-policy * {
+  color: var(--tb-text-secondary) !important;
+}
+
+/* OTP / 2FA setup body copy. */
+#kc-totp-settings,
+#kc-totp-settings *,
+.kc-totp-supported-apps,
+.kc-totp-supported-apps *,
+.kc-totp-manual-instructions,
+.kc-totp-manual-instructions * {
+  color: var(--tb-text-primary) !important;
+}
+
+/* Patternfly alert content inside the card — make sure the body of
+   alerts (info/warning/success) is readable on dark. */
+.pf-v5-c-alert__title,
+.pf-v5-c-alert__description,
+.pf-v5-c-alert__action-group {
+  color: var(--tb-text-primary) !important;
+}
+
 /* ─── OTP / 2FA page ────────────────────────────────────── */
 .pf-v5-c-tile {
   background-color: var(--tb-input-bg) !important;
