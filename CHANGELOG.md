@@ -2,6 +2,32 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14774] — 2026-05-16
+
+### Changed
+
+- **Assistant IA de rédaction : formatage propre des brouillons
+  de réponses.** Le bouton "AI Draft" dans le composeur de
+  réponse générait des messages en un bloc compact, sans
+  paragraphes ni séparation visuelle — l'IA produisait du
+  plain-text alors que l'éditeur attend du HTML. Le prompt
+  impose désormais un sous-ensemble HTML clair (paragraphes,
+  listes à puces, gras parcimonieux) avec un guide de style :
+  un paragraphe par idée, listes pour les énumérations de 3+
+  items, gras sur 1-2 termes clés maximum. Le brouillon
+  s'affiche maintenant comme un email écrit par un agent
+  professionnel. Filet de sécurité : si l'IA renvoie quand même
+  du plain-text par erreur, conversion automatique des sauts
+  de ligne avant insertion dans l'éditeur — robustesse garantie.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.14773] — 2026-05-16
 
 ### Fixed
