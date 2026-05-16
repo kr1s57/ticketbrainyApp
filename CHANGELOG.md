@@ -2,6 +2,42 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14773] — 2026-05-16
+
+### Fixed
+
+- **Notifications agents sur nouveaux tickets entrants : trou
+  majeur comblé.** Quand un client envoyait un email à une boîte
+  TB, le ticket était bien créé et l'accusé partait au client —
+  mais les agents abonnés à la boîte ne recevaient **aucune**
+  notification par email. Seules des notifs in-app étaient créées,
+  et uniquement pour les rôles ADMIN / SUPERVISOR. Un agent
+  standard absent de l'interface n'était jamais averti qu'une
+  demande était en attente. Désormais, à chaque ticket entrant :
+  notification in-app **et** email pour chaque agent abonné à la
+  boîte (`Settings → Mailboxes → Subscribed users` avec
+  `notifyNewTicket=true`). L'email est expédié depuis l'adresse
+  de la boîte concernée, avec le sujet, l'expéditeur, l'extrait
+  du message et un lien direct vers le ticket. La préférence
+  d'email par utilisateur est respectée. Filet de sécurité : si
+  aucun agent n'est abonné à la boîte, fallback automatique sur
+  les admins et superviseurs pour ne jamais perdre un ticket.
+
+- **Email d'alerte à l'agent assigné sur réponse client.** Même
+  cause, même solution pour les réponses : l'agent assigné au
+  ticket ne recevait qu'une notif in-app, jamais d'email. Il
+  reçoit maintenant aussi un email (et lui seul — pas
+  d'arrosage de toute l'équipe). Respecte la préférence
+  `notifyReply` par boîte de chaque utilisateur.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.14772] — 2026-05-16
 
 ### Fixed
