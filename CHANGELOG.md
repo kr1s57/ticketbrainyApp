@@ -2,6 +2,50 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147764] — 2026-05-18
+
+### Added
+
+- **Settings > Plugins — affiche l'email lié à votre licence.**
+  Sous "Manage your licensed plugins and features" la page
+  affiche désormais `Licenses bound to <email>` — l'adresse
+  utilisée lors de l'activation initiale de l'instance.
+  Pratique pour identifier rapidement un instance dev vs prod
+  ou pour le support. L'information est persistée localement
+  (table `SystemConfig`, colonne `activationEmail`) — pour les
+  instances déjà déployées avant cette release, l'email n'est
+  pas connu et restera vide tant qu'aucune réactivation n'a
+  lieu. Si tu veux le backfill manuellement, l'administrateur
+  peut le faire via :
+  ```sql
+  UPDATE "SystemConfig" SET "activationEmail" = 'your@email'
+   WHERE id = 'global';
+  ```
+
+### Changed
+
+- **Marketplace VigilanceKey — toutes les licences existantes
+  affichent désormais une échéance annuelle.** Avant cette
+  release, les licences `enterprise_pack` (et certaines autres)
+  apparaissaient comme "Permanent" sur l'admin VigilanceKey
+  parce que leur `expires_at` était fixé à 2099. Pour harmoniser
+  avec le passage en abonnement annuel, toutes les licences
+  TicketBrainy existantes ont été migrées vers une échéance à
+  +1 an depuis aujourd'hui (sauf `core` qui reste permanent et
+  `slack_connect` qui est retiré). Si tu remarques que ta
+  licence "permanente" originale apparait soudain avec une
+  échéance, c'est normal — au moment du renouvellement annuel,
+  le tarif sera identique à celui annoncé sur la marketplace.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.147763] — 2026-05-18
 
 ### Changed
