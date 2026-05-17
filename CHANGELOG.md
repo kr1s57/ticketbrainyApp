@@ -2,6 +2,38 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14775] — 2026-05-17
+
+### Added
+
+- **XpertTeamIA : modèle IA configurable par tâche.** Jusqu'à
+  présent un seul "Modèle expert" pilotait à la fois la Deep
+  Analysis (raisonnement profond sur les tickets techniques),
+  le Tri automatique (classification rapide à l'arrivée des
+  mails) et la rédaction SmartReply IA (brouillons de
+  réponses). Comme ces trois tâches n'ont pas du tout les
+  mêmes exigences, c'était un compromis coûteux : payer Opus
+  pour rédiger un accusé de réception est du gaspillage de
+  tokens, et utiliser Haiku pour une analyse approfondie laisse
+  de la qualité sur la table. Désormais, depuis
+  **Réglages → XpertTeamIA**, vous choisissez un modèle distinct
+  pour chacune des trois tâches, avec une recommandation
+  affichée pour chacune (Opus/Sonnet pour Deep, Haiku pour
+  Triage et SmartReply). Au changement de provider AI (API Key
+  Anthropic / Claude Code CLI / Codex CLI), des défauts
+  intelligents sont appliqués automatiquement par tâche. Claude
+  Haiku 4.5 a été ajouté au catalogue côté Claude. Économies
+  de tokens immédiates sur les déploiements API Key, et
+  routage explicite sur les abonnements CLI.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.14774] — 2026-05-16
 
 ### Changed
