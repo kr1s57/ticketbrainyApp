@@ -2,6 +2,45 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147762] — 2026-05-18
+
+### Added
+
+- **Liste des tickets — bouton "Marquer comme lu" et auto-clear du
+  point bleu quand on Résout/Ferme un ticket.** Quand un agent
+  traite un ticket par téléphone et bascule simplement le statut en
+  **Résolu** ou **Fermé** sans rédiger de réponse, le point bleu
+  "en attente de réponse" restait visible dans la liste — il était
+  calculé uniquement à partir du type du dernier message
+  (`INITIAL` ou `CUSTOMER_REPLY`). Le modèle `Ticket` a maintenant
+  une colonne `agentReadAt` qui est :
+  1. **automatiquement** mise à jour à `now()` lors de toute
+     transition vers Résolu / Fermé ;
+  2. **manuellement** mise à jour via un nouveau bouton
+     **"Marquer comme lu"** qui apparaît dans la barre de
+     sélection multiple (à côté de "Supprimer la sélection"),
+     pour les tickets que l'agent veut acquitter sans changer
+     leur statut.
+
+  Le point bleu (et les compteurs latéraux de mailbox) restent
+  affichés tant qu'aucun acquittement n'a eu lieu OU qu'un nouveau
+  message client est arrivé après l'acquittement — c'est
+  automatique, pas besoin de réinitialiser.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+> La migration Prisma `20260518_ticket_agent_read_at` ajoute
+> la colonne `Ticket.agentReadAt` (nullable). Elle est appliquée
+> automatiquement par le conteneur `migrate` au boot, aucune
+> action manuelle requise.
+
 ## [1.10.147761] — 2026-05-17
 
 ### Fixed
