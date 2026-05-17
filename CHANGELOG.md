@@ -2,6 +2,30 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147763] — 2026-05-18
+
+### Changed
+
+- **Enterprise Pack — prix passé en annuel.** Le plugin
+  Enterprise Pack devient **99€/an** (au lieu de 99€/unique
+  jusqu'ici) pour s'aligner sur tous les autres plugins payants
+  qui sont déjà en abonnement annuel. Côté marketplace VGXKey
+  comme côté UI plugin store dans TB, l'affichage passe de
+  "/unique" à "/an". Les licences `enterprise_pack` déjà émises
+  en one-shot avant cette release restent **valides indéfiniment**
+  — la modification ne s'applique qu'aux nouvelles activations.
+  Un Sync Licence depuis Settings > Plugins remonte le nouveau
+  modèle pour l'UI.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.147762] — 2026-05-18
 
 ### Added
