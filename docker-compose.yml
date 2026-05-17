@@ -108,7 +108,11 @@ services:
     volumes:
       - ./keycloak/ticketbrainy-realm.json:/opt/keycloak/data/realm-template/ticketbrainy-realm.json:ro
       - ./keycloak/docker-entrypoint.sh:/opt/keycloak/custom-entry/docker-entrypoint.sh:ro
-      - ./keycloak/themes/ticketbrainy:/opt/keycloak/themes/ticketbrainy:ro
+      # v1.10.14776: mount as themes-src (read-only) so the entrypoint
+      # can render the email theme with __TB_PORTAL_URL__ substituted
+      # to APP_URL before Keycloak boots. The rendered copy lands in
+      # /opt/keycloak/themes/ticketbrainy (writable rootfs).
+      - ./keycloak/themes/ticketbrainy:/opt/keycloak/themes-src/ticketbrainy:ro
     depends_on:
       db:
         condition: service_healthy

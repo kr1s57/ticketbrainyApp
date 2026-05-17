@@ -2,6 +2,50 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14776] — 2026-05-17
+
+### Added
+
+- **Email d'activation Keycloak enrichi : portail TicketBrainy en clair.**
+  Quand un administrateur crée un agent et déclenche l'envoi de
+  l'email "Mise à jour du mot de passe", le courriel reçu était
+  jusque-là incomplet : il proposait uniquement le lien Keycloak
+  (mise à jour du compte) sans indiquer où se connecter ensuite.
+  Le destinataire devait deviner l'URL du portail. Le nouveau
+  template ajoute une seconde section **"2. Connexion au
+  portail TicketBrainy"** sous l'action d'activation, avec un
+  bouton CTA et l'URL en clair pour fallback. La première
+  section reste identique (instructions Keycloak natives,
+  expiration du lien à 12h). Disponible en FR / EN / DE / ES / IT.
+  L'URL est injectée à partir d'`APP_URL` au démarrage du
+  conteneur Keycloak — aucune configuration manuelle requise.
+
+- **Rôle Superviseur : accès lecture seule à Paramètres.**
+  Les utilisateurs Superviseur (SUPERVISOR) pouvaient déjà
+  s'authentifier mais étaient redirigés vers `/settings` dès
+  qu'ils cliquaient sur Time tracking, Catégories IA ou les
+  pages Déploiement & Sécurité. Ils peuvent désormais
+  **consulter** tous les paramètres (configuration mailbox,
+  sécurité, équipes, plugins, etc.) sans pouvoir modifier quoi
+  que ce soit — une bannière "Mode lecture seule" rappelle la
+  restriction, et l'attribut HTML `inert` désactive toutes les
+  interactions du formulaire (boutons Save, inputs, dropdowns).
+  Les Server Actions de mutation conservent leur garde
+  `requireRole("ADMIN")` en défense en profondeur. AGENT reste
+  bloqué hors de Paramètres comme avant.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+> Le redémarrage de Keycloak régénère automatiquement le thème
+> email avec votre `APP_URL`. Le rôle Superviseur n'a aucun
+> changement de schéma BDD à appliquer.
+
 ## [1.10.147751] — 2026-05-17
 
 ### Fixed

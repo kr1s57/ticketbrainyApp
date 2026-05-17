@@ -25,9 +25,8 @@ MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-120}"
 #
 # Keycloak has ONE global hostname config, but this install serves TWO
 # origins from the same instance: the public WAF vhost
-# (for example support.example.com, shared with the web UI via the Next.js
-# /realms proxy) for user flows, AND the direct LAN port (for example
-# 192.168.1.50:3028)
+# (support.ticketbrainy.com, shared with the web UI via the Next.js
+# /realms proxy) for user flows, AND the direct LAN port (10.55.x:3028)
 # for the admin console on the master realm.
 #
 # Pinning KC_HOSTNAME to either one breaks the other (v1.8.2→v1.8.4
@@ -135,6 +134,7 @@ fi
 
 PAYLOAD='{
   "loginTheme": "ticketbrainy",
+  "emailTheme": "ticketbrainy",
   "accountTheme": "keycloak.v2",
   "bruteForceProtected": true,
   "permanentLockout": false,
@@ -183,11 +183,12 @@ VERIFY=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}")
 
 LOGIN_THEME=$(echo "$VERIFY" | sed -n 's/.*"loginTheme":"\([^"]*\)".*/\1/p')
+EMAIL_THEME=$(echo "$VERIFY" | sed -n 's/.*"emailTheme":"\([^"]*\)".*/\1/p')
 BFP=$(echo "$VERIFY" | sed -n 's/.*"bruteForceProtected":\(true\|false\).*/\1/p')
 
-echo "[apply-config] verification: loginTheme=${LOGIN_THEME} bruteForceProtected=${BFP}"
+echo "[apply-config] verification: loginTheme=${LOGIN_THEME} emailTheme=${EMAIL_THEME} bruteForceProtected=${BFP}"
 
-if [ "$LOGIN_THEME" != "ticketbrainy" ] || [ "$BFP" != "true" ]; then
+if [ "$LOGIN_THEME" != "ticketbrainy" ] || [ "$EMAIL_THEME" != "ticketbrainy" ] || [ "$BFP" != "true" ]; then
   echo "[apply-config] FATAL: verification failed" >&2
   exit 6
 fi
