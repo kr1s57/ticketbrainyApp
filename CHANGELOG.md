@@ -2,6 +2,29 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147751] — 2026-05-17
+
+### Fixed
+
+- **XpertTeamIA : recommandations adaptées au provider IA actif.**
+  Les libellés "Recommandé : …" sous les sélecteurs de modèle
+  affichaient les noms Claude (Opus / Sonnet / Haiku) même quand
+  le provider Codex CLI était sélectionné — la liste déroulante
+  proposait bien GPT-5.x mais le texte d'aide parlait toujours
+  d'Haiku, créant une incohérence visuelle. Les trois
+  recommandations basculent maintenant automatiquement sur les
+  équivalents Codex (Deep Analysis → GPT-5.4 ou GPT-5.5,
+  Triage → GPT-5.4 Mini, SmartReply → GPT-5.4 Mini) selon le
+  provider actif. Correction propagée dans les 5 langues.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+docker compose pull
+docker compose up -d --force-recreate
+```
+
 ## [1.10.14775] — 2026-05-17
 
 ### Added
