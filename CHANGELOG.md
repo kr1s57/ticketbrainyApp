@@ -2,6 +2,53 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147761] — 2026-05-17
+
+### Fixed
+
+- **Email d'activation Keycloak — `apply-config.sh` ne mourait plus
+  silencieusement.** v1.10.14776 ajoutait `emailTheme: ticketbrainy`
+  au PUT de hardening du realm, mais sur les installations existantes
+  `apply-config.sh` pouvait sortir sans aucun log lors du fetch du
+  token admin (combinaison `curl -sf` + `set -e` qui avalent les
+  réponses 4xx). Conséquence : `emailTheme` jamais appliqué sur le
+  realm → l'agent recevait l'ancien template (sans section
+  "Connexion au portail"). Le déclencheur typique : la protection
+  brute-force du realm master (5 échecs, lockout 15 min) qui
+  s'accumule pendant un cycle de déploiement répété, et bloque
+  ensuite tous les essais suivants. La nouvelle version (1) loggue
+  toujours le code HTTP + le corps de réponse quand le token est
+  refusé, (2) refait un essai après 10 s pour absorber les
+  conditions de course au boot froid, (3) imprime une instruction
+  claire `bash scripts/keycloak-reset-admin.sh --mode unlock` quand
+  le code 401 indique un lockout, ou `--mode recovery <NEW_PASSWORD>`
+  pour un 400/403 (password mismatch). Le template de realm
+  (`keycloak/ticketbrainy-realm.json`) embarque aussi désormais
+  `emailTheme: ticketbrainy` pour que les installations fraîches
+  l'aient dès le `--import-realm`, sans dépendre du token admin.
+
+### Update
+
+```bash
+cd /opt/ticketbrainy
+git pull
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+> **Si tu es resté sur l'ancien email après v1.10.14776 :** ton
+> admin master est probablement lockout. Lance d'abord :
+>
+> ```bash
+> bash scripts/keycloak-reset-admin.sh --mode unlock
+> docker compose up -d --force-recreate --no-deps keycloak-init
+> docker logs ticketbrainy-keycloak-init-1
+> ```
+>
+> Tu dois voir la ligne `[apply-config] verification: ... emailTheme=ticketbrainy ...`.
+> Recrée alors un user de test dans Keycloak → email avec les
+> 2 sections.
+
 ## [1.10.14776] — 2026-05-17
 
 ### Added

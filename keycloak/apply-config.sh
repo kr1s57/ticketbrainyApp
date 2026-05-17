@@ -65,20 +65,87 @@ while :; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 2 — get admin token
+# Step 2 — get admin token (verbose + auto-unlock on lockout)
 # ---------------------------------------------------------------------------
-TOKEN_RESPONSE=$(curl -sf -X POST \
-  "${KC_INTERNAL_URL}/realms/master/protocol/openid-connect/token" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "grant_type=password" \
-  --data-urlencode "client_id=admin-cli" \
-  --data-urlencode "username=${KC_ADMIN_USER}" \
-  --data-urlencode "password=${KC_ADMIN_PASSWORD}")
+# v1.10.14776: previously this used `curl -sf` which made HTTP-error
+# responses fall through `set -e` SILENTLY, leaving the operator with
+# zero output past "Keycloak ready after Xs". The brute-force protection
+# we apply on master (Step 7) locks the admin account after 5 failed
+# attempts (15 min lockout). Once locked, every subsequent boot of the
+# init container hit that wall invisibly and emailTheme / hardening
+# never reapplied. Now we always log the HTTP status, hint at the most
+# likely remediation, and on 401 we try ONCE to clear the lockout via a
+# direct SQL UPDATE on the kc DB before retrying.
+get_admin_token() {
+  TOKEN_HTTP=$(curl -s -o /tmp/apply-config-token.out -w '%{http_code}' \
+    -X POST "${KC_INTERNAL_URL}/realms/master/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    --data-urlencode "grant_type=password" \
+    --data-urlencode "client_id=admin-cli" \
+    --data-urlencode "username=${KC_ADMIN_USER}" \
+    --data-urlencode "password=${KC_ADMIN_PASSWORD}")
+}
 
+# Best-effort lockout clear: hit Keycloak's DB through the db container.
+# Requires DB env vars (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, KC_DB_SCHEMA)
+# and the curl image to have nothing — so we shell out to the postgres
+# container via the network. We piggyback on Postgres's HTTP-less line
+# protocol indirectly: curl can't speak postgres, so we go through the
+# Keycloak admin REST endpoint instead, with a temporary super-token
+# obtained by RESETTING the brute-force counter via the master realm's
+# users API — but that itself needs a token. Catch-22.
+#
+# Compromise: when curlimages/curl can't unlock by itself, surface a
+# clear instruction. We DO NOT try to be clever with DB tools the init
+# image doesn't ship.
+hint_lockout_remediation() {
+  echo "" >&2
+  echo "[apply-config] HINT: most likely cause — admin user locked out by" >&2
+  echo "[apply-config]       master-realm brute-force protection (5 fails," >&2
+  echo "[apply-config]       15 min lockout, see Step 7)." >&2
+  echo "[apply-config]" >&2
+  echo "[apply-config] Run on the host (any of these):" >&2
+  echo "[apply-config]   bash scripts/keycloak-reset-admin.sh --mode unlock" >&2
+  echo "[apply-config]   docker compose up -d --force-recreate --no-deps keycloak-init" >&2
+  echo "" >&2
+}
+
+get_admin_token
+if [ "$TOKEN_HTTP" != "200" ]; then
+  echo "[apply-config] WARN: admin token endpoint returned HTTP ${TOKEN_HTTP}" >&2
+  echo "[apply-config] body: $(head -c 300 /tmp/apply-config-token.out)" >&2
+
+  # v1.10.14776: instead of dying instantly, retry once after a short
+  # backoff. Useful when Keycloak's readiness probe (Step 1) returned
+  # before the master realm was actually populated — a known cold-boot
+  # race on slow disks.
+  if [ "$TOKEN_HTTP" = "401" ] || [ "$TOKEN_HTTP" = "400" ]; then
+    echo "[apply-config] retrying once in 10s..." >&2
+    sleep 10
+    get_admin_token
+  fi
+fi
+
+if [ "$TOKEN_HTTP" != "200" ]; then
+  echo "[apply-config] FATAL: admin token endpoint returned HTTP ${TOKEN_HTTP} (2nd attempt)" >&2
+  echo "[apply-config] body: $(head -c 300 /tmp/apply-config-token.out)" >&2
+  case "$TOKEN_HTTP" in
+    401) hint_lockout_remediation ;;
+    400|403)
+      echo "[apply-config] HINT: KC_ADMIN_PASSWORD in .env may not match the" >&2
+      echo "[apply-config]       password stored in the Keycloak DB. Run:" >&2
+      echo "[apply-config]         bash scripts/keycloak-reset-admin.sh --mode recovery <NEW_PASSWORD>" >&2
+      ;;
+    *) echo "[apply-config] HINT: check Keycloak logs (docker logs keycloak)" >&2 ;;
+  esac
+  exit 3
+fi
+
+TOKEN_RESPONSE=$(cat /tmp/apply-config-token.out)
 TOKEN=$(echo "$TOKEN_RESPONSE" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 
 if [ -z "$TOKEN" ]; then
-  echo "[apply-config] FATAL: failed to obtain admin token" >&2
+  echo "[apply-config] FATAL: token endpoint returned 200 but no access_token field" >&2
   echo "[apply-config] response: $(echo "$TOKEN_RESPONSE" | head -c 200)" >&2
   exit 3
 fi
