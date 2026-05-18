@@ -2,6 +2,31 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147767] — 2026-05-18
+
+### Added
+
+- **Nom de l'agent affiché au-dessus de chaque réponse dans un ticket.**
+  Dans la vue conversation d'un ticket, chaque bulle de réponse agent
+  était jusqu'ici étiquetée par le label générique « Agent ». Quand
+  plusieurs agents se relayaient sur un même ticket, plus rien dans
+  l'interface ne permettait de savoir qui avait posté quel message —
+  obligeant à reconstituer la chronologie depuis le log ou le mail.
+  Désormais, chaque nouvelle réponse est tagguée avec l'identifiant
+  de l'agent qui l'a postée, et son nom + ses initiales s'affichent
+  au-dessus de la bulle, à côté de la date/heure. Les messages
+  envoyés avant cette version conservent le label « Agent » (aucune
+  donnée historique n'est inventée), mais toutes les nouvelles
+  réponses sont nominatives. Le contenu envoyé au client par email
+  reste strictement inchangé (signature et corps identiques).
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147766] — 2026-05-18
 
 ### Fixed
