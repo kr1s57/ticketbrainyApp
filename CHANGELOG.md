@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14777] — 2026-05-18
+
+### Fixed
+
+- **Listes à puces et listes numérotées perdues dans l'aperçu des
+  réponses agent.** Quand un agent répondait à un ticket avec une
+  liste à puces dans l'éditeur, l'aperçu du ticket dans
+  l'interface affichait les items sans puces ni indentation (juste
+  les textes sur des lignes successives), alors que le client
+  recevait bien l'email avec les puces intactes. Les listes, les
+  en-têtes, les blockquotes, le formatage gras/italique et les
+  images insérées en ligne dans les réponses s'affichent désormais
+  correctement dans l'aperçu, en cohérence avec ce que reçoit
+  le destinataire.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147769] — 2026-05-18
 
 ### Fixed
