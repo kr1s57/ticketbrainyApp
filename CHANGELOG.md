@@ -2,6 +2,32 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147765] — 2026-05-18
+
+### Fixed
+
+- **Éditeur de réponse ticket — listes à puces visibles + paste d'images
+  presse-papier.** Les classes Tailwind `prose` n'étaient pas activées dans
+  le build, donc le reset preflight rendait tous les `<ul>` / `<ol>`
+  invisibles : bouton "liste à puces" sans effet apparent, raccourci `- `
+  qui consommait le tiret sans rien afficher, et structure de liste perdue
+  visuellement après un copier/coller depuis Gmail/Word. Ajout de styles
+  CSS ciblés `.ProseMirror` qui restaurent listes, en-têtes, blockquotes,
+  code et liens dans l'éditeur. Le HTML envoyé au destinataire n'a jamais
+  été affecté.
+- **Coller une capture d'écran dans la zone de réponse.** Tiptap ne gère
+  pas l'image du presse-papier par défaut. Ajout de handlers `handlePaste`
+  et `handleDrop` qui détectent les fichiers `image/*` dans le
+  presse-papier ou un drag-and-drop, les uploadent via la route
+  d'attachements existante, et insèrent l'image au point d'insertion.
+
+### Mise à jour
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
 ## [1.10.147764] — 2026-05-18
 
 ### Added
