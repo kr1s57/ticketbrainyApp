@@ -2,6 +2,29 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147769] — 2026-05-18
+
+### Fixed
+
+- **Page blanche + Reload auto à l'ouverture d'un ticket — vraie
+  cause racine.** Le patch précédent (v1.10.147768) avait éliminé
+  une partie du mismatch d'hydratation, mais l'erreur persistait en
+  production. Cause restante : le panneau IA collapsable du ticket
+  lisait `localStorage` directement dans son rendu initial, ce qui
+  faisait que le serveur rendait le panneau ouvert (sans accès au
+  storage navigateur) tandis que le client rendait potentiellement
+  le panneau fermé (storage lu) → structures DOM différentes → React
+  refusait l'hydratation → recharge automatique du ticket. La page
+  s'ouvre maintenant directement, sans aller-retour Reload, même
+  quand le panneau IA a été replié dans une session précédente.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147768] — 2026-05-18
 
 ### Fixed
