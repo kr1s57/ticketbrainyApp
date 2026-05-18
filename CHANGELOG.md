@@ -2,6 +2,34 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147768] — 2026-05-18
+
+### Fixed
+
+- **Ouverture d'un ticket : page blanche fugace + reload automatique
+  avant que le ticket s'affiche.** Sur les déploiements derrière un
+  WAF (Sophos XGS, Cloudflare en mode proxy strict, etc.), un ticket
+  cliqué depuis la liste s'affichait en blanc pendant 1-2 secondes,
+  un bouton « Reload » apparaissait, puis la page rechargeait toute
+  seule avant d'afficher le ticket. Cause : erreur React #418
+  (« hydration mismatch »), c.-à-d. divergence entre le HTML rendu
+  côté serveur et celui réhydraté côté client. Plusieurs sources
+  cumulées sur la page ticket : le locale utilisateur (FR/EN/…)
+  n'était connu qu'après le mount client, les temps relatifs
+  (« 5m ago ») étaient calculés à deux instants différents, et le
+  buffering RSC du WAF désynchronisait les chunks volumineux du
+  HTML email. Désormais, les nœuds dont le contenu est légitimement
+  client-dépendant (dates, temps relatifs, HTML email sanitisé)
+  acceptent la version client après hydratation sans déclencher
+  d'erreur — la page s'ouvre directement, sans aller-retour Reload.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147767] — 2026-05-18
 
 ### Added
