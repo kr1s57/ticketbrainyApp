@@ -2,6 +2,27 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147771] — 2026-05-18
+
+### Fixed
+
+- **Erreurs `502 Bad Gateway` dans la console pour les logos
+  cassés des signatures clients.** Quand un mail entrant
+  contenait un logo société hébergé sur un serveur HTTP cassé
+  ou inaccessible, le proxy d'image renvoyait un 502 que le
+  navigateur affichait comme une erreur console et une icône
+  d'image cassée. Désormais, en cas d'échec upstream, le proxy
+  renvoie silencieusement une image transparente 1×1 — l'agent
+  voit le contenu du mail sans le logo mort, et la console
+  reste propre. Aucun changement pour les images valides.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.14777] — 2026-05-18
 
 ### Fixed
