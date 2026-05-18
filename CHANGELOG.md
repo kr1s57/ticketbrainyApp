@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147766] — 2026-05-18
+
+### Fixed
+
+- **Pièce jointe agent retournait `{"error":"Forbidden"}` (403) au clic.**
+  La colonne `storagePath` est écrite sous deux formats : chemin absolu
+  côté mail-service (mails entrants) et chemin relatif côté reply agent.
+  Le route handler résolvait les chemins relatifs sous le CWD du process
+  au lieu de `/data/uploads`, ce qui faisait sortir le chemin des deux
+  roots autorisées et déclenchait le `Forbidden`. Conséquence : toute
+  pièce jointe ou image inline uploadée par un agent dans une réponse
+  était inaccessible au clic. Les attachements venant des mails entrants
+  fonctionnaient. Fix : résolution des chemins relatifs sous
+  `UPLOAD_ROOT` avant le contrôle de containment.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147765] — 2026-05-18
 
 ### Fixed
