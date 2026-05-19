@@ -2,6 +2,38 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147782] — 2026-05-19
+
+### Fixed
+
+- **Bot Telegram : aucune notification ne partait quand les Chat IDs
+  étaient saisis via l'UI.** L'UI envoyait une chaîne brute
+  (`"1602363121, 9999"`) mais le bot ne lisait que les tableaux —
+  l'envoi était silencieusement coupé. Désormais la chaîne est
+  normalisée en tableau côté web ET le bot accepte les deux formats
+  défensivement.
+- **Toggle Telegram impossible à désactiver dans certains cas.**
+  Pour les anciennes installations dont le routing était stocké en
+  boolean simple, cliquer « off » dans l'UI n'avait aucun effet.
+  Le code lit maintenant les deux schémas (boolean legacy ou
+  `{ enabled }` actuel).
+- **Rapport backup quotidien envoyé plusieurs fois après un restart.**
+  Le drapeau « déjà envoyé aujourd'hui » était en mémoire — à chaque
+  redémarrage du service mail, le rapport pouvait repartir. Il est
+  désormais persisté dans Redis avec un verrou atomique : un seul
+  rapport par jour, garanti.
+- **Erreurs Telegram silencieuses.** Les échecs d'envoi (token
+  invalide, Chat ID interdit, MarkdownV2 mal échappé) sont maintenant
+  loggés dans `docker compose logs telegram-bot`, ce qui rend le
+  diagnostic possible.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147781] — 2026-05-19
 
 ### Changed
