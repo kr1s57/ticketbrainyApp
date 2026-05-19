@@ -2,6 +2,53 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147783] — 2026-05-19
+
+### Fixed
+
+- **Rapport backup Telegram : doublons par tâche (6-7 lignes par job).**
+  Bug introduit en v1.10.14778. Le rapport listait désormais ligne par
+  ligne chacun des checks historiques (jusqu'à 8 jours) à chaque cycle,
+  d'où la duplication massive. Le rapport ne montre désormais que le
+  check le plus récent de chaque tâche.
+- **Rapport backup : format remis à celui que les admins
+  connaissaient.** Header avec jour en français, séparateur `━━━`,
+  ligne par tâche au format
+  `<emoji> <taskName> — <sujet email tronqué> (HH:MM)`, résumé
+  `Résultat: X/Y ✅ | Z/Y ⚠️ | W/Y ❌` en bas. Les tâches sans email
+  du jour sont visibles en `⚪ <taskName> — --`.
+
+### Added
+
+- **Bot Telegram : détection explicite du 409 Conflict.** Si une autre
+  instance polle avec le même token (ancien container, webhook actif),
+  le bot log un message clair avec les commandes de diagnostic. Au
+  démarrage, le bot supprime aussi tout webhook stale qui aurait pu
+  causer le 409.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+**Si vous voyez encore des doublons** ou si le bot logue 409 Conflict
+en boucle, vérifiez qu'un seul container `telegram-bot` tourne :
+
+```bash
+docker ps | grep telegram
+# devrait afficher UNE seule ligne
+```
+
+Si plusieurs containers tournent avec le même token, stoppez les
+orphelins :
+
+```bash
+docker stop <container-id-orphelin>
+docker rm <container-id-orphelin>
+```
+
 ## [1.10.147782] — 2026-05-19
 
 ### Fixed
