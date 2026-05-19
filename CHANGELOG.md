@@ -2,6 +2,34 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147784] — 2026-05-19
+
+### Fixed
+
+- **Sidebar mailbox : le dépliage ne se réinitialise plus quand vous
+  cliquez sur un ticket.** L'état d'expansion (boîtes ouvertes / fermées)
+  est désormais persisté dans le navigateur. Une boîte que vous avez
+  fermée manuellement reste fermée même si un nouveau mail arrive,
+  jusqu'à ce que vous la rouvriez explicitement.
+- **Collision tickets : le lock d'édition ne peut plus être volé.**
+  Auparavant, si un agent rédigeait une réponse et qu'un second agent
+  ouvrait le même ticket, certaines actions du second (coller du
+  contenu, déclencher un draft IA, ou simplement focus l'éditeur)
+  pouvaient voler le verrou d'édition au premier — qui se voyait
+  alors bloqué avec le message « un autre agent est en cours
+  d'édition ». Le serveur protège désormais le verrou actif : le
+  second agent voit le ticket en **mode consultation** avec un message
+  clair indiquant qui détient l'édition, sans interférer avec l'agent
+  qui travaille. Le verrou se libère automatiquement après 30 s sans
+  heartbeat (fermeture d'onglet, crash navigateur).
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.147783] — 2026-05-19
 
 ### Fixed
