@@ -2,6 +2,24 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147781] — 2026-05-19
+
+### Changed
+
+- **Heure du rapport backup Telegram accessible depuis Paramètres →
+  Telegram.** Jusqu'ici, l'heure d'envoi du rapport quotidien devait
+  être configurée dans Paramètres → Email backup. Elle est désormais
+  aussi visible juste sous le toggle « Rapports de backup », là où on
+  s'attend à la trouver. Les deux pages éditent le même paramètre, la
+  donnée reste unique.
+
+### Mise à jour
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
 ## [1.10.14778] — 2026-05-19
 
 ### Changed
