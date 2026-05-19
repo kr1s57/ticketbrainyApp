@@ -282,6 +282,7 @@ services:
     image: ghcr.io/kr1s57/ticketbrainy-mail:latest
     restart: unless-stopped
     environment:
+      TZ: ${TZ:-Europe/Paris}
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
@@ -306,6 +307,7 @@ services:
     image: ghcr.io/kr1s57/ticketbrainy-telegram:latest
     restart: unless-stopped
     environment:
+      TZ: ${TZ:-Europe/Paris}
       DATABASE_URL: postgresql://${DB_USER:-ticketbrainy}:${DB_PASSWORD}@db:5432/${DB_NAME:-ticketbrainy}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}

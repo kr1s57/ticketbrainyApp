@@ -2,6 +2,55 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.14778] — 2026-05-19
+
+### Changed
+
+- **Notifications backup Telegram — un seul rapport quotidien groupé.**
+  Plus aucune alerte individuelle au fil de l'eau quand les mails de
+  backup arrivent. Le bot envoie maintenant un unique message à
+  l'heure configurée (Paramètres → Email backup → « Heure du rapport
+  Telegram »), avec emoji par statut et blocs Échecs / Avertissements
+  / Réussis. L'auto-création de tickets sur ERROR/MISSING est
+  conservée. La fenêtre du rapport couvre les dernières 24 heures, ce
+  qui capture les backups qui traversent minuit.
+- **Heure du rapport en fuseau local.** Nouvelle variable `TZ` dans
+  `.env.example` (défaut `Europe/Paris`) propagée aux services
+  `mail-service` et `telegram-bot`. L'heure sélectionnée dans l'UI
+  est désormais interprétée dans le fuseau du serveur (et non plus
+  en UTC).
+
+### Added
+
+- **Notifications Telegram « Nouveau ticket » réellement fonctionnelles.**
+  Avant cette version, le toggle existait mais aucun événement
+  n'était publié vers le bot. Maintenant, à chaque nouveau ticket
+  (mail entrant ou création UI/API), un message formaté est envoyé
+  sur Telegram : sujet, expéditeur, boîte mail, extrait, lien direct.
+- **Sélecteur de boîtes mail pour les notifications « Nouveau ticket ».**
+  Paramètres → Telegram → toggle « Nouveaux tickets » affiche
+  désormais une liste de cases à cocher des boîtes mail actives.
+  Aucune case cochée = notifications pour toutes les boîtes (ancien
+  comportement). Cocher une ou plusieurs boîtes = notifications
+  uniquement pour celles-là.
+
+### Mise à jour
+
+> **Nouvelle variable `TZ`** dans `.env.example`. Ajoutez-la à votre
+> `.env` (sinon les containers tomberont sur la valeur par défaut
+> `Europe/Paris`).
+
+```bash
+git pull
+grep -q '^TZ=' .env || echo 'TZ=Europe/Paris' >> .env
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+Le `--force-recreate` est nécessaire pour que la variable `TZ` ajoutée
+au `docker-compose.yml` soit propagée aux containers `mail-service`
+et `telegram-bot`.
+
 ## [1.10.147771] — 2026-05-18
 
 ### Fixed
