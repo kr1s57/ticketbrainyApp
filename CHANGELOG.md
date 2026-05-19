@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147785] — 2026-05-19
+
+### Fixed
+
+- **Captures d'écran collées dans une réponse : enfin visibles dans le
+  fil du ticket.** Depuis l'ajout du collage de captures d'écran
+  (1.10.147765), votre client recevait bien l'image mais celle-ci
+  n'apparaissait pas dans votre réponse côté agent — seule une pièce
+  jointe attachée au mail était visible. L'image collée est désormais
+  (a) visible directement dans le bubble de réponse de la conversation,
+  (b) intégrée inline dans le mail reçu par le client (et non plus
+  envoyée comme pièce jointe séparée), (c) toujours téléchargeable
+  depuis la liste des pièces jointes du ticket.
+
 ## [1.10.147784] — 2026-05-19
 
 ### Fixed
