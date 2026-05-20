@@ -2,6 +2,22 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147787] — 2026-05-20
+
+### Added
+
+- **Visibilité des personnes en copie sur chaque ticket.** Quand un
+  client envoie un mail à votre helpdesk en mettant plusieurs personnes
+  en copie (Cc), le ticket conserve désormais la liste complète des
+  destinataires et chaque message du fil affiche une ligne
+  « En copie : … » sous le nom de l'expéditeur. Avant ce patch, ces
+  contacts étaient perdus à la réception : votre agent n'avait aucun
+  moyen de savoir qui d'autre suivait l'échange, ce qui pouvait poser
+  problème pour les tickets multi-interlocuteurs (client + son
+  prestataire, client + son responsable, etc.). Rétro-compatible : les
+  tickets déjà reçus avant ce patch ne montrent rien (aucune donnée à
+  rejouer), seuls les nouveaux mails entrants exposent les Cc.
+
 ## [1.10.147786] — 2026-05-20
 
 ### Fixed
