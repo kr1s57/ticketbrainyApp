@@ -2,6 +2,7 @@
 
 All notable releases of TicketBrainy.
 
+<<<<<<< HEAD
 ## [1.10.147787] — 2026-05-20
 
 ### Added
@@ -17,6 +18,28 @@ All notable releases of TicketBrainy.
   prestataire, client + son responsable, etc.). Rétro-compatible : les
   tickets déjà reçus avant ce patch ne montrent rien (aucune donnée à
   rejouer), seuls les nouveaux mails entrants exposent les Cc.
+=======
+## [1.10.147788] — 2026-05-20
+
+### Security — Supply chain hardening (Phase 1)
+
+- **Images Docker maintenant pinées par version exacte au lieu de
+  `:latest`.** Le `docker-compose.yml` référence désormais
+  `ghcr.io/kr1s57/ticketbrainy-{web,ai,mail,telegram,migrate}:1.10.147788`
+  et `searxng/searxng@sha256:b5d4892d…` au lieu de `:latest`. Plus
+  aucune image ne peut être tirée silencieusement par `docker compose
+  pull` sans avoir été validée par une release TB explicite (anti
+  supply-chain). Le workflow opérateur ne change pas :
+  `cd /opt/ticketbrainy && git pull && docker compose pull && docker
+  compose up -d` synchronise le compose à la nouvelle version épinglée,
+  puis pull exactement cette version. Aucune action manuelle requise
+  pour les installations existantes.
+- **Avertissement au démarrage si `SECURITY_ALLOWLIST_BYPASS=true`** —
+  bannière `console.warn` encadrée dans `docker logs aidesk-web-1` à
+  chaque boot du conteneur web tant que le bypass break-glass de
+  l'allowlist IP admin est actif. Évite de laisser le bypass actif par
+  inattention après une intervention de récupération.
+>>>>>>> 04f08e6 (v1.10.147788 — supply-chain hardening Phase 1)
 
 ## [1.10.147786] — 2026-05-20
 

@@ -36,7 +36,7 @@ services:
       - internal
 
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-migrate:latest
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.10.147788
     # v1.10.146: raw-SQL migrations first (CREATE EXTENSION vector +
     # AiKnowledgeChunk table), THEN prisma db push for the rest.
     command: sh -c "cd apps/web && node prisma/run-raw-migrations.mjs && npx prisma db push"
@@ -157,7 +157,7 @@ services:
       - internal
 
   web:
-    image: ghcr.io/kr1s57/ticketbrainy-web:latest
+    image: ghcr.io/kr1s57/ticketbrainy-web:1.10.147788
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials (owned by root:root on the host) and drop to
@@ -247,7 +247,7 @@ services:
       - internal
 
   ai-service:
-    image: ghcr.io/kr1s57/ticketbrainy-ai:latest
+    image: ghcr.io/kr1s57/ticketbrainy-ai:1.10.147788
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials and drop to appuser (uid 1001) via su-exec.
@@ -279,7 +279,7 @@ services:
       - internal
 
   mail-service:
-    image: ghcr.io/kr1s57/ticketbrainy-mail:latest
+    image: ghcr.io/kr1s57/ticketbrainy-mail:1.10.147788
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -304,7 +304,7 @@ services:
       - internal
 
   telegram-bot:
-    image: ghcr.io/kr1s57/ticketbrainy-telegram:latest
+    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.10.147788
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -329,7 +329,12 @@ services:
   # never exposed publicly. The ai-service queries it via
   # http://searxng:8080.
   searxng:
-    image: searxng/searxng:latest
+    # v1.10.147788 (hardening Phase 1): pin SearXNG by digest instead of
+    # `:latest` so a compromised upstream tag cannot be silently pulled
+    # by `docker compose pull`. To upgrade, fetch the new digest from
+    # https://hub.docker.com/r/searxng/searxng/tags and bump the line
+    # below in a new TB release.
+    image: searxng/searxng@sha256:b5d4892daf19736acdefc34a67bb06dd702638beb282e993aeb612e0953c2d54
     restart: unless-stopped
     environment:
       SEARXNG_BASE_URL: http://searxng:8080/
