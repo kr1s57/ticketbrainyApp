@@ -2,6 +2,25 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147786] — 2026-05-20
+
+### Fixed
+
+- **Régression critique — vos agents ne recevaient plus aucune notif
+  "Nouveau ticket" pour les tickets créés à la main depuis l'interface.**
+  Cas reproductible : un agent voit un mail client dans Outlook avant
+  que TicketBrainy n'ait fini son tour de relève IMAP, clique sur
+  « Nouveau ticket » dans la barre d'outils pour ne pas attendre, le
+  ticket est créé… mais aucun agent ne reçoit la notification email,
+  ni la notification dans la cloche en haut à droite, ni l'alerte
+  Telegram. Seul l'accusé de réception au client était envoyé.
+  La fan-out était isolée dans le flux IMAP : tout ticket créé hors d'un
+  mail entrant (création manuelle, bouton « Forcer la collecte »)
+  passait à travers. La diffusion (cloche, email aux agents abonnés,
+  Telegram) est désormais déclenchée depuis tous les points d'entrée —
+  un tenant frais sans abonnement explicite tombe en fallback sur les
+  admins et les superviseurs.
+
 ## [1.10.147785] — 2026-05-19
 
 ### Fixed
