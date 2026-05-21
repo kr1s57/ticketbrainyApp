@@ -2,6 +2,29 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147790] — 2026-05-21
+
+### Fixed
+
+- **BackupMonitor — rapport Telegram quotidien : un job hebdomadaire
+  apparaissait ✅ tous les jours.** Si vous aviez configuré un backup
+  qui ne tourne qu'un seul jour de la semaine (ex. SBTP EXT-USB le
+  vendredi), son ✅ du vendredi continuait d'apparaître sur le rapport
+  quotidien de 06h00 tous les jours suivants, jusqu'au vendredi
+  suivant. Les jobs Lun-Ven n'étaient pas concernés car ils avaient
+  une ligne « légitime » du jour précédent qui poussait la stale via
+  la dédup interne. Désormais, le rapport ne regarde plus
+  « les lignes touchées dans les 24h » mais « la date cible du backup
+  selon le planning configuré » :
+  - SBTP EXT-USB (Vendredi 12-18) → apparaît dans le rapport du
+    **samedi matin** uniquement, le reste de la semaine il est marqué
+    `➖ SBTP EXT-USB — --` (NOT_SCHEDULED).
+  - Backup Mon-Fri overnight (21h-06h) → apparaît du mardi matin au
+    samedi matin. Lundi/Dimanche → `➖`.
+  - Backup quotidien → apparaît tous les matins comme avant.
+  Aucune action requise côté client : l'emoji `➖` était déjà
+  supporté depuis v1.10.147783.
+
 ## [1.10.147789] — 2026-05-21
 
 ### Fixed
