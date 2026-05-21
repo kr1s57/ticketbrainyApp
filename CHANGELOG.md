@@ -2,6 +2,34 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147789] — 2026-05-21
+
+### Fixed
+
+- **Fusion de tickets — la trace côté UI était invisible.** Quand
+  vous fusionnez plusieurs tickets dans un seul (action « Fusionner »
+  depuis la liste des tickets), le travail de regroupement (messages,
+  notes, étiquettes, temps passé) était bien fait en base, mais
+  l'interface n'affichait **aucune** indication visible une fois la
+  page rouverte : pas de bandeau, pas de ligne dans l'historique
+  d'activité, et l'URL d'un ticket fusionné renvoyait une page
+  pratiquement vide sans message explicatif.
+  Cette release ajoute :
+  1. Un **bandeau violet persistant** en tête du ticket cible
+     listant les tickets sources qui ont été absorbés
+     (« Ce ticket a absorbé #32 « Dylan », #45 « … » »).
+  2. Une **ligne dédiée dans le flux d'activité** (« a fusionné les
+     tickets #32 « Dylan » dans celui-ci »).
+  3. Une **redirection automatique** depuis l'URL d'un ticket fusionné
+     vers le ticket cible, avec un message « Le ticket #N a été
+     fusionné dans celui-ci. ». Plus de page vide ou de 404 obscur.
+  4. Traduction complète FR/EN/DE/ES/IT.
+  Note : les tickets déjà fusionnés avant cette release continueront
+  d'afficher une page vide quand on ouvre leur URL source (pas de
+  données rétroactives à reconstituer) — le bandeau côté cible, lui,
+  reste visible pour toutes les fusions historiques grâce à
+  l'historique d'activité.
+
 ## [1.10.147788] — 2026-05-20
 
 ### Security — Supply chain hardening (Phase 1)
