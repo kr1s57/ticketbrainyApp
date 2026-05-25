@@ -2,6 +2,31 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147792] — 2026-05-25
+
+### Fixed
+
+- **Création KB depuis ticket résolu : contenu nettoyé et complet.** Le
+  bouton « Résolu + Créer KB » générait un article qui (1) affichait du
+  HTML brut (`<html><head>…`) quand la réponse agent n'avait pas de
+  partie texte, et (2) tronquait la procédure à 300 caractères — les
+  étapes `Step 1`, `Step 2`, etc. de la réponse agent étaient perdues.
+  Désormais : l'HTML est nettoyé, les brouillons non envoyés sont
+  ignorés, la dernière réponse réellement envoyée par l'agent est
+  utilisée comme source, et les marqueurs `Step N` / `Étape N` sont
+  convertis en sections Markdown `### Étape N : …` complètes.
+
+### Changed
+
+- **Éditeur d'articles KB désormais en mode visuel (WYSIWYG).** L'écran
+  de création / édition d'article (`/kb/new`, `/kb/[id]`) utilisait un
+  textarea Markdown brut, qui figeait sur les longs contenus et obligeait
+  les agents à taper la syntaxe Markdown à la main. Remplacé par un
+  éditeur Tiptap avec barre d'outils visuelle (gras, italique, code,
+  titres, listes, citation, lien, et boutons dédiés pour insérer les
+  encarts **Conseil / Attention / Info**). La sauvegarde reste en
+  Markdown, donc les articles existants s'ouvrent sans conversion.
+
 ## [1.10.147790] — 2026-05-21
 
 ### Fixed
