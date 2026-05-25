@@ -2,6 +2,52 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147795] — 2026-05-25
+
+### Fixed
+
+- **Sauvegarde d'article KB bloquée après reformatage IA.** Quand vous
+  cliquiez sur **✨ Améliorer avec IA** puis sur **Mettre à jour
+  l'article**, l'enregistrement échouait avec un toast générique
+  « Échec de l'enregistrement ». Cause : votre WAF / Cloudflare bloque
+  les patterns de callouts GitHub-style (`> [!WARNING]`, `> [!TIP]`,
+  `> [!INFO]`) que Claude insère systématiquement dans le markdown
+  reformaté, les considérant comme une tentative d'injection XSS — le
+  POST était rejeté en 403 avant même d'atteindre l'application. Le
+  contenu KB est désormais transparenté encodé avant l'envoi
+  (préfixe `b64:`) et décodé côté serveur, ce qui contourne la règle
+  WAF sans rien changer au stockage en base ni à l'affichage des
+  articles.
+
+### Changed — IMPORTANT pour les opérateurs
+
+- **Nouvelle variable d'environnement requise** :
+  `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`. Sans cette variable, chaque
+  redéploiement Docker générait des identifiants de Server Actions
+  différents, ce qui cassait tous les onglets actuellement ouverts
+  par vos agents (erreur **403 / Failed to find Server Action** lors
+  du premier clic après une mise à jour, résolu uniquement par un
+  hard-refresh). Avec une clé stable, les onglets ouverts continuent
+  de fonctionner après chaque redéploiement.
+  - **À faire** : générer la clé une seule fois et l'ajouter dans
+    votre `.env` :
+    ```
+    openssl rand -base64 32
+    ```
+    puis ajouter dans `/opt/ticketbrainy/.env` :
+    ```
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<la-valeur-générée>
+    ```
+  - **Sans rotation** : gardez la même valeur. Ne la changez que si
+    vous suspectez une fuite (auquel cas tous les onglets ouverts
+    redeviendront invalides, comportement attendu).
+
+- `SERVER_ACTIONS_ALLOWED_ORIGINS` (optionnelle) — l'hôte extrait de
+  `APP_URL` est désormais autorisé automatiquement pour les Server
+  Actions derrière reverse proxy / WAF. Définissez cette variable
+  uniquement si vous servez l'application depuis plusieurs noms de
+  domaine.
+
 ## [1.10.147793] — 2026-05-25
 
 ### Added
