@@ -2,6 +2,23 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147793] — 2026-05-25
+
+### Added
+
+- **Bouton « ✨ Améliorer avec IA » dans l'éditeur d'article KB.**
+  L'éditeur visuel introduit en v147792 restait passif : un texte brut
+  collé (par exemple une procédure pas-à-pas) restait brut. Vous pouvez
+  désormais cliquer sur **✨ Améliorer avec IA** en haut à droite de la
+  barre d'outils pour que Claude reformate le contenu en article
+  structuré : sections **Contexte / Diagnostic / Procédure / Conseils**,
+  étapes numérotées avec titres d'action (`### Étape 1 : Vérifier
+  l'alimentation`), encarts **Conseil / Attention / Info** insérés
+  automatiquement aux bons endroits, valeurs techniques (commandes,
+  chemins, durées) préservées à l'identique. Aucune invention de
+  contenu. Utilise le même modèle que SmartReply (réglable dans
+  *Paramètres → XpertTeamIA*).
+
 ## [1.10.147792] — 2026-05-25
 
 ### Fixed
