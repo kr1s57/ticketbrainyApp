@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147796] — 2026-05-26
+
+### Fixed
+
+- **Réponses ticket contenant du code technique bloquées sans message.**
+  Lorsqu'un agent envoyait une réponse (ou créait un ticket / une note
+  interne) contenant un script PowerShell, une commande shell, une
+  expression régulière ou une requête SQL, l'envoi pouvait échouer
+  silencieusement : aucun message n'apparaissait dans le fil et l'agent
+  pensait son message parti. Cause : votre WAF / Cloudflare considère ces
+  patterns techniques comme des tentatives d'injection (RCE/XSS/SQLi) et
+  rejette le POST en 403 avant qu'il n'atteigne l'application. Le contenu
+  rédigé par l'agent est désormais encodé de façon transparente avant
+  l'envoi et décodé côté serveur, ce qui contourne la règle WAF sans rien
+  changer au stockage ni à l'affichage. Ce traitement, déjà appliqué aux
+  articles de la base de connaissances en 1.10.147795, couvre maintenant
+  les réponses publiques, les notes internes et la création de tickets.
+- **Message d'erreur explicite en cas de blocage.** Si un envoi échoue
+  malgré tout (autre motif côté WAF, coupure réseau), un message
+  « Envoi bloqué — réessayez ou contactez l'administrateur » s'affiche
+  désormais, au lieu d'un silence trompeur.
+
 ## [1.10.147795] — 2026-05-25
 
 ### Fixed
