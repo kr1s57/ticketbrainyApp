@@ -2,6 +2,24 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147797] — 2026-05-26
+
+### Fixed
+
+- **Assistant IA / génération de réponse en erreur `refresh_token_reused`.**
+  Sur les instances utilisant le compte Codex/OpenAI du serveur, l'Assistant
+  IA pouvait cesser de fonctionner au bout de quelques heures avec une erreur
+  `401 refresh_token_reused`. Cause : le jeton d'authentification est
+  renouvelé automatiquement à l'intérieur du conteneur, mais la synchronisation
+  interne écrasait périodiquement ce jeton fraîchement renouvelé par l'ancienne
+  copie (déjà consommée) présente sur le serveur hôte. La synchronisation passe
+  désormais en mode « mise à jour uniquement » : le jeton renouvelé par le
+  conteneur est préservé, tandis qu'un nouveau `codex login` sur l'hôte continue
+  de se propager normalement.
+  - *Récupération sur une instance déjà affectée* : exécuter `codex login` sur
+    le serveur hôte, puis
+    `docker compose up -d --force-recreate ai-service web`.
+
 ## [1.10.147796] — 2026-05-26
 
 ### Fixed
