@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147800] — 2026-05-28
+
+### Changed
+
+- **Pièces jointes affichées en haut du message.** Dans un ticket, les pièces
+  jointes (icône trombone, nom du fichier et taille) apparaissent désormais en
+  haut du message — sous les indicateurs SPF/DKIM/DMARC et près de la ligne
+  « En copie » — plutôt que sous le corps du message, pour les repérer
+  immédiatement.
+
 ## [1.10.147799] — 2026-05-28
 
 ### Added
