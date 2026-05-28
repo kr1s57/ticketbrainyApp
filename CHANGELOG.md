@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147798] — 2026-05-28
+
+### Added
+
+- **Adresses Cc / Cci à la création d'un ticket manuel.** Le formulaire
+  « Nouveau ticket » propose désormais un bouton « Ajouter Cc / Cci » qui
+  déplie deux champs CC et CCI. Les destinataires renseignés reçoivent une
+  copie de l'email d'accusé de réception envoyé au client et apparaissent
+  dans le fil de conversation du ticket.
+
 ## [1.10.147797] — 2026-05-26
 
 ### Fixed
