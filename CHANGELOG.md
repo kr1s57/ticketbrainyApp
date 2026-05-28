@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147799] — 2026-05-28
+
+### Added
+
+- **Réponse « à tous » automatique.** Lorsqu'un client met des personnes en
+  copie (CC) en créant un ticket, votre réponse depuis l'interface inclut
+  désormais ces destinataires d'office : le champ CC est **pré-rempli et
+  visible**, et reste **modifiable** — vous pouvez retirer une adresse avant
+  d'envoyer. Un ticket sans CC n'envoie qu'à l'expéditeur, comme avant.
+- **Brouillon de réponse conservé automatiquement.** Si vous saisissez une
+  réponse sans l'envoyer puis quittez le ticket, rafraîchissez la page ou
+  changez de poste, votre texte (et les CC/BCC) est **restauré** à votre retour
+  avec un badge « Brouillon ». Le badge disparaît dès que vous modifiez le
+  message. Les brouillons sont automatiquement supprimés après 48 h.
+
 ## [1.10.147798] — 2026-05-28
 
 ### Added
