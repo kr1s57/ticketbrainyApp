@@ -2,6 +2,25 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147802] — 2026-05-29
+
+> Mise à jour de sécurité **recommandée** (complète la 1.10.147801).
+
+### Sécurité
+
+- Les identifiants OAuth d'une boîte mail ne peuvent plus être définis que par
+  un administrateur (auparavant aussi accessibles aux superviseurs), au même
+  titre que les identifiants IMAP/SMTP.
+- La création d'un ticket est désormais restreinte aux boîtes mail dont l'agent
+  est membre : un agent ne peut plus créer de ticket — ni déclencher d'e-mail
+  d'accusé — depuis la boîte d'une autre équipe.
+
+### Corrigé
+
+- Relève manuelle des e-mails : la récupération « supprimer un ticket →
+  marquer le mail non lu → relancer la relève » recrée à nouveau le ticket
+  (régression de la 1.10.147801).
+
 ## [1.10.147801] — 2026-05-29
 
 > Mise à jour de sécurité et de fiabilité **recommandée**.
