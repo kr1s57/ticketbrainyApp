@@ -2,6 +2,31 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.2] — 2026-05-29
+
+> Version mineure — **localisation des enquêtes de satisfaction** et
+> internationalisation côté serveur.
+
+### Ajouté
+
+- Les enquêtes de satisfaction (CSAT) sont désormais entièrement localisées :
+  email d'enquête, page de confirmation et page de remerciement s'affichent
+  dans la langue de l'agent qui les déclenche, dans les 5 langues (français,
+  anglais, allemand, espagnol, italien).
+- Résolution de la langue côté serveur (cookie `tb-locale`, repli sur la langue
+  du navigateur). Les dictionnaires de traduction ne sont plus embarqués dans le
+  JavaScript envoyé au navigateur, ce qui allège le bundle client.
+
+### Modifié
+
+- Le triage et l'analyse IA respectent désormais la langue choisie dans
+  l'interface.
+
+### Sécurité
+
+- Le sujet du ticket est échappé dans le corps HTML de l'email d'enquête CSAT
+  (prévention d'injection de balises).
+
 ## [1.11.1] — 2026-05-29
 
 > Version mineure — **localisation** des écrans clés.
