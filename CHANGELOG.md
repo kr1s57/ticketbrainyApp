@@ -2,6 +2,25 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.21] — 2026-05-30
+
+> Correctif — **lisibilité des fils de tickets** : meilleure suppression des
+> citations recopiées dans les mails entrants.
+
+### Corrigé
+
+- Les citations de l'historique recopiées par le client (Outlook bureau et web,
+  Gmail, Apple Mail, Thunderbird) sont désormais bien masquées dans les réponses
+  entrantes — y compris sur les **réponses courtes** (« Merci », un numéro), qui
+  affichaient auparavant tout l'historique. Un bouton « Afficher le message
+  complet » reste disponible pour dérouler le message d'origine.
+- Les bannières ajoutées par les passerelles de sécurité (ex. Sophos) en tête de
+  message sont retirées de l'affichage.
+- Le masquage s'applique aussi au premier message d'un ticket, pas seulement aux
+  réponses.
+
+Affichage uniquement : le message d'origine reste intégralement conservé.
+
 ## [1.11.2] — 2026-05-29
 
 > Version mineure — **localisation des enquêtes de satisfaction** et
