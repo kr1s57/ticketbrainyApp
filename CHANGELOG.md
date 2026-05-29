@@ -2,6 +2,31 @@
 
 All notable releases of TicketBrainy.
 
+## [1.10.147801] — 2026-05-29
+
+> Mise à jour de sécurité et de fiabilité **recommandée**.
+
+### Sécurité
+
+- Renforcement du cloisonnement par boîte mail : un agent n'accède qu'aux
+  tickets, pièces jointes et résultats de recherche de ses propres boîtes
+  (corrections d'isolation inter-boîtes sur la recherche, les pièces jointes,
+  le verrou d'édition et le changement de client d'un ticket).
+- Les règles d'exclusion d'e-mails entrants, ainsi que la définition des
+  identifiants IMAP/SMTP à la création d'une boîte mail, sont réservées aux
+  administrateurs / superviseurs.
+- Le verrou anti-fraude de licence s'applique désormais aussi aux modules
+  premium, et non plus au seul cœur de l'application.
+
+### Corrigé
+
+- Relève manuelle des e-mails : plus de tickets ni de notifications en double,
+  et une réponse n'est plus rattachée à un ticket supprimé.
+- L'IA (tri, analyse, résumé) n'inclut plus les brouillons d'agent dans son
+  contexte.
+- Commande Telegram `/backup` : dates comparées en UTC — fin des faux
+  « manquant » / « erreur » selon le fuseau horaire du serveur.
+
 ## [1.10.147800] — 2026-05-28
 
 ### Changed
