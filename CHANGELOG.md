@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.1] — 2026-05-29
+
+> Version mineure — **localisation** des écrans clés.
+
+### Ajouté
+
+- Localisation complète de la page de connexion et de la cloche de
+  notifications (temps relatif inclus) dans les 5 langues (français, anglais,
+  allemand, espagnol, italien).
+- Extraction des libellés codés en dur vers les traductions sur le badge SLA,
+  la recherche globale, le tableau de bord, les axes du graphique d'activité,
+  la file de tickets et l'éditeur de réponse.
+
+### Modifié
+
+- L'alerte d'expiration de licence respecte désormais la langue choisie.
+
+### Corrigé
+
+- Correction d'un scintillement possible du badge SLA au chargement de la page
+  d'un ticket.
+
 ## [1.11.0] — 2026-05-29
 
 > Version mineure — durcissement **sécurité & fiabilité recommandé**.
