@@ -2,6 +2,39 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.0] — 2026-05-29
+
+> Version mineure — durcissement **sécurité & fiabilité recommandé**.
+
+### Sécurité
+
+- Cloisonnement par boîte mail renforcé sur l'ensemble des actions sensibles :
+  fusion de tickets, gestion des tags et des clients réservées aux
+  administrateurs / superviseurs ; liaison client, génération et partage
+  d'articles de base de connaissances limités au périmètre de l'agent.
+- Durcissement du crawler de la base de connaissances (RAG) contre les accès
+  réseau internes (protection SSRF, y compris re-bind DNS).
+- Les données clients envoyées à l'IA (tri, analyse, résumé) sont désormais
+  expurgées de leurs informations personnelles ; le contenu web externe est
+  traité comme une source non fiable.
+- Jetons OAuth isolés par boîte mail (plus de partage entre boîtes) ;
+  connexion SSO Keycloak refusée tant que l'e-mail n'est pas vérifié ;
+  image du moteur de recherche interne épinglée et secret régénéré.
+
+### Performance & fiabilité
+
+- File de tickets : index optimisé pour la vue par défaut ; le filtre de boîte
+  mail d'un agent n'est plus écrasé.
+- Statistiques CSAT corrigées (agrégation par agent, taux borné à 100 %).
+- Disparition des avertissements d'affichage (heures relatives) sur la file et
+  le tableau de bord.
+
+### À noter pour les administrateurs
+
+- **SSO Keycloak** : assurez-vous que votre realm émet le claim
+  `email_verified` (un compte sans e-mail vérifié sera refusé). Testez une
+  connexion SSO après mise à jour.
+
 ## [1.10.147802] — 2026-05-29
 
 > Mise à jour de sécurité **recommandée** (complète la 1.10.147801).
