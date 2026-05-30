@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.31] — 2026-05-30
+
+> Correctif de performance — **chargement de la barre latérale**.
+
+### Performance
+
+- Les compteurs de tickets par boîte mail affichés dans la barre latérale (rafraîchis
+  automatiquement toutes les 30 secondes) sont désormais calculés en **une seule requête**
+  au lieu de plusieurs par boîte. Sur les installations à fort volume, cela réduit
+  nettement la charge base de données de l'écran le plus consulté. Les compteurs affichés
+  sont **strictement identiques**.
+
+Aucune migration de base de données. Mise à jour applicative simple.
+
 ## [1.11.3] — 2026-05-30
 
 > Version mineure — **exactitude et performance des analyses SLA & CSAT**.
