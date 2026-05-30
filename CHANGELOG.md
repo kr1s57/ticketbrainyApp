@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.32] — 2026-05-30
+
+> Correctif de performance — **rapports de temps**.
+
+### Performance
+
+- Les totaux des rapports de temps (heures totales, heures facturables, montant) sont
+  désormais calculés directement en base de données sur **l'ensemble** des entrées
+  correspondant à vos filtres — plus rapides et exacts, même sur de très gros volumes.
+- La liste affichée est limitée à 5000 lignes, avec un message d'avertissement invitant à
+  affiner les filtres au-delà ; les totaux, eux, restent calculés sur l'ensemble.
+- La table des temps est désormais indexée pour accélérer le filtrage par date et par agent.
+
+Aucune migration de base de données. Mise à jour applicative simple.
+
 ## [1.11.31] — 2026-05-30
 
 > Correctif de performance — **chargement de la barre latérale**.
