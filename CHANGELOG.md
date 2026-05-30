@@ -2,6 +2,27 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.3] — 2026-05-30
+
+> Version mineure — **exactitude et performance des analyses SLA & CSAT**.
+
+### Corrigé
+
+- Les tableaux de bord **Conformité SLA** et **Satisfaction (CSAT)** calculent
+  désormais leurs indicateurs (taux de conformité, moyennes, histogrammes,
+  distributions) sur **l'intégralité** de la période sélectionnée. Auparavant, au-delà
+  d'un certain volume de tickets ou de réponses, les chiffres étaient calculés sur un
+  échantillon tronqué — et donc potentiellement inexacts — sans aucun avertissement.
+- La liste des tickets en dépassement de SLA s'affiche dans un ordre stable.
+
+### Performance
+
+- Les pages Analyses SLA et CSAT s'appuient désormais sur des agrégations en base de
+  données, réduisant l'empreinte mémoire et le temps de chargement sur les grands
+  volumes.
+
+Aucune migration de base de données. Mise à jour applicative simple.
+
 ## [1.11.21] — 2026-05-30
 
 > Correctif — **lisibilité des fils de tickets** : meilleure suppression des
