@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.33] — 2026-05-30
+
+> Correctif de performance — **rattachement des tickets orphelins**.
+
+### Performance
+
+- L'outil « Rattacher les orphelins » (Réglages → Clients) traite désormais l'ensemble des
+  tickets en **un nombre de requêtes constant** au lieu de plusieurs requêtes par ticket. Sur
+  les installations avec un grand historique de tickets non rattachés, l'opération est nettement
+  plus rapide et ne risque plus de saturer la base. Le résultat (tickets rattachés) est
+  **strictement identique**.
+
+Aucune migration de base de données. Mise à jour applicative simple.
+
 ## [1.11.32] — 2026-05-30
 
 > Correctif de performance — **rapports de temps**.
