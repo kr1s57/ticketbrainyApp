@@ -2,6 +2,22 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.34] — 2026-05-30
+
+> Correctif de performance — **analyse approfondie (Deep Analysis)**.
+
+### Performance
+
+- Lancer une analyse approfondie d'un ticket n'ouvre plus qu'**un seul flux temps réel** au lieu
+  de deux requêtes concurrentes (le suivi en direct et une interrogation répétée de la base toutes
+  les 1,5 s tournaient en parallèle). La charge sur la base et le service IA pendant une analyse
+  est nettement réduite, sans changement visible côté interface.
+- Si la connexion temps réel est interrompue en cours d'analyse, l'interface rejoint
+  automatiquement l'analyse en arrière-plan (qui continue côté serveur) au lieu d'afficher une
+  erreur — et un « Relancer » ne risque plus de déclencher une analyse en double.
+
+Aucune migration de base de données. Mise à jour applicative simple.
+
 ## [1.11.33] — 2026-05-30
 
 > Correctif de performance — **rattachement des tickets orphelins**.
