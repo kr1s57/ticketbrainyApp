@@ -2,6 +2,20 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.35] — 2026-05-30
+
+> Correctif de performance — **service d'envoi d'emails**.
+
+### Performance
+
+- Le service de messagerie n'immobilise plus sa connexion Redis pendant l'attente de nouveaux
+  emails à envoyer : la lecture bloquante de la file tourne désormais sur une connexion dédiée.
+  Les opérations en parallèle (mise en file des emails sortants, notifications, supervision des
+  sauvegardes) ne sont plus retardées (jusqu'à 5 secondes auparavant). Comportement d'envoi
+  inchangé.
+
+Aucune migration de base de données. Mise à jour applicative simple.
+
 ## [1.11.34] — 2026-05-30
 
 > Correctif de performance — **analyse approfondie (Deep Analysis)**.
