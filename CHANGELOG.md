@@ -2,6 +2,27 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.40] — 2026-05-31
+
+Vues sauvegardées dans la file de tickets. Chaque agent peut nommer et persister
+un jeu de filtres et le rappeler en un clic depuis la barre latérale.
+
+### Fonctionnalités
+- **Vues sauvegardées (privées)** : un bouton « Sauvegarder la vue » dans la
+  barre de filtres enregistre les filtres actifs (statut, priorité, boîte,
+  assigné, tag, recherche, tri) sous un nom ; la barre latérale liste vos vues
+  pour les rappeler ou les supprimer en un clic.
+
+### Notes
+- Vues privées à chaque agent. Aucune migration de données (nouvelle table créée
+  automatiquement au déploiement).
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.39] — 2026-05-31
 
 Correctif de déploiement pour la 1.11.38 : la création de la contrainte d'unicité
