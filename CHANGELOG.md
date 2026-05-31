@@ -2,6 +2,25 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.39] — 2026-05-31
+
+Correctif de déploiement pour la 1.11.38 : la création de la contrainte d'unicité
+Message-ID pouvait faire échouer l'étape de migration au démarrage. L'index est
+désormais créé directement par la migration (idempotente), sans interruption.
+
+### Correctif
+- La contrainte d'unicité (ticketId, Message-ID) est créée par la migration
+  elle-même, évitant l'échec de l'étape de migration au déploiement.
+
+### Notes
+- Aucun changement fonctionnel. Aucune action manuelle requise.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.38] — 2026-05-31
 
 Fiabilité : protection contre la double-ingestion d'un même email dans un fil de
