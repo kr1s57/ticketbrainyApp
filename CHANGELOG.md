@@ -2,6 +2,29 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.37] — 2026-05-31
+
+Durcissement sécurité : les valeurs fournies par le client (sujet du ticket,
+nom du client, premier message) sont désormais systématiquement échappées dans
+les emails sortants (notifications aux agents, accusés de résolution, relances
+d'auto-clôture, réponses automatiques). Un contenu porteur de balisage HTML ne
+peut plus altérer le rendu d'un email envoyé.
+
+### Sécurité
+- Échappement systématique des champs contrôlés par le client interpolés dans
+  les corps d'emails.
+- Le gabarit d'email déclare explicitement la nature (HTML ou texte) de chaque
+  corps, supprimant une heuristique de détection de contenu contournable.
+
+### Notes
+- Aucun changement fonctionnel visible ni migration de base de données.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.36] — 2026-05-31
 
 Performance de l'ai-service (finding P2 de l'audit interne). Les appels au modèle
