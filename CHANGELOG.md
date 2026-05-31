@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.38] — 2026-05-31
+
+Fiabilité : protection contre la double-ingestion d'un même email dans un fil de
+ticket, avec déduplication automatique des éventuels doublons déjà présents au
+déploiement.
+
+### Fiabilité
+- Un même email entrant ne peut plus créer de message en double dans un fil de
+  ticket (course de relève force-poll/listener), grâce à une contrainte
+  d'unicité Message-ID par ticket.
+- La mise à jour déduplique automatiquement les doublons existants (migration
+  idempotente, sans intervention manuelle).
+
+### Notes
+- Aucun changement fonctionnel visible.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.37] — 2026-05-31
 
 Durcissement sécurité : les valeurs fournies par le client (sujet du ticket,
