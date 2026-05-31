@@ -2,6 +2,30 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.36] — 2026-05-31
+
+Performance de l'ai-service (finding P2 de l'audit interne). Les appels au modèle
+d'IA (triage automatique, analyse approfondie, génération de réponses) étaient lancés
+sans aucune borne de simultanéité. Lors d'un afflux d'emails entrants (jusqu'à une
+centaine de triages déclenchés d'un coup) ou de plusieurs analyses approfondies en
+parallèle, cela pouvait saturer le CPU/RAM ou faire dépasser le quota de l'API (erreurs 429).
+
+### Performance
+- Un **limiteur de concurrence** plafonne désormais le nombre d'appels IA simultanés
+  (par défaut **4**, configurable via la variable d'environnement `AI_MAX_CONCURRENCY`).
+  Au-delà, les appels patientent qu'un créneau se libère : la charge est lissée, plus
+  de saturation ni d'erreurs 429 sous pic.
+
+### Notes
+- Aucun changement de comportement fonctionnel : mêmes appels, mêmes résultats ; seule
+  la simultanéité est bornée. Aucune migration de base de données.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.35] — 2026-05-30
 
 > Correctif de performance — **service d'envoi d'emails**.
