@@ -2,6 +2,23 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.41] — 2026-06-01
+
+Correctif : lors de la création manuelle d'un ticket depuis l'interface, le
+client reçoit désormais le message rédigé par l'agent — et non plus un accusé
+de réception générique.
+
+### Correctif
+- Le message saisi par l'agent à la création d'un ticket est bien transmis au
+  client (destinataire, copies Cc/Bcc et expéditeur de la boîte inchangés) et
+  s'affiche du bon côté de la conversation, comme une réponse sortante.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.40] — 2026-05-31
 
 Vues sauvegardées dans la file de tickets. Chaque agent peut nommer et persister
