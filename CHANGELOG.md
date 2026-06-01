@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.42] — 2026-06-01
+
+Confort : la fenêtre « Nouveau ticket » (création manuelle d'un ticket) était
+trop étroite pour rédiger un message à l'aise.
+
+### Améliorations
+- **Fenêtre de création élargie** : modal nettement plus large et plus haut, et
+  zone de saisie du message agrandie, pour rédiger confortablement.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.41] — 2026-06-01
 
 Correctif : lors de la création manuelle d'un ticket depuis l'interface, le
