@@ -2,6 +2,23 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.43] — 2026-06-02
+
+Sécurité : mise à jour de Next.js (16.2.4 → 16.2.6) intégrant les correctifs
+de sécurité critiques publiés par Vercel. Mise à jour recommandée.
+
+### Sécurité
+- **Next.js 16.2.6** : 13 correctifs de sécurité (déni de service,
+  contournement middleware/proxy, SSRF, empoisonnement de cache, XSS, plus
+  une faille React amont), dont CVE-2026-44578 (CVSS 8.6). Aucun changement
+  fonctionnel côté application.
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.42] — 2026-06-01
 
 Confort : la fenêtre « Nouveau ticket » (création manuelle d'un ticket) était
