@@ -2,6 +2,29 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.44] — 2026-06-04
+
+Améliorations du flux e-mail des tickets, en réponse aux retours clients et
+agents.
+
+### Corrigé
+- **Attribution d'un client** : changer le client d'un ticket envoie désormais
+  un message d'attribution clair au nouveau contact (« Le ticket #N vous a été
+  attribué… »), citant la demande d'origine, au lieu de l'accusé de réception
+  générique « Nous avons bien reçu votre demande » qui prêtait à confusion.
+- **Suivi des envois automatiques** : les accusés de réception et messages
+  d'attribution apparaissent maintenant dans le fil du ticket, visibles et
+  traçables côté agent.
+- **Regroupement des e-mails** : réponses et accusés portent les bons en-têtes
+  de conversation (References) et un objet « Re: [Ticket #N] … » cohérent, ce
+  qui évite les conversations dédoublées (notamment sous Outlook).
+
+### Mise à jour
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.43] — 2026-06-02
 
 Sécurité : mise à jour de Next.js (16.2.4 → 16.2.6) intégrant les correctifs
