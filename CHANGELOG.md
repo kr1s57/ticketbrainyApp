@@ -2,6 +2,19 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.45] — 2026-06-08
+
+Suite des améliorations du flux e-mail.
+
+### Corrigé
+- **Accusé de réception plus lisible** : le rappel du message d'origine dans
+  l'accusé automatique envoyé au client est désormais nettoyé — plus de codes
+  d'images parasites (`[cid:…]`), de liens de passerelle de sécurité illisibles
+  ni de bloc signature recopié, et la coupure se fait proprement en fin de mot.
+- **Aperçus de tickets cohérents** : le même nettoyage s'applique aux aperçus
+  des notifications agents (nouveau ticket, réponse client) et à l'aperçu
+  Telegram. Le message complet conservé dans le ticket reste inchangé.
+
 ## [1.11.44] — 2026-06-04
 
 Améliorations du flux e-mail des tickets, en réponse aux retours clients et
