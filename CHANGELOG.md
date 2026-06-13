@@ -2,6 +2,18 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.46] — 2026-06-13
+
+Correctif d'un blocage signalé par les équipes de support.
+
+### Corrigé
+- **Plus de ticket « verrouillé » pour les autres agents** : lorsqu'un agent
+  ouvrait un ticket et passait à autre chose sans fermer l'onglet, la zone de
+  réponse devenait inaccessible à tous les autres agents. Désormais, le composer
+  n'est plus jamais bloqué : si un collègue rédige déjà une réponse sur le même
+  ticket, une simple bannière d'information l'indique. L'indicateur disparaît
+  automatiquement après une minute d'inactivité.
+
 ## [1.11.45] — 2026-06-08
 
 Suite des améliorations du flux e-mail.
