@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.47] — 2026-07-11
+
+Correctif de fiabilité de l'Assistant IA, signalé de façon récurrente.
+
+### Corrigé
+- **Fin des erreurs intermittentes de l'Assistant IA** : dans certains cas,
+  l'Assistant IA cessait de répondre et affichait une erreur d'authentification,
+  alors que la configuration était correcte. La cause profonde est traitée et
+  l'Assistant reste disponible de façon fiable.
+- **Statut de connexion IA fiable** : l'indicateur de connexion dans les
+  réglages reflète désormais l'état réel de l'authentification, et non la seule
+  présence de l'outil — plus de faux « connecté ».
+- **Changement de fournisseur IA immédiat** : basculer de fournisseur ou mettre
+  à jour une clé dans les réglages prend effet aussitôt, sans redémarrage.
+
 ## [1.11.46] — 2026-06-13
 
 Correctif d'un blocage signalé par les équipes de support.

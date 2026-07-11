@@ -36,7 +36,7 @@ services:
       - internal
 
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.46
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.47
     # v1.10.146: raw-SQL migrations first (CREATE EXTENSION vector +
     # AiKnowledgeChunk table), THEN prisma db push for the rest.
     command: sh -c "cd apps/web && node prisma/run-raw-migrations.mjs && npx prisma db push"
@@ -157,7 +157,7 @@ services:
       - internal
 
   web:
-    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.46
+    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.47
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials (owned by root:root on the host) and drop to
@@ -254,7 +254,7 @@ services:
       - internal
 
   ai-service:
-    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.46
+    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.47
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials and drop to appuser (uid 1001) via su-exec.
@@ -265,6 +265,12 @@ services:
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
       APP_URL: ${APP_URL:-http://localhost:3000}
       AI_SERVICE_PORT: "3001"
+      # v1.11.47: cross-process invalidation of the AI provider/API-key cache.
+      # ai-service subscribes to the Redis `ai:settings-changed` channel that
+      # `web` publishes when an admin changes the provider/key in Settings → AI,
+      # and clears its cache at once. Without Redis, a 60s TTL takes over (the
+      # subscriber logs a warning and degrades gracefully).
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       # v1.10.146: RAG knowledge builder. The ai-service falls back
       # gracefully when these are unreachable (skips the crawl, keeps
       # the rest of the analysis flow working).
@@ -286,7 +292,7 @@ services:
       - internal
 
   mail-service:
-    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.46
+    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.47
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -311,7 +317,7 @@ services:
       - internal
 
   telegram-bot:
-    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.46
+    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.47
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
