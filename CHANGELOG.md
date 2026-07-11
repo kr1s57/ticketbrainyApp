@@ -2,6 +2,27 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.48] — 2026-07-11
+
+Correctif de la cause racine des erreurs d'authentification récurrentes de
+l'Assistant IA (mode abonnement Claude Code CLI).
+
+### Corrigé
+- **Fin des erreurs 401 récurrentes de l'Assistant IA** : sous charge, plusieurs
+  requêtes IA simultanées pouvaient invalider le jeton de connexion et provoquer
+  une erreur d'authentification persistante jusqu'à une reconnexion manuelle. Les
+  appels au moteur IA sont désormais traités un à la fois, ce qui supprime la
+  cause à la racine — l'Assistant reste disponible de façon fiable.
+- **Indicateur de connexion IA fiable et sans effet de bord** : le badge de
+  statut des réglages reflète l'état réel du jeton (connecté / expiré) en lisant
+  simplement sa date d'expiration, sans solliciter le moteur — plus de faux
+  négatifs ni de charge inutile.
+
+### Note de mise à jour
+Si l'Assistant affichait déjà l'erreur avant cette mise à jour, une reconnexion
+unique reste nécessaire pour repartir d'un jeton sain ; ensuite, le problème ne
+se reproduit plus.
+
 ## [1.11.47] — 2026-07-11
 
 Correctif de fiabilité de l'Assistant IA, signalé de façon récurrente.
