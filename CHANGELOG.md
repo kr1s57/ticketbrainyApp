@@ -2,6 +2,26 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.49] — 2026-07-12
+
+Deux correctifs de fiabilité de l'Assistant IA en mode abonnement Claude Code CLI.
+
+### Corrigé
+- **Option « Claude Code CLI » indisponible à tort** (« CLI non détecté sur le
+  serveur ») : l'indicateur de connexion pouvait signaler le CLI comme
+  indisponible après une période d'inactivité, alors que l'abonnement restait
+  parfaitement connecté. L'état affiché reflète désormais la connexion réelle de
+  l'abonnement — l'option reste sélectionnable tant que la session est valide.
+- **Assistant IA basculant vers « clé API non configurée »** : dans certains cas,
+  le mode Claude sélectionné n'était pas reconnu et l'Assistant réclamait une clé
+  API. Le mode choisi est désormais respecté de façon robuste — plus de décrochage
+  silencieux.
+
+### Note de mise à jour
+Aucune action requise. Si l'option Claude reste indisponible après la mise à jour,
+c'est que la session d'abonnement a réellement expiré : une simple reconnexion
+suffit.
+
 ## [1.11.48] — 2026-07-11
 
 Correctif de la cause racine des erreurs d'authentification récurrentes de
