@@ -229,11 +229,16 @@ services:
     volumes:
       - app-data:/data
       - claude-config:/home/nextjs/.claude
-      # Host Claude CLI creds, read-only. Synced into the persistent volume
-      # by docker-claude-init.sh at container start so AI features keep
-      # working after rebuilds without any manual script. See:
+      # Bind-mount the host Claude DIRECTORY (read-only), not a single file.
+      # A single-file bind mount pins the inode at container start, so when the
+      # Claude CLI rotates its OAuth credentials on the host (atomic rename →
+      # new inode) the container keeps reading a stale snapshot and the
+      # "Claude Code CLI" option greys out ("CLI non détecté") while the
+      # subscription is actually valid. Mounting the directory follows the
+      # path, so rotations are visible immediately; docker-claude-init.sh
+      # re-syncs the volume copy every 5 minutes. See:
       # feedback_ai_must_survive_rebuild.md
-      - ${HOST_CLAUDE_CREDS_FILE:-/root/.claude/.credentials.json}:/host-claude/credentials.json:ro
+      - ${HOST_CLAUDE_DIR:-/root/.claude}:/host-claude/dir:ro
       - ${HOST_CLAUDE_CONFIG_FILE:-/root/.claude.json}:/host-claude/claude.json:ro
       # v1.10.0: Caddy cert mount (read-only). Empty volume on LAN/WAF
       # deployments where Caddy is not used; populated on VPS Caddy
@@ -278,10 +283,13 @@ services:
       RAG_EMBEDDINGS_URL: http://embeddings:80
     volumes:
       - claude-config:/home/appuser/.claude
-      # Host Claude CLI creds, read-only. Synced into the persistent volume
-      # by docker-claude-init.sh at container start so AI features keep
-      # working after rebuilds without any manual script.
-      - ${HOST_CLAUDE_CREDS_FILE:-/root/.claude/.credentials.json}:/host-claude/credentials.json:ro
+      # Bind-mount the host Claude DIRECTORY (read-only), not a single file, so
+      # atomic credential rotations on the host (rename → new inode) stay
+      # visible to the container. A single-file mount pins the inode and the
+      # container reads a stale, expired snapshot after the first rotation.
+      # docker-claude-init.sh re-syncs the volume copy every 5 minutes. See:
+      # feedback_ai_must_survive_rebuild.md
+      - ${HOST_CLAUDE_DIR:-/root/.claude}:/host-claude/dir:ro
       - ${HOST_CLAUDE_CONFIG_FILE:-/root/.claude.json}:/host-claude/claude.json:ro
     depends_on:
       db:

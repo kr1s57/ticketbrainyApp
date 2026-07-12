@@ -16,11 +16,21 @@ Deux correctifs de fiabilité de l'Assistant IA en mode abonnement Claude Code C
   le mode Claude sélectionné n'était pas reconnu et l'Assistant réclamait une clé
   API. Le mode choisi est désormais respecté de façon robuste — plus de décrochage
   silencieux.
+- **Identifiants Claude figés sur un ancien instantané** (montage Docker) : les
+  identifiants de l'abonnement étaient montés dans les conteneurs comme un
+  **fichier unique**, ce qui épinglait l'inode au démarrage. Quand le CLI Claude
+  fait tourner son jeton sur l'hôte (remplacement atomique du fichier), les
+  conteneurs continuaient de lire l'ancien instantané expiré → l'option
+  « Claude Code CLI » se grisait alors que l'abonnement restait valide. On monte
+  désormais le **répertoire** `~/.claude` (au lieu du seul fichier) : les
+  rotations de jeton sont visibles immédiatement, sans recréation de conteneur.
 
 ### Note de mise à jour
-Aucune action requise. Si l'option Claude reste indisponible après la mise à jour,
-c'est que la session d'abonnement a réellement expiré : une simple reconnexion
-suffit.
+Ce correctif touche le montage des volumes : la mise à jour **doit recréer les
+conteneurs**. Utiliser :
+`cd /opt/ticketbrainy && git pull && docker compose up -d --force-recreate`
+Si l'option Claude reste indisponible ensuite, c'est que la session d'abonnement a
+réellement expiré : une simple reconnexion (`claude` sur l'hôte) suffit.
 
 ## [1.11.48] — 2026-07-11
 
