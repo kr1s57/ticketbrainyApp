@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.50] — 2026-07-17
+
+Deux améliorations du formulaire « Nouveau ticket » (création manuelle par un agent).
+
+### Ajouté
+- **Autocomplétion des clients connus.** En tapant le début du nom ou de l'adresse
+  e-mail d'un client déjà présent dans le système, une liste de suggestions
+  apparaît : un clic remplit automatiquement le nom **et** l'e-mail. Plus besoin de
+  ressaisir un client existant ; la saisie manuelle reste possible pour un nouveau
+  contact.
+- **Assistant IA à la création d'un ticket.** L'aide à la rédaction par IA
+  (décrire le message souhaité, choisir la langue, générer), jusqu'ici disponible
+  uniquement lors de la réponse à un ticket, l'est désormais aussi dans le
+  formulaire de création. Nécessite le module IA de génération d'e-mails.
+
 ## [1.11.49] — 2026-07-12
 
 Deux correctifs de fiabilité de l'Assistant IA en mode abonnement Claude Code CLI.
