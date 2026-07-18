@@ -2,6 +2,16 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.51] — 2026-07-17
+
+### Corrigé
+- **Autocomplétion des clients : recherche sur le contact et l'e-mail.** Les
+  suggestions du formulaire « Nouveau ticket » ne trouvaient pas un client
+  enregistré sous un nom d'entreprise lorsqu'on tapait le nom de la personne à
+  contacter. La recherche porte désormais sur le nom du client, son e-mail, ainsi
+  que le **nom et l'e-mail du contact** ; sélectionner un contact remplit
+  directement son nom et son adresse e-mail.
+
 ## [1.11.50] — 2026-07-17
 
 Deux améliorations du formulaire « Nouveau ticket » (création manuelle par un agent).
