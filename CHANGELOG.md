@@ -2,6 +2,18 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.52] — 2026-07-24
+
+### Corrigé
+- **Les réponses à une relance d'« Auto-fermeture » restent dans le ticket
+  d'origine.** Les e-mails d'auto-fermeture (message initial, relances et fermeture
+  finale) partaient sans le repère `[Ticket #N]` ni les en-têtes de conversation, et
+  n'apparaissaient pas dans l'historique du ticket. Quand un client répondait à une
+  relance, un **nouveau ticket** était créé au lieu de poursuivre l'échange. Désormais
+  ces e-mails portent le numéro du ticket d'origine, sont visibles dans son historique,
+  et **toute réponse rouvre le ticket d'origine** au lieu d'en créer un nouveau. Le
+  texte de l'e-mail de fermeture indique maintenant qu'une réponse rouvrira le ticket.
+
 ## [1.11.51] — 2026-07-17
 
 ### Corrigé
