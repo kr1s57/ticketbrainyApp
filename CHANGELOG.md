@@ -2,6 +2,35 @@
 
 All notable releases of TicketBrainy.
 
+## [Sécurité] — 2026-08-25 — Keycloak CVE-2026-18963 (à appliquer sans délai)
+
+### Sécurité
+- **Faille critique corrigée dans Keycloak (CVE-2026-18963, CVSS 9.1).** Une
+  faiblesse du module d'authentification Keycloak permettait à un attaquant
+  **non authentifié** de détourner la procédure « mot de passe oublié » et de
+  prendre le contrôle de n'importe quel compte **sans jamais recevoir l'e-mail de
+  réinitialisation**. Aucune action de la victime n'était nécessaire.
+  **Toutes les installations TicketBrainy jusqu'à la 1.11.52 incluse sont
+  concernées.** L'image Keycloak passe de `26.2` à `26.7.2` (version corrigée) et
+  le numéro de version est désormais figé pour éviter tout retour en arrière.
+
+  Mise à jour :
+
+  ```bash
+  cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d --force-recreate keycloak && docker compose up -d keycloak-init
+  ```
+
+  Les images applicatives TicketBrainy ne changent pas (elles restent en
+  `1.11.52`) : seule la brique d'authentification est mise à jour.
+
+  **Après la mise à jour**, il est recommandé de changer le mot de passe
+  administrateur Keycloak et de forcer une reconnexion de tous les utilisateurs.
+  Si la mise à jour ne peut pas être faite immédiatement, désactivez en attendant
+  *Realm settings → Login → Forgot password* dans la console d'administration —
+  cela coupe la réinitialisation de mot de passe en libre-service, à réactiver une
+  fois la mise à jour faite. Procédure complète et signaux de détection dans
+  `docs/KEYCLOAK-ADMIN-RECOVERY.md` (section 8).
+
 ## [1.11.52] — 2026-07-24
 
 ### Corrigé

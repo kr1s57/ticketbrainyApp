@@ -239,7 +239,7 @@ case "$MODE" in
       -e KC_DB_PASSWORD="${DB_PASSWORD}" \
       -e KC_HOSTNAME_STRICT=false \
       -e KC_HTTP_ENABLED=true \
-      quay.io/keycloak/keycloak:26.2 start >/dev/null
+      quay.io/keycloak/keycloak:26.7.2 start >/dev/null
 
     echo -e "${YELLOW}→ Waiting for recovery instance...${NC}"
     for i in $(seq 1 60); do

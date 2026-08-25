@@ -20,7 +20,7 @@ A one-shot `keycloak-init` service ships with `docker-compose.yml`. On every
    - `loginTheme = ticketbrainy` — custom branded login page
    - `bruteForceProtected = true` — 5 failures → 15-minute lockout
    - `passwordPolicy = length(12) + upperCase + lowerCase + digits + specialChars + notUsername + passwordHistory(5)`
-   - `otpPolicyAlgorithm = HmacSHA256` (upgraded from default `HmacSHA1`)
+   - `otpPolicyAlgorithm = HmacSHA1` — Google/MS Authenticator ignore SHA256
    - `sslRequired = external` — HTTPS required for non-localhost
    - `ssoSessionMaxLifespan = 28800` — max 8 h session
    - `accessTokenLifespan = 300` — 5-minute access tokens
@@ -127,7 +127,7 @@ password via the admin REST API. After a successful run:
 Procedure executed by the script:
 
 1. Stops the running keycloak container
-2. Spawns a temporary `quay.io/keycloak/keycloak:26.2` container on the same
+2. Spawns a temporary `quay.io/keycloak/keycloak:26.7.2` container on the same
    network and database, with bootstrap-admin env vars set to a randomly
    generated recovery account
 3. Authenticates as the recovery account against the `master` realm
@@ -193,7 +193,9 @@ once via the admin console:
 docker compose pull keycloak
 
 # 2. Recreate keycloak (re-binds theme volume to current host inode)
-docker compose up -d keycloak
+#    --force-recreate is REQUIRED: without it Compose may consider the
+#    service up-to-date and skip entrypoint/theme changes.
+docker compose up -d --force-recreate keycloak
 
 # 3. Wait until ready, then re-apply the hardened settings
 docker compose up -d --no-deps keycloak-init
@@ -227,3 +229,92 @@ curl -sf http://localhost:8080/admin/realms/ticketbrainy \
   -H "Authorization: Bearer $TOKEN"
 ' 2>/dev/null
 ```
+
+---
+
+## 8. CVE-2026-18963 — account takeover via "Forgot password"
+
+> **Disclosed** 2026-08-19 · **CVSS 9.1 (critical)** · **Affected** Keycloak
+> `26.0.0` → `26.7.1` · **Fixed** `26.7.2` (Red Hat build: `26.4.15` / `26.6.6`)
+
+**What it is.** Keycloak's `reset-credentials` flow does not properly validate
+its own state. An unauthenticated remote attacker can drive the flow to the
+"set a new password" step for *any* known username or e-mail **without ever
+receiving or clicking the reset e-mail**, then set credentials and take over the
+account. No victim interaction is required.
+
+**Your exposure.** Every TicketBrainy deployment kit up to and including
+`1.11.52` pinned `quay.io/keycloak/keycloak:26.2`, and the `ticketbrainy` realm
+allows self-service password reset on the public `auth.<domain>` frontend.
+**Assume you are affected and patch.**
+
+### 8.1 Patch
+
+The compose file now pins `26.7.2`. From your deployment directory:
+
+```bash
+git pull
+docker compose pull keycloak
+docker compose up -d --force-recreate keycloak
+docker compose up -d --no-deps keycloak-init     # re-apply hardened realm settings
+
+# Confirm the running build (must NOT print 26.0–26.7.1)
+docker compose exec keycloak /opt/keycloak/bin/kc.sh --version
+```
+
+Keycloak migrates its own database schema on first boot — no manual migration
+step. TicketBrainy's application images are unchanged by this advisory.
+
+### 8.2 Temporary mitigation (ONLY if you cannot patch today)
+
+Admin console → realm `ticketbrainy` → *Realm settings* → *Login* →
+**Forgot password = Off**. Repeat for the `master` realm.
+
+This disables self-service password reset for your end users, so it is a
+stopgap — switch it back `On` once you are running `26.7.2`.
+
+### 8.3 Post-patch checklist
+
+1. **Rotate the Keycloak admin password** (see section 3), then update
+   `KC_ADMIN_PASSWORD` in your `.env` and re-run `keycloak-init`.
+
+2. **Force everyone to log in again.** An account compromised before the patch
+   may still hold a valid session or refresh token:
+
+   ```bash
+   docker compose exec keycloak /opt/keycloak/bin/kcadm.sh config credentials \
+     --server http://localhost:8080 --realm master \
+     --user "$KC_ADMIN_USER" --password "$KC_ADMIN_PASSWORD"
+   docker compose exec keycloak /opt/keycloak/bin/kcadm.sh create \
+     realms/ticketbrainy/logout-all
+   ```
+
+3. **Require a password change** on any account whose credentials were reset in
+   the exposure window (see 8.4):
+
+   ```bash
+   docker compose exec keycloak /opt/keycloak/bin/kcadm.sh update \
+     users/<USER_ID> -r ticketbrainy -s 'requiredActions=["UPDATE_PASSWORD"]'
+   ```
+
+### 8.4 Detection signals
+
+Keycloak login events are the audit trail:
+
+```bash
+docker compose exec keycloak /opt/keycloak/bin/kcadm.sh get \
+  'events?realm=ticketbrainy&type=UPDATE_PASSWORD&type=RESET_PASSWORD&type=SEND_RESET_PASSWORD&type=EXECUTE_ACTION_TOKEN&max=500' \
+  -r ticketbrainy
+```
+
+Red flags:
+
+- `UPDATE_PASSWORD` / `RESET_PASSWORD` with **no preceding
+  `SEND_RESET_PASSWORD`** for the same `userId` — the e-mail step was skipped.
+- Many `RESET_PASSWORD_ERROR` / `EXECUTE_ACTION_TOKEN_ERROR` from a single
+  `ipAddress` — someone probing the flow.
+- A `LOGIN` from a new `ipAddress` right after a reset the user never requested.
+- Reset traffic outside business hours, or aimed at admin/agent accounts.
+
+> Empty event list? Event storage is off. Enable it in
+> *Realm settings → Sessions/Events → User events enabled*, `Expiration = 30 days`.

@@ -50,7 +50,13 @@ services:
     restart: "no"
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.2
+    # SÉCURITÉ (2026-08-25) — CVE-2026-18963 (CVSS 9.1) : prise de contrôle de
+    # compte non authentifiée via le flux « mot de passe oublié ». Versions
+    # touchées : Keycloak 26.0.0 → 26.7.1. Corrigé en 26.7.2.
+    # Le tag est désormais EXACT (auparavant `26.2`, tag flottant) pour qu'une
+    # mise à jour ne puisse jamais retomber sur une version vulnérable.
+    # Mise à jour : docker compose up -d --force-recreate keycloak
+    image: quay.io/keycloak/keycloak:26.7.2
     restart: unless-stopped
     entrypoint: ["/opt/keycloak/custom-entry/docker-entrypoint.sh"]
     # v1.10.02: KC_BIND makes the host port bind configurable. Default
