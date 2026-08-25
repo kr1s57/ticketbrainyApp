@@ -16,14 +16,56 @@ APP_URL_SAFE=$(sanitize "${APP_URL:-}")
 APP_PORT_SAFE=$(sanitize "${APP_PORT:-3027}")
 LAN_HOST_SAFE=$(sanitize "${LAN_HOST:-localhost}")
 
+# 2026-08-25: LAN_HOST is fed from LAN_HOSTS (docker-compose), which is a
+# COMMA-SEPARATED list — install.sh writes "localhost,<server-ip>[,<admin-ip>]".
+# Substituting it straight into "http://${LAN_HOST}:${APP_PORT}" produced a
+# SINGLE malformed entry, e.g.
+#     http://10.0.0.5,localhost:3027/api/auth/callback/keycloak
+# which matches no browser request, so a direct-LAN OIDC login could never
+# complete (only the public APP_URL callback worked). Expand the list into one
+# redirect URI / web origin per host instead.
+#
+# LAN_HOSTS may legitimately hold CIDR ranges (it also feeds the web
+# allowlist); a CIDR is not a valid URI host, so those entries are skipped.
+#
+# Pure bash — the Keycloak image ships no awk (bash/sed/tr/grep only).
+build_lan_list() {
+  # $1 = path suffix appended to each origin ("" for webOrigins)
+  local suffix="$1" out="" seen="," host
+  local IFS=','
+  for host in $LAN_HOST_SAFE; do
+    # trim surrounding whitespace
+    host="${host#"${host%%[![:space:]]*}"}"
+    host="${host%"${host##*[![:space:]]}"}"
+    [ -z "$host" ] && continue
+    # a CIDR range is not a valid URI host
+    case "$host" in */*) continue ;; esac
+    # de-duplicate
+    case "$seen" in *",${host},"*) continue ;; esac
+    seen="${seen}${host},"
+    out="${out}, \"http://${host}:${APP_PORT_SAFE}${suffix}\""
+  done
+  printf '%s' "$out"
+}
+
+# Escape the characters sed treats specially in a replacement string.
+sed_escape() { printf '%s' "$1" | sed 's|[\\&|]|\\&|g'; }
+
+LAN_REDIRECT_URIS=$(build_lan_list "/api/auth/callback/keycloak")
+LAN_WEB_ORIGINS=$(build_lan_list "")
+
 if [ -f "$TEMPLATE" ]; then
   mkdir -p "$IMPORT_DIR"
 
   # Replace bare placeholders with sanitized env var values.
+  # ${LAN_HOST} is kept for backward compatibility with pre-2026-08-25
+  # realm templates; the current template uses the expanded lists.
   sed \
     -e "s|\${KC_CLIENT_SECRET}|${KC_CLIENT_SECRET_SAFE}|g" \
     -e "s|\${APP_URL}|${APP_URL_SAFE}|g" \
     -e "s|\${APP_PORT}|${APP_PORT_SAFE}|g" \
+    -e "s|\${LAN_REDIRECT_URIS}|$(sed_escape "$LAN_REDIRECT_URIS")|g" \
+    -e "s|\${LAN_WEB_ORIGINS}|$(sed_escape "$LAN_WEB_ORIGINS")|g" \
     -e "s|\${LAN_HOST}|${LAN_HOST_SAFE}|g" \
     "$TEMPLATE" > "$IMPORT_DIR/ticketbrainy-realm.json"
 

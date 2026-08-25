@@ -35,12 +35,10 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "${KC_CLIENT_SECRET}",
       "redirectUris": [
-        "${APP_URL}/api/auth/callback/keycloak",
-        "http://${LAN_HOST}:${APP_PORT}/api/auth/callback/keycloak"
+        "${APP_URL}/api/auth/callback/keycloak"${LAN_REDIRECT_URIS}
       ],
       "webOrigins": [
-        "${APP_URL}",
-        "http://${LAN_HOST}:${APP_PORT}"
+        "${APP_URL}"${LAN_WEB_ORIGINS}
       ],
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,

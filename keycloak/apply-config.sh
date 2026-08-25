@@ -48,6 +48,24 @@ fi
 echo "[apply-config] target=${KC_INTERNAL_URL} realm=${KC_REALM}"
 
 # ---------------------------------------------------------------------------
+# Shared helper — extract a client UUID from a /clients?clientId=… response
+# ---------------------------------------------------------------------------
+# Takes the FIRST "id":"…" occurrence. The previous idiom
+# (`sed 's/.*"id":"\([^"]*\)".*/\1/p'`) is greedy and therefore grabbed the
+# LAST one — a protocolMapper's or attribute's id on clients that have them
+# (account-console, security-admin-console), which then made every PUT 404.
+# ---------------------------------------------------------------------------
+kc_first_id() {
+  awk '{
+    n = index($0, "\"id\":\"")
+    if (n == 0) exit
+    s = substr($0, n + 6)
+    q = index(s, "\"")
+    if (q > 1) print substr(s, 1, q - 1)
+  }'
+}
+
+# ---------------------------------------------------------------------------
 # Step 1 — wait for Keycloak master realm to respond
 # ---------------------------------------------------------------------------
 elapsed=0
@@ -273,7 +291,7 @@ echo "[apply-config] ensuring ticketbrainy-admin-read client exists..."
 EXISTING_CLIENT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-read" || echo "[]")
 
-EXISTING_CLIENT_UUID=$(echo "$EXISTING_CLIENT_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+EXISTING_CLIENT_UUID=$(echo "$EXISTING_CLIENT_JSON" | kc_first_id)
 
 if [ -z "$EXISTING_CLIENT_UUID" ]; then
   echo "[apply-config] creating ticketbrainy-admin-read..."
@@ -301,7 +319,7 @@ if [ -z "$EXISTING_CLIENT_UUID" ]; then
   # Re-fetch to get the UUID
   EXISTING_CLIENT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
     "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-read")
-  EXISTING_CLIENT_UUID=$(echo "$EXISTING_CLIENT_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+  EXISTING_CLIENT_UUID=$(echo "$EXISTING_CLIENT_JSON" | kc_first_id)
   echo "[apply-config] ticketbrainy-admin-read created (uuid=${EXISTING_CLIENT_UUID})"
 else
   echo "[apply-config] ticketbrainy-admin-read already exists (uuid=${EXISTING_CLIENT_UUID})"
@@ -312,11 +330,11 @@ fi
 # role to /users/{id}/role-mappings/clients/{realmMgmtClientId}
 SVC_USER_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_CLIENT_UUID}/service-account-user")
-SVC_USER_ID=$(echo "$SVC_USER_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+SVC_USER_ID=$(echo "$SVC_USER_JSON" | kc_first_id)
 
 REALM_MGMT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=realm-management")
-REALM_MGMT_UUID=$(echo "$REALM_MGMT_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+REALM_MGMT_UUID=$(echo "$REALM_MGMT_JSON" | kc_first_id)
 
 for ROLE in view-realm view-users view-events view-identity-providers; do
   # Fetch the role representation
@@ -387,7 +405,7 @@ echo "[apply-config] ensuring ticketbrainy-admin-write client exists..."
 EXISTING_WRITE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
   "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-write" || echo "[]")
 
-EXISTING_WRITE_UUID=$(echo "$EXISTING_WRITE_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+EXISTING_WRITE_UUID=$(echo "$EXISTING_WRITE_JSON" | kc_first_id)
 
 if [ -z "$EXISTING_WRITE_UUID" ]; then
   echo "[apply-config] creating ticketbrainy-admin-write..."
@@ -419,7 +437,7 @@ if [ -z "$EXISTING_WRITE_UUID" ]; then
     # Re-fetch to get the UUID
     EXISTING_WRITE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
       "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-admin-write")
-    EXISTING_WRITE_UUID=$(echo "$EXISTING_WRITE_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+    EXISTING_WRITE_UUID=$(echo "$EXISTING_WRITE_JSON" | kc_first_id)
     echo "[apply-config] ticketbrainy-admin-write created (uuid=${EXISTING_WRITE_UUID})"
   fi
 else
@@ -432,7 +450,7 @@ fi
 if [ -n "$EXISTING_WRITE_UUID" ]; then
   WRITE_SVC_USER_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
     "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${EXISTING_WRITE_UUID}/service-account-user")
-  WRITE_SVC_USER_ID=$(echo "$WRITE_SVC_USER_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+  WRITE_SVC_USER_ID=$(echo "$WRITE_SVC_USER_JSON" | kc_first_id)
 
   for ROLE in manage-users view-users query-users; do
     ROLE_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
@@ -537,7 +555,7 @@ echo "[apply-config] disabling ROPC and implicit flow on default clients..."
 for DEFAULT_CLIENT_ID in admin-cli account account-console broker security-admin-console; do
   DC_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
     "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=${DEFAULT_CLIENT_ID}" || echo "[]")
-  DC_UUID=$(echo "$DC_JSON" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n1)
+  DC_UUID=$(echo "$DC_JSON" | kc_first_id)
 
   if [ -n "$DC_UUID" ]; then
     DC_PUT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
@@ -554,5 +572,117 @@ for DEFAULT_CLIENT_ID in admin-cli account account-console broker security-admin
     echo "[apply-config]   ${DEFAULT_CLIENT_ID}: not found in realm (skipped)"
   fi
 done
+
+# ---------------------------------------------------------------------------
+# Step 9 (2026-08-25) — repair comma-joined redirect URIs / web origins
+# ---------------------------------------------------------------------------
+# The realm template used to render "http://${LAN_HOST}:${APP_PORT}/..." with
+# LAN_HOST fed from LAN_HOSTS — a COMMA-SEPARATED list ("localhost,<ip>[,<ip>]").
+# That produced ONE malformed entry per array, e.g.
+#     http://10.0.0.5,localhost:3027/api/auth/callback/keycloak
+# which matches no browser request, so a direct-LAN OIDC login could never
+# complete (only the public APP_URL callback worked).
+#
+# docker-entrypoint.sh now expands the list at import time, but the realm is
+# imported ONCE (IGNORE_EXISTING) — existing installs keep the broken value in
+# the database forever. Repair it here instead: split any entry whose host part
+# contains a comma into one entry per host. Entries that are already clean are
+# left untouched, so this is a no-op PUT-free pass on a healthy install.
+# ---------------------------------------------------------------------------
+
+# `"a","b"` (raw JSON array body) -> one value per line.
+# Splits on the quote-comma-quote separator, never on a comma inside a value.
+kc_list_from_json_array() {
+  awk -v s="$1" 'BEGIN{
+    n = split(s, a, "\",\"")
+    for (i = 1; i <= n; i++) {
+      v = a[i]
+      gsub(/^"/, "", v); gsub(/"$/, "", v)
+      if (v != "") print v
+    }
+  }'
+}
+
+# stdin: one URI per line -> stdout: same, with comma-joined hosts expanded.
+kc_split_comma_hosts() {
+  awk '
+    {
+      uri = $0
+      if (uri == "") next
+      i = index(uri, "://")
+      if (i == 0 || index(uri, ",") == 0) { if (!seen[uri]++) print uri; next }
+      scheme = substr(uri, 1, i + 2)
+      rest   = substr(uri, i + 3)
+      if (index(rest, ",") == 0) { if (!seen[uri]++) print uri; next }
+
+      # Port-anchored split: the template renders ":<port>" exactly once, after
+      # the host list. Anchoring on it keeps a CIDR entry such as
+      # 10.0.0.0/24 from being mistaken for the start of the path.
+      if (match(rest, /:[0-9]+(\/|$)/)) {
+        hostlist = substr(rest, 1, RSTART - 1)
+        tail     = substr(rest, RSTART)
+        match(tail, /^:[0-9]+/)
+        port = substr(tail, 1, RLENGTH)
+        path = substr(tail, RLENGTH + 1)
+      } else {
+        j = index(rest, "/")
+        if (j > 0) { hostlist = substr(rest, 1, j - 1); path = substr(rest, j) }
+        else       { hostlist = rest;                   path = "" }
+        port = ""
+      }
+
+      n = split(hostlist, hosts, ",")
+      for (h = 1; h <= n; h++) {
+        host = hosts[h]
+        gsub(/^[ \t]+|[ \t]+$/, "", host)
+        # A CIDR range is valid in LAN_HOSTS (web allowlist) but is not a
+        # valid URI host — drop it rather than emit a bogus callback.
+        if (host == "" || index(host, "/") > 0) continue
+        out = scheme host port path
+        if (!seen[out]++) print out
+      }
+    }'
+}
+
+kc_to_json_array() {
+  awk 'BEGIN{ORS=""} {if (NR>1) printf ","; printf "\"%s\"", $0}'
+}
+
+echo "[apply-config] checking ticketbrainy-web redirect URIs..."
+
+WEB_CLIENT_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+  "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients?clientId=ticketbrainy-web" || echo "[]")
+WEB_CLIENT_UUID=$(echo "$WEB_CLIENT_JSON" | kc_first_id)
+
+if [ -z "$WEB_CLIENT_UUID" ]; then
+  echo "[apply-config]   ticketbrainy-web not found in realm (skipped)" >&2
+else
+  RAW_REDIRECTS=$(echo "$WEB_CLIENT_JSON" | sed -n 's/.*"redirectUris":\[\([^]]*\)\].*/\1/p')
+  RAW_ORIGINS=$(echo "$WEB_CLIENT_JSON" | sed -n 's/.*"webOrigins":\[\([^]]*\)\].*/\1/p')
+
+  FIXED_REDIRECTS=$(kc_list_from_json_array "$RAW_REDIRECTS" | kc_split_comma_hosts | kc_to_json_array)
+  FIXED_ORIGINS=$(kc_list_from_json_array "$RAW_ORIGINS" | kc_split_comma_hosts | kc_to_json_array)
+
+  if [ "$FIXED_REDIRECTS" = "$RAW_REDIRECTS" ] && [ "$FIXED_ORIGINS" = "$RAW_ORIGINS" ]; then
+    echo "[apply-config]   redirect URIs and web origins are clean"
+  elif [ -n "$RAW_REDIRECTS" ] && [ -z "$FIXED_REDIRECTS" ]; then
+    # Never PUT an empty redirect list — that would lock everyone out.
+    echo "[apply-config]   WARNING: refusing to rewrite redirectUris (repair produced an empty list)" >&2
+  else
+    echo "[apply-config]   repairing comma-joined entries:"
+    echo "[apply-config]     redirectUris: [${RAW_REDIRECTS}] -> [${FIXED_REDIRECTS}]"
+    echo "[apply-config]     webOrigins:   [${RAW_ORIGINS}] -> [${FIXED_ORIGINS}]"
+    WEB_PUT_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+      -X PUT "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${WEB_CLIENT_UUID}" \
+      -H "Authorization: Bearer ${TOKEN}" \
+      -H "Content-Type: application/json" \
+      -d "{\"clientId\":\"ticketbrainy-web\",\"redirectUris\":[${FIXED_REDIRECTS}],\"webOrigins\":[${FIXED_ORIGINS}]}")
+    if [ "$WEB_PUT_STATUS" = "204" ]; then
+      echo "[apply-config]   ticketbrainy-web redirect URIs repaired"
+    else
+      echo "[apply-config]   WARNING: redirect URI repair PUT returned HTTP ${WEB_PUT_STATUS}" >&2
+    fi
+  fi
+fi
 
 echo "[apply-config] OK — Keycloak realm '${KC_REALM}' is hardened"

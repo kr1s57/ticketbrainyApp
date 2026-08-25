@@ -2,6 +2,33 @@
 
 All notable releases of TicketBrainy.
 
+## [Corrigé] — 2026-08-25 — connexion en accès direct (LAN)
+
+### Corrigé
+- **La connexion depuis l'adresse LAN du serveur échouait.** Lorsque `LAN_HOSTS`
+  contient plusieurs entrées — ce qui est le cas par défaut, l'installateur y met
+  `localhost` **et** l'IP du serveur — l'adresse de retour déclarée dans Keycloak
+  était construite en collant toutes les entrées bout à bout, ce qui donnait une
+  adresse invalide. Résultat : seule la connexion via l'URL publique
+  fonctionnait ; se connecter directement sur `http://<ip-serveur>:<port>`
+  retournait une erreur « invalid redirect ». Une adresse de retour est désormais
+  déclarée **par hôte**, et les installations existantes sont **réparées
+  automatiquement** au démarrage (les plages CIDR de `LAN_HOSTS`, valides pour
+  l'allowlist web mais pas comme adresse de retour, sont ignorées).
+- **Deux clients Keycloak par défaut n'étaient pas durcis.** Le durcissement qui
+  désactive l'authentification par mot de passe direct (ROPC) et le flux implicite
+  échouait silencieusement sur `account-console` et `security-admin-console` : ces
+  deux clients conservaient ces flux **activés** à chaque synchronisation. Corrigé
+  — les cinq clients par défaut du realm sont maintenant réellement durcis.
+
+Aucune image applicative ne change (elles restent en `1.11.52`). Comme ce
+correctif porte sur des fichiers montés depuis le dépôt, `--force-recreate` est
+nécessaire :
+
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d --force-recreate keycloak && docker compose up -d --no-deps --force-recreate keycloak-init
+```
+
 ## [Sécurité] — 2026-08-25 — Keycloak CVE-2026-18963 (à appliquer sans délai)
 
 ### Sécurité
