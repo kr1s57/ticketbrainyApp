@@ -106,8 +106,13 @@ unchanged.
 ### Scenario B — Rotate admin password (current password known)
 
 ```bash
-./scripts/keycloak-reset-admin.sh --mode api 'NEW_STRONG_PASSWORD'
+./scripts/keycloak-reset-admin.sh --mode api
 ```
+
+The script prompts for the new password on a masked stdin prompt — it refuses a
+password given on the command line, because argv is visible in `ps`, shell
+history and terminal logs. For non-interactive use, pass it in the environment:
+`KC_NEW_ADMIN_PASSWORD=... ./scripts/keycloak-reset-admin.sh --mode api`.
 
 Logs in with the current `KC_ADMIN_PASSWORD` from `.env` and sets a new
 password via the admin REST API. After a successful run:
@@ -121,8 +126,10 @@ password via the admin REST API. After a successful run:
 ### Scenario C — Admin password is genuinely lost
 
 ```bash
-./scripts/keycloak-reset-admin.sh --mode recovery 'NEW_STRONG_PASSWORD'
+./scripts/keycloak-reset-admin.sh --mode recovery
 ```
+
+(Same masked prompt as scenario B — no password on the command line.)
 
 Procedure executed by the script:
 
