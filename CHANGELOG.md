@@ -2,6 +2,31 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.521] — 2026-08-26
+
+### Corrigé
+- **Un backup en échec pouvait s'afficher en vert dans le Moniteur de backup.**
+  Quand le logiciel de sauvegarde envoie ses rapports dans une autre langue que
+  l'anglais — par exemple `Tâche "…" : Échec (8 VM réussie(s), 1 VM en échec…)` —
+  ni les compteurs de VM ni le verdict n'étaient reconnus, et la tâche était
+  marquée **réussie** par défaut. Le tableau affichait donc une coche verte tous
+  les jours sur un backup en échec, y compris lorsque **aucune** machine n'avait
+  été sauvegardée. Les rapports français sont désormais compris (compteurs et
+  verdict), les mots-clés que vous saisissez dans une tâche ignorent les accents
+  et la casse, et un e-mail que le moniteur ne sait pas interpréter est signalé
+  en **avertissement** avec son sujet — il n'est plus jamais compté comme un
+  succès silencieux.
+- **Un backup entièrement réussi pouvait au contraire être signalé en erreur.**
+  Le mot-clé d'échec était cherché dans tout le sujet, y compris dans le
+  décompte : le « failed » de `0 VMs failed` — donc *zéro* échec — déclenchait
+  une erreur. Le verdict est maintenant lu avant le décompte.
+- **Un échec partiel crée désormais un ticket.** Sur les tâches où la création
+  automatique de ticket est activée, seuls les échecs totaux et les backups
+  manquants ouvraient un ticket : une sauvegarde où une partie des machines
+  échouait, ou un rapport incompréhensible, passaient sans alerte. Les
+  avertissements ouvrent maintenant un ticket au même titre que les erreurs, et
+  ce ticket porte le bon statut dans son objet.
+
 ## [Corrigé] — 2026-08-25 — connexion en accès direct (LAN)
 
 ### Corrigé
