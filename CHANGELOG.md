@@ -2,6 +2,38 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.522] — 2026-09-11
+
+Réponses d'agent : les personnes en copie ne recevaient pas le mail.
+
+### Corrigé
+- **Reply-all oubliait l'auteur du dernier message client.** Quand un tiers en
+  copie répondait, le Cc pré-rempli ne contenait plus que les autres personnes
+  en copie : celui à qui l'agent répondait disparaissait. L'expéditeur du
+  dernier message client est désormais inclus (hors client du ticket et
+  mailbox).
+- **Champ CC texte libre jamais validé.** Une adresse ajoutée sans virgule
+  (`Nom <a@x>b@y`) était transmise telle quelle et ne donnait qu'UN seul
+  destinataire réel. Le champ CC/CCI est maintenant un champ à puces (puce
+  rouge = adresse invalide) dans le composer et le modal « Nouveau ticket »,
+  la liste est validée côté serveur et refusée par le service mail si elle
+  reste incorrecte.
+- **Échec d'envoi silencieux.** Une réponse perdue sur une erreur SMTP
+  (« Connection timeout ») s'affichait comme envoyée. Le service mail réessaie
+  3 fois (3 s, 15 s), puis marque la réponse **« Non envoyé »** dans le fil
+  avec un bouton **« Renvoyer »** ; les jobs échoués sont conservés dans la
+  liste Redis `mail:outgoing:failed`. Timeouts SMTP explicites (30/30/60 s).
+  Si la file d'envoi est indisponible, le composer le dit au lieu d'afficher
+  « Réponse envoyée ». Le log `Email sent` inclut désormais cc / accepted /
+  rejected.
+- **Le champ `To` des mails entrants était remplacé par l'adresse de la
+  mailbox** : les collègues mis en To (et non en Cc) étaient perdus pour le
+  reply-all. La vraie liste To est stockée.
+
+### Migration
+- Le service `migrate` ajoute l'enum `DeliveryStatus` et deux colonnes
+  nullable sur `TicketMessage` — aucune donnée existante modifiée.
+
 ## [1.11.521] — 2026-08-26
 
 ### Corrigé
