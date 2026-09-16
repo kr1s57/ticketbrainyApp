@@ -2,6 +2,31 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.523] — 2026-09-16
+
+Rapports facturables : un agent peut désormais y accéder sans devenir superviseur.
+
+### Corrigé
+- **« An error occurred loading this page » pour un agent sur Statistiques →
+  Rapports.** La page était réservée aux rôles Admin/Superviseur et le refus
+  s'affichait comme une erreur générique avec bouton Reload. Une vraie page
+  « Accès refusé » remplace ce comportement.
+
+### Ajouté
+- **Permission « Accès aux rapports » par agent.** Case à cocher dans
+  Paramètres → Équipes (dialogue Ajouter/Modifier, visible pour le rôle Agent)
+  + badge « Rapports » dans la liste. L'agent autorisé voit l'onglet Rapports
+  et peut consulter, exporter (XLSX/impression) et envoyer par e-mail les
+  rapports sur l'ensemble des tickets. Ses autres droits sont inchangés.
+  Admin/Superviseur inchangés.
+- L'onglet Rapports est masqué pour les personnes non autorisées.
+
+### Mise à jour
+```
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+Le service `migrate` ajoute la nouvelle colonne automatiquement.
+
 ## [1.11.522] — 2026-09-11
 
 Réponses d'agent : les personnes en copie ne recevaient pas le mail.
