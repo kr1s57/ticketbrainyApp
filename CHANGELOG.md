@@ -2,6 +2,21 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.524] — 2026-09-19
+
+Page de connexion : nouveau visuel 3D animé.
+
+### Modifié
+- **Visuel de la page de login remplacé.** L'ancienne animation 2D laisse
+  place à un cerveau-réseau 3D de particules en rotation : des e-mails
+  entrants descendent les synapses et font pulser le noyau — l'image du
+  triage IA. Parallaxe à la souris, palette violet → bleu du logo.
+- Léger et sans WebGL (fonctionne sur postes RDP/VM) ; animation arrêtée en
+  mobile et onglet caché, image fixe si « réduire les animations » est actif.
+
+### Mise à jour
+`cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+
 ## [1.11.523] — 2026-09-16
 
 Rapports facturables : un agent peut désormais y accéder sans devenir superviseur.
