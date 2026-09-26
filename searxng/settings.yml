@@ -46,7 +46,7 @@ ui:
   default_theme: simple
   results_on_new_tab: false
 
-redis:
+valkey:
   url: redis://${REDIS_PASSWORD}@redis:6379/2
 
 outgoing:
@@ -63,12 +63,8 @@ outgoing:
 # match the four UI toggle groups: tech / vendor / security / general.
 engines:
   # ── Tech communities ──
-  - name: reddit
-    engine: reddit
-    shortcut: re
-    categories: [tech]
-    timeout: 6.0
-    page_size: 25
+  # (reddit engine removed: dropped upstream in SearXNG 2026.9 — the
+  #  engines/reddit.py module no longer ships in the image.)
 
   - name: stackoverflow
     engine: stackexchange

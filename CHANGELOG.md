@@ -2,6 +2,28 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.525] — 2026-09-26
+
+Sécurité : mise à jour des dépendances des images (rapport EPM, ≈150 avis
+GHSA dont 7 critiques). Aucune fonctionnalité nouvelle.
+
+### Sécurité
+- Next.js 16.3.5, next-auth 4.24.15 (abandonne `@auth/core 0.34.3`),
+  nodemailer 10, mailparser 3.9.28, fastify 5.12.5, undici 7.29.1,
+  Prisma 7.10, node-telegram-bot-api 1.2 (supprime la chaîne `request` /
+  `form-data 2.3.3`), article-extractor 9 (plus de `sanitize-html`),
+  tiptap 3.31, dompurify 3.4.15, sharp 0.35.4, postcss 8.5.28.
+- Images : npm 11.19.1 épinglé (corrige pacote / sigstore / tar embarqués
+  par l'image Node de base).
+- searxng : digest `2026.9.25` (lxml 6.1.3, Pygments 2.21.0) ; le moteur
+  `reddit`, supprimé en amont, est retiré de `searxng/settings.yml`.
+  Variable compose `SEARXNG_REDIS_URL` renommée `SEARXNG_VALKEY_URL`
+  (clé `valkey.url` dans `settings.yml`).
+- `npm audit` de production : 0 vulnérabilité.
+
+### Mise à jour
+`cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+
 ## [1.11.524] — 2026-09-19
 
 Page de connexion : nouveau visuel 3D animé.

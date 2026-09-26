@@ -36,7 +36,7 @@ services:
       - internal
 
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.524
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.525
     # v1.10.146: raw-SQL migrations first (CREATE EXTENSION vector +
     # AiKnowledgeChunk table), THEN prisma db push for the rest.
     command: sh -c "cd apps/web && node prisma/run-raw-migrations.mjs && npx prisma db push"
@@ -163,7 +163,7 @@ services:
       - internal
 
   web:
-    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.524
+    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.525
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials (owned by root:root on the host) and drop to
@@ -265,7 +265,7 @@ services:
       - internal
 
   ai-service:
-    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.524
+    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.525
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials and drop to appuser (uid 1001) via su-exec.
@@ -306,7 +306,7 @@ services:
       - internal
 
   mail-service:
-    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.524
+    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.525
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -331,7 +331,7 @@ services:
       - internal
 
   telegram-bot:
-    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.524
+    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.525
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -361,11 +361,11 @@ services:
     # by `docker compose pull`. To upgrade, fetch the new digest from
     # https://hub.docker.com/r/searxng/searxng/tags and bump the line
     # below in a new TB release.
-    image: searxng/searxng@sha256:b5d4892daf19736acdefc34a67bb06dd702638beb282e993aeb612e0953c2d54
+    image: searxng/searxng@sha256:5286edb35782454ab8a102c5eff6b54bff745853191b46aeead95f225aa6dfb6
     restart: unless-stopped
     environment:
       SEARXNG_BASE_URL: http://searxng:8080/
-      SEARXNG_REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
+      SEARXNG_VALKEY_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     depends_on:
