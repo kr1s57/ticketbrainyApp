@@ -134,7 +134,7 @@ password via the admin REST API. After a successful run:
 Procedure executed by the script:
 
 1. Stops the running keycloak container
-2. Spawns a temporary `quay.io/keycloak/keycloak:26.7.2` container on the same
+2. Spawns a temporary `quay.io/keycloak/keycloak:26.7.4` container on the same
    network and database, with bootstrap-admin env vars set to a randomly
    generated recovery account
 3. Authenticates as the recovery account against the `master` realm

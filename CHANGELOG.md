@@ -19,6 +19,10 @@ GHSA dont 7 critiques). Aucune fonctionnalité nouvelle.
   `reddit`, supprimé en amont, est retiré de `searxng/settings.yml`.
   Variable compose `SEARXNG_REDIS_URL` renommée `SEARXNG_VALKEY_URL`
   (clé `valkey.url` dans `settings.yml`).
+- Keycloak épinglé en **26.7.4** (précédemment 26.7.2). Les installations
+  dont la base a déjà été migrée en 26.7.4 ne verront plus l'avertissement
+  « Possibly incorrect state of migration ». Recréation du conteneur
+  requise : `docker compose up -d --force-recreate keycloak`.
 - `npm audit` de production : 0 vulnérabilité.
 
 ### Mise à jour
