@@ -2,6 +2,32 @@
 
 All notable releases of TicketBrainy.
 
+## [1.11.526] — 2026-10-20
+
+Spam : sortir un ticket des spams + faux positif sur image mal nommée.
+
+### Corrigé
+- **Bouton « Non spam »** : sur la page d'un ticket classé spam (bandeau
+  rouge avec le motif) et dans la vue spam à côté de « Supprimer ». Une
+  confirmation propose « Toujours accepter cet expéditeur » (liste
+  blanche, ADMIN/SUPERVISOR). Le ticket réapparaît dans *Non assignés*,
+  statut inchangé ; compteurs de la barre latérale rafraîchis aussitôt.
+  L'opération est tracée dans l'onglet Activité.
+- **Image `.png` contenant du JPEG → ticket forcé en spam** : un
+  décalage de format inoffensif (images entre elles, PDF nommé `.jpg`,
+  fichier sans extension) ne classe plus le mail en spam ; la pièce
+  jointe reste signalée. Le haut risque est réservé aux contenus
+  réellement dangereux (exécutable, archive ou conteneur Office derrière
+  une autre extension).
+- **Expéditeurs internes** (agent de l'instance ou domaine d'une boîte
+  TicketBrainy) : une pièce jointe à risque ne les envoie plus en spam à
+  elle seule. Le verdict antispam amont reste appliqué.
+
+### Mise à jour
+```
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.525] — 2026-09-26
 
 Sécurité : mise à jour des dépendances des images (rapport EPM, ≈150 avis
