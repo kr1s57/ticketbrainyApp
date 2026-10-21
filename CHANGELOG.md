@@ -1,70 +1,157 @@
 # Changelog
 
-All notable releases of TicketBrainy.
+All notable changes to TicketBrainy are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to a custom semantic versioning scheme (see
+`feedback_versioning_scheme.md` in the project memory).
+
+## [Unreleased]
+
+## [1.11.527] — 2026-10-21
+
+Sécurité : correctif Node.js du 21 octobre 2026 (bulletin
+« October 2026 Security Releases »). Aucun changement fonctionnel.
+
+### Sécurité
+- **Node.js 22.23.3 → 22.23.4** dans les 5 images (web, ai-service,
+  mail-service, telegram-bot, migrate) : base `node:22.23.4-alpine`
+  désormais épinglée dans les Dockerfiles (plus de tag flottant `22-alpine`).
+  Corrige notamment **CVE-2026-111497** (décodeur Brotli, écriture hors
+  limites, exécution de code à distance, High) auquel l'instance était
+  exposée via les requêtes sortantes `fetch()` du crawler RAG et du proxy
+  d'images, ainsi que CVE-2026-105481 (keep-alive HTTP),
+  CVE-2026-105482 (dns.resolve), CVE-2026-106069 / 106072 (validation
+  d'hôte TLS en IP non canonique), CVE-2026-106073 (permission model) et
+  CVE-2026-106074 (entropie des snapshots). Dépendances embarquées mises à
+  jour : undici 6.29.1, c-ares 1.34.9, OpenSSL 3.5.9, retrait du CA
+  intermédiaire eMudhra compromis.
+
+### Mise à jour
+- Installs existants : `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+  puis vérifier `docker compose exec web node --version` → `v22.23.4`.
 
 ## [1.11.526] — 2026-10-20
 
-Spam : sortir un ticket des spams + faux positif sur image mal nommée.
+Spam : sortir un ticket des spams + faux positif sur image mal nommée
+(cas d'école prod : ticket #572, transfert interne d'une demande client
+avec une image collée dans Outlook).
 
 ### Corrigé
-- **Bouton « Non spam »** : sur la page d'un ticket classé spam (bandeau
-  rouge avec le motif) et dans la vue spam à côté de « Supprimer ». Une
-  confirmation propose « Toujours accepter cet expéditeur » (liste
-  blanche, ADMIN/SUPERVISOR). Le ticket réapparaît dans *Non assignés*,
-  statut inchangé ; compteurs de la barre latérale rafraîchis aussitôt.
-  L'opération est tracée dans l'onglet Activité.
-- **Image `.png` contenant du JPEG → ticket forcé en spam** : un
-  décalage de format inoffensif (images entre elles, PDF nommé `.jpg`,
-  fichier sans extension) ne classe plus le mail en spam ; la pièce
-  jointe reste signalée. Le haut risque est réservé aux contenus
-  réellement dangereux (exécutable, archive ou conteneur Office derrière
-  une autre extension).
-- **Expéditeurs internes** (agent de l'instance ou domaine d'une boîte
-  TicketBrainy) : une pièce jointe à risque ne les envoie plus en spam à
-  elle seule. Le verdict antispam amont reste appliqué.
+- **« Non spam » absent de la page du ticket** : un ticket classé spam
+  n'offrait aucune issue depuis sa propre page (seule la vue spam avait
+  un bouton « Légitime », qui mettait l'expéditeur en liste blanche
+  d'office). Nouveau bandeau rouge « Ce ticket est classé spam » avec le
+  motif et un bouton **Non spam** ; même bouton dans la vue spam à côté
+  de « Supprimer ». Le bouton ouvre une confirmation avec la case
+  « Toujours accepter cet expéditeur » (ADMIN/SUPERVISOR). Le ticket
+  réapparaît dans *Non assignés*, statut inchangé ; les compteurs de la
+  barre latérale se rafraîchissent immédiatement.
+- **Traçabilité** : l'opération crée une `TicketActivity` `spam_unmarked`
+  (utilisateur, motifs d'origine, liste blanche ou non), visible dans
+  l'onglet Activité.
+- **Image `.png` contenant du JPEG → ticket forcé en spam** : tout
+  décalage magic-bytes était classé « haut risque » au même niveau qu'un
+  `.exe` déguisé. `validateMagicBytes` renvoie désormais une gravité
+  (`info` pour un décalage inoffensif — images entre elles, PDF nommé
+  `.jpg`, sans extension — ; `high` quand le contenu réel est un
+  exécutable, un conteneur OLE ou une archive derrière une autre
+  extension). Seule la gravité `high` est un signal spam ; un décalage
+  `info` reste signalé sur la pièce jointe (badge) et ne saute plus le
+  triage IA.
+- **Expéditeurs internes** (agent actif de l'instance, ou domaine d'une
+  boîte TicketBrainy) : une pièce jointe à risque ne les envoie plus en
+  spam à elle seule (avertissement dans les logs). Le verdict antispam
+  amont « spam » reste appliqué (usurpation).
 
-### Mise à jour
-```
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+### Technique
+- `decideSpam()` centralise la règle (liste blanche > verdict amont >
+  pièce jointe à risque sauf expéditeur interne) ; `summarizeEmailSecurity`
+  lit un niveau de risque par pièce jointe au lieu d'une regex sur le texte
+  du motif. Tests node:test (18) + vitest (8) ajoutés.
+- `unmarkSpam` (doublon mort sans trace d'activité) supprimé de
+  `favorite.actions.ts`.
 
 ## [1.11.525] — 2026-09-26
 
-Sécurité : mise à jour des dépendances des images (rapport EPM, ≈150 avis
-GHSA dont 7 critiques). Aucune fonctionnalité nouvelle.
+Sécurité : campagne de mise à jour des dépendances suite au rapport EPM
+(≈150 avis GHSA sur les images construites, dont 7 critiques). Aucune
+fonctionnalité nouvelle ; toutes les corrections sont des bumps de version.
 
 ### Sécurité
-- Next.js 16.3.5, next-auth 4.24.15 (abandonne `@auth/core 0.34.3`),
-  nodemailer 10, mailparser 3.9.28, fastify 5.12.5, undici 7.29.1,
-  Prisma 7.10, node-telegram-bot-api 1.2 (supprime la chaîne `request` /
-  `form-data 2.3.3`), article-extractor 9 (plus de `sanitize-html`),
-  tiptap 3.31, dompurify 3.4.15, sharp 0.35.4, postcss 8.5.28.
-- Images : npm 11.19.1 épinglé (corrige pacote / sigstore / tar embarqués
-  par l'image Node de base).
-- searxng : digest `2026.9.25` (lxml 6.1.3, Pygments 2.21.0) ; le moteur
-  `reddit`, supprimé en amont, est retiré de `searxng/settings.yml`.
-  Variable compose `SEARXNG_REDIS_URL` renommée `SEARXNG_VALKEY_URL`
-  (clé `valkey.url` dans `settings.yml`).
-- Keycloak épinglé en **26.7.4** (précédemment 26.7.2). Les installations
-  dont la base a déjà été migrée en 26.7.4 ne verront plus l'avertissement
-  « Possibly incorrect state of migration ». Recréation du conteneur
-  requise : `docker compose up -d --force-recreate keycloak`.
-- `npm audit` de production : 0 vulnérabilité.
+- **next 16.2.6 → 16.3.5** (GHSA-p293-qw3h-jr36 et GHSA-2xp9-vwfh-vxw4
+  critiques, + 8 avis hauts/moyens). Override racine aligné.
+- **next-auth 4.24.14 → 4.24.15** : abandonne le peer `@auth/core 0.34.3`
+  (GHSA-7rqj-j65f-68wh critique, GHSA-xmf8-cvqr-rfgj) et `cookie 0.6.0` ;
+  `@auth/core` forcé en 0.41.3 pour `@auth/prisma-adapter`.
+- **node-telegram-bot-api 0.66 → 1.2.0** (réécriture TypeScript, transport
+  `fetch`) : supprime la chaîne `request` obsolète qui embarquait
+  `form-data 2.3.3` (GHSA-fjxv-7rqg-78g4 critique), `tough-cookie 2.5.0`,
+  `uuid 3.4.0` et `qs 6.5.5`. Adaptations : type `InlineKeyboardMarkup`
+  importé nommément, `link_preview_options` à la place de
+  `disable_web_page_preview`.
+- **@extractus/article-extractor 8 → 9.0.1** : n'embarque plus
+  `sanitize-html` (GHSA-rpr9-rxv7-x643 critique + 3 moyens).
+- **nodemailer 8.0.4 → 10.0.10** (web, mail-service, override racine ;
+  8 avis hauts/moyens). Version identique à celle épinglée par mailparser,
+  qui passe en **3.9.28** (`linkify-it` 5.0.2, GHSA-v245-v573-v5vm).
+- **fastify 5.8.5 → 5.12.5** (`find-my-way` 9.9.0, `fast-uri` 3.1.8/4.2.1,
+  2 avis fastify) ; **undici 7.25 → 7.29.1** (12 avis dont 4 hauts).
+- **prisma / @prisma/client / @prisma/adapter-pg 7.7 → 7.10.0** : `valibot`
+  1.4.2, `find-my-way` 9.7.0, `hono` et `@hono/node-server` disparaissent
+  de l'arbre (19 avis) ; overrides `mysql2 3.24.4`, `deepmerge-ts 8.0.2`.
+- **Images Docker : npm 11.19.1 épinglé** dans les 4 Dockerfiles. Le
+  `node:22-alpine` embarque npm 10.9.9 avec `pacote 19.0.2`
+  (GHSA-w4pp-8pjf-rmxw), `sigstore 3.1.0` / `@sigstore/core 2.0.0`
+  (GHSA-52v5-jr5w-gjxr, GHSA-jfc7-64v2-mr8c) et un `tar` vulnérable ; npm 11
+  livre pacote 21.5.1, sigstore 4.1.1, tar 7.5.22. Le script de release
+  construit désormais avec `--pull`.
+- **searxng** : digest passé de `2026.5.9` à `2026.9.25`
+  (`sha256:5286edb3…`, lxml 6.1.3, Pygments 2.21.0, granian 2.8.3 ; 5 avis).
+  Le moteur `reddit` a disparu de l'image amont (module supprimé) : retiré
+  de `searxng/settings.yml`, les 7 autres moteurs RAG sont inchangés.
+  La clé `redis.url` (dépréciée) devient `valkey.url` et la variable
+  compose `SEARXNG_REDIS_URL` devient `SEARXNG_VALKEY_URL`.
+- Autres bumps : `@tiptap/* 3.31.3`, `isomorphic-dompurify 4.2.0`
+  (`dompurify 3.4.15`, 9 avis), `sharp 0.35.4`, `ip-address 10.7.2`,
+  `postcss 8.5.28` (+ `nanoid 3.3.19`), `turbo 2.10.13`, `vitest 4.1.11`
+  (`vite 8.0.16`), `tsx 4.23.13` (`esbuild 0.28.2`), `browserslist 4.29.0`,
+  `baseline-browser-mapping 2.11.25`, `brace-expansion 1.1.21`,
+  `tmp 0.2.7` et `uuid 11.1.1` sous exceljs.
+- `.env` passe en mode `600` (secrets lisibles par tous signalés par EPM).
+- `npm audit --omit=dev` : 0 vulnérabilité (68 avant).
 
-### Mise à jour
-`cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+### Notes techniques
+- `prisma` ajouté en devDependency des 3 services Node (ai, mail, telegram) :
+  leurs Dockerfiles font `npx prisma generate` sans dépendance locale et
+  `npx` téléchargeait désormais `prisma@8.0.0-rc.17` (tag latest), qui n'a
+  plus de commande `generate` → build cassé. La version verrouillée est
+  maintenant utilisée.
+- Le lockfile a été régénéré depuis zéro avec `--legacy-peer-deps`
+  (peer optionnel `nodemailer ^7` de next-auth). `npm ci` strict reste OK.
+- Toutes les transitives fraîches (< 7 jours) sont épinglées par overrides
+  pour respecter la quarantaine supply-chain ; à relâcher lors du prochain
+  bump.
+- Non traité, à la charge du serveur : ports 22/80 exposés, conteneurs
+  tiers démarrés en root (db, redis, searxng, embeddings), `web` et
+  `ai-service` démarrent en root puis basculent sur uid 1001 via su-exec
+  (lecture des credentials Claude montés depuis l'hôte).
 
 ## [1.11.524] — 2026-09-19
 
-Page de connexion : nouveau visuel 3D animé.
+Page de connexion : nouveau visuel 3D animé « Neural Core ».
 
 ### Modifié
-- **Visuel de la page de login remplacé.** L'ancienne animation 2D laisse
-  place à un cerveau-réseau 3D de particules en rotation : des e-mails
-  entrants descendent les synapses et font pulser le noyau — l'image du
-  triage IA. Parallaxe à la souris, palette violet → bleu du logo.
-- Léger et sans WebGL (fonctionne sur postes RDP/VM) ; animation arrêtée en
-  mobile et onglet caché, image fixe si « réduire les animations » est actif.
+- **Visuel de la page de login remplacé.** L'ancienne animation 2D (logo +
+  enveloppes en orbite) laisse place à un cerveau-réseau 3D de particules en
+  rotation : des e-mails entrants arrivent de l'extérieur, descendent les
+  synapses et font pulser le noyau — l'image du triage IA. Parallaxe à la
+  souris, intro d'assemblage, palette violet → bleu du logo. Logo, nom et
+  accroche passent en bas du panneau.
+- Canvas 2D avec projection 3D maison, **aucune dépendance ajoutée** (pas de
+  WebGL : fonctionne sur postes RDP/VM). Boucle arrêtée en mobile (panneau
+  masqué) et onglet caché, image fixe si `prefers-reduced-motion`, DPR
+  plafonné à 2.
 
 ### Mise à jour
 `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
@@ -74,423 +161,528 @@ Page de connexion : nouveau visuel 3D animé.
 Rapports facturables : un agent peut désormais y accéder sans devenir superviseur.
 
 ### Corrigé
-- **« An error occurred loading this page » pour un agent sur Statistiques →
-  Rapports.** La page était réservée aux rôles Admin/Superviseur et le refus
-  s'affichait comme une erreur générique avec bouton Reload. Une vraie page
-  « Accès refusé » remplace ce comportement.
+- **« An error occurred loading this page » pour un AGENT sur Statistiques →
+  Rapports.** La page levait `Forbidden` (réservée ADMIN/SUPERVISOR), exception
+  attrapée par le garde-fou RSC qui affichait une erreur générique avec bouton
+  Reload. Une vraie page « Accès refusé » remplace ce comportement sur
+  `/analytics/reports` et `/analytics/reports/print`.
 
 ### Ajouté
-- **Permission « Accès aux rapports » par agent.** Case à cocher dans
-  Paramètres → Équipes (dialogue Ajouter/Modifier, visible pour le rôle Agent)
-  + badge « Rapports » dans la liste. L'agent autorisé voit l'onglet Rapports
-  et peut consulter, exporter (XLSX/impression) et envoyer par e-mail les
-  rapports sur l'ensemble des tickets. Ses autres droits sont inchangés.
-  Admin/Superviseur inchangés.
+- **Permission « Accès aux rapports » par agent** (`User.canViewReports`,
+  colonne booléenne, défaut `false`). Case à cocher dans Paramètres → Équipes
+  (dialogue Ajouter/Modifier, visible pour le rôle Agent) + badge « Rapports »
+  dans la liste. L'agent autorisé voit l'onglet Rapports et peut consulter,
+  exporter (XLSX/impression) et envoyer par e-mail les rapports sur
+  **l'ensemble** des tickets, sans autre changement de ses droits (tickets,
+  recherche, tableau de bord restent filtrés comme avant). ADMIN/SUPERVISOR
+  inchangés. Règle centralisée dans `canAccessReports()` (+ tests) et
+  appliquée page, actions serveur et route d'export.
 - L'onglet Rapports est masqué pour les personnes non autorisées.
 
 ### Mise à jour
-```
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
-Le service `migrate` ajoute la nouvelle colonne automatiquement.
+`cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+(le service `migrate` ajoute la colonne automatiquement, aucune action manuelle).
 
 ## [1.11.522] — 2026-09-11
 
-Réponses d'agent : les personnes en copie ne recevaient pas le mail.
+Réponses d'agent : les personnes en copie ne recevaient pas le mail (prod #431).
 
 ### Corrigé
 - **Reply-all oubliait l'auteur du dernier message client.** Quand un tiers en
-  copie répondait, le Cc pré-rempli ne contenait plus que les autres personnes
-  en copie : celui à qui l'agent répondait disparaissait. L'expéditeur du
-  dernier message client est désormais inclus (hors client du ticket et
-  mailbox).
+  copie répondait (from = Xavier, cc = Denis), le Cc pré-rempli ne contenait
+  que Denis : Xavier, à qui l'agent répondait, disparaissait. `computeReplyAllCc`
+  inclut désormais le `from` du dernier message client (sauf client du ticket
+  et mailbox).
 - **Champ CC texte libre jamais validé.** Une adresse ajoutée sans virgule
-  (`Nom <a@x>b@y`) était transmise telle quelle et ne donnait qu'UN seul
-  destinataire réel. Le champ CC/CCI est maintenant un champ à puces (puce
-  rouge = adresse invalide) dans le composer et le modal « Nouveau ticket »,
-  la liste est validée côté serveur et refusée par le service mail si elle
-  reste incorrecte.
-- **Échec d'envoi silencieux.** Une réponse perdue sur une erreur SMTP
-  (« Connection timeout ») s'affichait comme envoyée. Le service mail réessaie
-  3 fois (3 s, 15 s), puis marque la réponse **« Non envoyé »** dans le fil
-  avec un bouton **« Renvoyer »** ; les jobs échoués sont conservés dans la
-  liste Redis `mail:outgoing:failed`. Timeouts SMTP explicites (30/30/60 s).
-  Si la file d'envoi est indisponible, le composer le dit au lieu d'afficher
-  « Réponse envoyée ». Le log `Email sent` inclut désormais cc / accepted /
-  rejected.
-- **Le champ `To` des mails entrants était remplacé par l'adresse de la
-  mailbox** : les collègues mis en To (et non en Cc) étaient perdus pour le
-  reply-all. La vraie liste To est stockée.
+  (`Denis ROYER <d.royer@…>xavier@…`) était transmise telle quelle à nodemailer,
+  qui n'en faisait qu'UN destinataire. Nouveau parseur partagé
+  (`@ticketbrainy/shared` `normalizeAddressList`) : découpe `,` `;` et `>` collé,
+  validation stricte. Champ CC/CCI en puces dans le composer et le modal
+  « Nouveau ticket » (puce rouge = invalide), rejet côté serveur (`addReply`,
+  `createTicket`) et refus côté mail-service (défense en profondeur).
+- **Échec SMTP silencieux.** Un job perdu sur « Connection timeout » était
+  affiché comme une réponse normale. Nouvelles colonnes
+  `TicketMessage.deliveryStatus` (QUEUED/SENT/FAILED) + `deliveryError` ;
+  le consumer réessaie 3× (3 s, 15 s) puis dead-letter `mail:outgoing:failed`
+  et marque le message FAILED ; timeouts SMTP explicites (30/30/60 s) ; le fil
+  affiche « Non envoyé » (ou « En attente d'envoi » après 2 min) avec un bouton
+  « Renvoyer » (`resendReply`) ; le composer n'affiche plus « envoyé » si Redis
+  est indisponible ; le log `Email sent` inclut cc / accepted / rejected.
+- **Le listener IMAP écrasait le `To` entrant** par l'adresse de la mailbox :
+  les collègues mis en To étaient perdus. La vraie liste To est stockée
+  (listener et force-poll web).
 
 ### Migration
-- Le service `migrate` ajoute l'enum `DeliveryStatus` et deux colonnes
-  nullable sur `TicketMessage` — aucune donnée existante modifiée.
+- `prisma db push` (service `migrate`) ajoute l'enum `DeliveryStatus` et deux
+  colonnes nullable — aucune donnée existante modifiée.
 
 ## [1.11.521] — 2026-08-26
 
-### Corrigé
-- **Un backup en échec pouvait s'afficher en vert dans le Moniteur de backup.**
-  Quand le logiciel de sauvegarde envoie ses rapports dans une autre langue que
-  l'anglais — par exemple `Tâche "…" : Échec (8 VM réussie(s), 1 VM en échec…)` —
-  ni les compteurs de VM ni le verdict n'étaient reconnus, et la tâche était
-  marquée **réussie** par défaut. Le tableau affichait donc une coche verte tous
-  les jours sur un backup en échec, y compris lorsque **aucune** machine n'avait
-  été sauvegardée. Les rapports français sont désormais compris (compteurs et
-  verdict), les mots-clés que vous saisissez dans une tâche ignorent les accents
-  et la casse, et un e-mail que le moniteur ne sait pas interpréter est signalé
-  en **avertissement** avec son sujet — il n'est plus jamais compté comme un
-  succès silencieux.
-- **Un backup entièrement réussi pouvait au contraire être signalé en erreur.**
-  Le mot-clé d'échec était cherché dans tout le sujet, y compris dans le
-  décompte : le « failed » de `0 VMs failed` — donc *zéro* échec — déclenchait
-  une erreur. Le verdict est maintenant lu avant le décompte.
-- **Un échec partiel crée désormais un ticket.** Sur les tâches où la création
-  automatique de ticket est activée, seuls les échecs totaux et les backups
-  manquants ouvraient un ticket : une sauvegarde où une partie des machines
-  échouait, ou un rapport incompréhensible, passaient sans alerte. Les
-  avertissements ouvrent maintenant un ticket au même titre que les erreurs, et
-  ce ticket porte le bon statut dans son objet.
-
-## [Corrigé] — 2026-08-25 — connexion en accès direct (LAN)
+Backup monitor : un rapport Nakivo « Échec » s'affichait en vert.
 
 ### Corrigé
-- **La connexion depuis l'adresse LAN du serveur échouait.** Lorsque `LAN_HOSTS`
-  contient plusieurs entrées — ce qui est le cas par défaut, l'installateur y met
-  `localhost` **et** l'IP du serveur — l'adresse de retour déclarée dans Keycloak
-  était construite en collant toutes les entrées bout à bout, ce qui donnait une
-  adresse invalide. Résultat : seule la connexion via l'URL publique
-  fonctionnait ; se connecter directement sur `http://<ip-serveur>:<port>`
-  retournait une erreur « invalid redirect ». Une adresse de retour est désormais
-  déclarée **par hôte**, et les installations existantes sont **réparées
-  automatiquement** au démarrage (les plages CIDR de `LAN_HOSTS`, valides pour
-  l'allowlist web mais pas comme adresse de retour, sont ignorées).
-- **Deux clients Keycloak par défaut n'étaient pas durcis.** Le durcissement qui
-  désactive l'authentification par mot de passe direct (ROPC) et le flux implicite
-  échouait silencieusement sur `account-console` et `security-admin-console` : ces
-  deux clients conservaient ces flux **activés** à chaque synchronisation. Corrigé
-  — les cinq clients par défaut du realm sont maintenant réellement durcis.
+- **Un backup en échec était compté comme réussi, tous les jours.** Nakivo envoie
+  ses rapports dans la langue du serveur : `Tâche "…": Échec (8 VM réussie(s),
+  1 VM en échec, …)`. Les compteurs n'étaient reconnus qu'au format anglais
+  (`N VMs successful … N VMs failed`), les patterns par défaut de la tâche sont
+  anglais (`successful` / `failed`), et le dernier cas d'`analyzeBackupStatus`
+  traduisait « e-mail trouvé, rien compris » par **`SUCCESS`**. Résultat en prod
+  (`PVEITS01 ITCAM-RDS`, depuis au moins le 14/08) : coche verte quotidienne sur
+  un job en échec — y compris quand **aucune** VM n'était sauvegardée
+  (`0 VM réussie(s), 9 VM en échec` → `SUCCESS`). `parseVmCounts` lit désormais
+  les deux langues (comparaison sans accents, un motif par compteur : un champ
+  manquant ou déplacé n'annule plus toute l'analyse), une liste de mots-clés
+  multilingues intégrée sert de **repli** quand aucun pattern de la tâche ne
+  matche (la configuration de l'admin reste prioritaire), les patterns saisis
+  sont insensibles aux accents (`echec` ↔ `Échec`), et un e-mail non interprété
+  devient `WARNING` avec le sujet en détail — plus jamais un succès silencieux.
+- **Un backup entièrement réussi pouvait être classé en erreur.** Le mot-clé
+  d'échec était cherché dans **tout** le sujet, décompte compris : le « failed »
+  de `Successful (9 VMs successful, 0 VMs failed, …)` matchait `failedPattern` et
+  faisait tomber le rapport en `ERROR`. Le verdict est maintenant lu sur la partie
+  du sujet **qui précède** le décompte — « 0 VM en échec » est une donnée, pas un
+  verdict.
+- **`WARNING` crée un ticket au même titre qu'`ERROR` et `MISSING`.** Un échec
+  partiel (des VM en échec, d'autres réussies) ou un e-mail non interprété
+  n'ouvrait aucun ticket. `isAlertingStatus()` centralise la règle, et
+  `createBackupTicket` reçoit le statut réel : un ticket `WARNING` s'intitulait
+  `[Backup Alert] … — ERROR`, le statut étant déduit de la seule présence d'un
+  e-mail. La création reste attachée au **premier** enregistrement d'un jour :
+  la fenêtre IMAP de 192 h rejoue 8 jours d'e-mails, et créer un ticket sur
+  changement de statut déclencherait une rafale à chaque évolution de l'analyseur.
+- 16 tests (`apps/mail-service/src/imap/backup-analyzer.test.ts`, le module n'en
+  avait aucun) : sujets FR de prod, compteurs dans le corps, accents, priorité
+  des patterns de la tâche, statuts alertants, non-régression anglaise.
 
-Aucune image applicative ne change (elles restent en `1.11.52`). Comme ce
-correctif porte sur des fichiers montés depuis le dépôt, `--force-recreate` est
-nécessaire :
+## [Corrigé] — 2026-08-25 — redirect URIs Keycloak assemblés par des virgules
 
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d --force-recreate keycloak && docker compose up -d --no-deps --force-recreate keycloak-init
-```
+Correctif livré hors cycle (fichiers bind-montés `keycloak/`), **aucune image
+reconstruite** — le pin GHCR reste `1.11.52`. Nécessite `--force-recreate`.
 
-## [Sécurité] — 2026-08-25 — Keycloak CVE-2026-18963 (à appliquer sans délai)
+### Corrigé
+- **Le callback OIDC en accès LAN direct ne pouvait jamais aboutir.** Le compose
+  passe `LAN_HOST: ${LAN_HOSTS:-localhost}` à Keycloak, or `LAN_HOSTS` est une
+  liste **séparée par des virgules** (`install.sh` écrit
+  `localhost,<ip-serveur>[,<ip-admin>]`). Le template de realm interpolait cette
+  liste dans **une seule** entrée — `http://10.0.0.5,localhost:3027/api/auth/callback/keycloak`
+  — qui ne correspond à aucune requête navigateur : seul le callback public
+  `APP_URL` fonctionnait, le chemin LAN renvoyait `400 invalid redirect`. Le
+  `webOrigin` correspondant était cassé de la même façon.
+  `keycloak/docker-entrypoint.sh` développe désormais la liste en **une URI par
+  hôte** (bash pur — l'image Keycloak n'embarque pas `awk`), en ignorant les
+  plages CIDR (légitimes dans `LAN_HOSTS` pour l'allowlist web, mais invalides
+  comme hôte d'URI) et en dédupliquant.
+- **Réparation des installations existantes.** Le realm n'est importé qu'une
+  fois (`IGNORE_EXISTING`) : corriger le template ne suffisait pas, la valeur
+  cassée restait en base indéfiniment. `keycloak/apply-config.sh` (Step 9) répare
+  donc `redirectUris`/`webOrigins` du client `ticketbrainy-web` à chaque
+  démarrage : toute entrée dont la partie hôte contient une virgule est éclatée
+  en une entrée par hôte. Le découpage est ancré sur le `:<port>` pour ne pas
+  confondre le `/` d'un CIDR avec le début du chemin. Passe sans écriture sur une
+  installation saine (idempotent), et refuse d'écrire une liste vide.
+- **`account-console` et `security-admin-console` échappaient au durcissement
+  ROPC.** L'extraction de l'UUID client (`sed 's/.*"id":"\([^"]*\)".*/\1/p'`) est
+  **gourmande** : elle retenait le **dernier** `"id"` de la représentation JSON —
+  celui d'un protocolMapper ou d'un attribut sur les clients qui en ont — d'où un
+  `PUT … HTTP 404 (non-fatal)` silencieux sur ces deux clients à chaque sync,
+  qui gardaient donc ROPC et le flux implicite **activés**. Nouveau helper
+  `kc_first_id` (première occurrence), appliqué aux 8 extractions du script. Les
+  cinq clients par défaut sont désormais réellement durcis.
+
+## [Sécurité] — 2026-08-25 — Keycloak CVE-2026-18963
+
+Correctif de sécurité **critique** livré hors cycle : mise à jour d'image
+Keycloak uniquement, **aucune image applicative TicketBrainy n'est reconstruite**
+(le pin GHCR reste `1.11.52`).
 
 ### Sécurité
-- **Faille critique corrigée dans Keycloak (CVE-2026-18963, CVSS 9.1).** Une
-  faiblesse du module d'authentification Keycloak permettait à un attaquant
-  **non authentifié** de détourner la procédure « mot de passe oublié » et de
-  prendre le contrôle de n'importe quel compte **sans jamais recevoir l'e-mail de
-  réinitialisation**. Aucune action de la victime n'était nécessaire.
-  **Toutes les installations TicketBrainy jusqu'à la 1.11.52 incluse sont
-  concernées.** L'image Keycloak passe de `26.2` à `26.7.2` (version corrigée) et
-  le numéro de version est désormais figé pour éviter tout retour en arrière.
+- **CVE-2026-18963 (CVSS 9.1) — prise de contrôle de compte non authentifiée via
+  « mot de passe oublié ».** Le flux `reset-credentials` de Keycloak valide mal son
+  propre état : un attaquant distant non authentifié pouvait atteindre l'étape
+  « définir un nouveau mot de passe » pour n'importe quel utilisateur connu **sans
+  jamais recevoir ni cliquer l'e-mail de réinitialisation**, puis s'approprier le
+  compte. Aucune interaction utilisateur requise. Versions touchées : `26.0.0` →
+  `26.7.1` ; corrigé en `26.7.2` (RHBK `26.4.15` / `26.6.6`).
+  TicketBrainy épinglait `quay.io/keycloak/keycloak:26.2` et le realm
+  `ticketbrainy` expose `resetPasswordAllowed: true` sur le frontend public
+  `auth.<domaine>` : **toute installation ≤ 1.11.52 est concernée.**
+- **Pin Keycloak `26.2` → `26.7.2`, désormais exact** (`docker-compose.prod.yml`,
+  compose public, `scripts/keycloak-reset-admin.sh`). Le tag flottant `26.2` est
+  abandonné pour qu'un `docker compose pull` ne puisse plus atterrir sur une
+  version vulnérable.
+- **Runbook post-incident** — nouvelle section 9 de `docs/admin/keycloak-recovery.md` :
+  procédure de patch, mitigation temporaire (*Realm settings → Login → Forgot
+  password = Off*, à ne garder que si le patch est impossible), rotation des
+  identifiants admin, déconnexion globale du realm (`logout-all`) pour invalider
+  les sessions et refresh tokens acquis avant le correctif, et signaux de détection
+  à chercher dans les events Keycloak (`UPDATE_PASSWORD` sans
+  `SEND_RESET_PASSWORD` correspondant, rafales de `RESET_PASSWORD_ERROR` depuis une
+  même IP, `LOGIN` depuis une IP inédite juste après une réinitialisation).
 
-  Mise à jour :
-
-  ```bash
-  cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d --force-recreate keycloak && docker compose up -d keycloak-init
-  ```
-
-  Les images applicatives TicketBrainy ne changent pas (elles restent en
-  `1.11.52`) : seule la brique d'authentification est mise à jour.
-
-  **Après la mise à jour**, il est recommandé de changer le mot de passe
-  administrateur Keycloak et de forcer une reconnexion de tous les utilisateurs.
-  Si la mise à jour ne peut pas être faite immédiatement, désactivez en attendant
-  *Realm settings → Login → Forgot password* dans la console d'administration —
-  cela coupe la réinitialisation de mot de passe en libre-service, à réactiver une
-  fois la mise à jour faite. Procédure complète et signaux de détection dans
-  `docs/KEYCLOAK-ADMIN-RECOVERY.md` (section 8).
+### Corrigé
+- `docs/admin/keycloak-recovery.md` documentait `otpPolicyAlgorithm = HmacSHA256`
+  alors que `apply-config.sh` applique bien `HmacSHA1` (SHA256 casse Google/MS
+  Authenticator) ; la doc suivait aussi un `up -d keycloak` sans `--force-recreate`.
 
 ## [1.11.52] — 2026-07-24
 
+Correctif de threading des e-mails d'auto-fermeture (« Fermeture auto en attente »).
+
 ### Corrigé
-- **Les réponses à une relance d'« Auto-fermeture » restent dans le ticket
-  d'origine.** Les e-mails d'auto-fermeture (message initial, relances et fermeture
-  finale) partaient sans le repère `[Ticket #N]` ni les en-têtes de conversation, et
-  n'apparaissaient pas dans l'historique du ticket. Quand un client répondait à une
-  relance, un **nouveau ticket** était créé au lieu de poursuivre l'échange. Désormais
-  ces e-mails portent le numéro du ticket d'origine, sont visibles dans son historique,
-  et **toute réponse rouvre le ticket d'origine** au lieu d'en créer un nouveau. Le
-  texte de l'e-mail de fermeture indique maintenant qu'une réponse rouvrira le ticket.
+- **Une réponse à une relance d'auto-fermeture créait un nouveau ticket.** Les
+  e-mails d'auto-fermeture (relance et fermeture finale, côté mail-service) partaient
+  en `Re: <sujet>` **brut** : sans tag `[Ticket #N]` dans le sujet, sans en-têtes
+  `References`/`In-Reply-To`, et **sans être enregistrés** comme message du ticket.
+  Le listener entrant ne pouvait donc rattacher la réponse ni par en-tête (Méthode 1)
+  ni par numéro de ticket dans le sujet (Méthode 2) → `handleNewTicket` créait un
+  ticket parasite (prod : #300 → #333). Les trois e-mails d'auto-fermeture (initial,
+  relance, finale) adoptent désormais le sujet canonique `Re: [Ticket #N] …`, la
+  chaîne `References` complète du fil, et sont **persistés dans le ticket d'origine**
+  (visibles dans la timeline, `Message-ID` back-fillé pour l'appariement). Une réponse
+  client **rouvre le ticket d'origine** (REOPENED) et annule l'auto-fermeture — jamais
+  de nouveau ticket. Le texte de l'e-mail de fermeture finale promet désormais la
+  **réouverture** du ticket au lieu de la création d'un nouveau. Nouveau helper testé
+  `apps/mail-service/src/lib/auto-close-mail.ts` (`buildAutoCloseThread`,
+  `buildAutoCloseMailJob`) ; `scheduler/auto-close.ts` et `auto-close.actions.ts`.
 
 ## [1.11.51] — 2026-07-17
 
+Correctif de l'autocomplétion client livrée en 1.11.50.
+
 ### Corrigé
-- **Autocomplétion des clients : recherche sur le contact et l'e-mail.** Les
-  suggestions du formulaire « Nouveau ticket » ne trouvaient pas un client
-  enregistré sous un nom d'entreprise lorsqu'on tapait le nom de la personne à
-  contacter. La recherche porte désormais sur le nom du client, son e-mail, ainsi
-  que le **nom et l'e-mail du contact** ; sélectionner un contact remplit
-  directement son nom et son adresse e-mail.
+- **Autocomplétion client : recherche sur le contact et l'e-mail.** La recherche
+  n'interrogeait que `name`/`email`/`company` du client — or un client est souvent
+  enregistré sous un nom d'entreprise (« Heinrich&Bock ») alors que la personne que
+  l'agent connaît est le **contact** (« Fabien Messa » / `fabien.messa@…`, champs
+  `contactName`/`contactEmail`). Taper le nom d'un contact ne renvoyait donc aucune
+  suggestion. La recherche porte désormais sur **nom client + e-mail + nom du contact
+  + e-mail du contact** (le champ `company` n'est plus interrogé), et chaque client
+  génère une suggestion **par identité** : rechercher un contact propose (et remplit)
+  la personne — nom + e-mail du contact — plutôt que l'adresse générique de
+  l'entreprise. `searchCustomersForTicket`.
 
 ## [1.11.50] — 2026-07-17
 
-Deux améliorations du formulaire « Nouveau ticket » (création manuelle par un agent).
+Deux améliorations du modal « Nouveau ticket » (création manuelle depuis la web UI).
 
 ### Ajouté
-- **Autocomplétion des clients connus.** En tapant le début du nom ou de l'adresse
-  e-mail d'un client déjà présent dans le système, une liste de suggestions
-  apparaît : un clic remplit automatiquement le nom **et** l'e-mail. Plus besoin de
-  ressaisir un client existant ; la saisie manuelle reste possible pour un nouveau
-  contact.
-- **Assistant IA à la création d'un ticket.** L'aide à la rédaction par IA
-  (décrire le message souhaité, choisir la langue, générer), jusqu'ici disponible
-  uniquement lors de la réponse à un ticket, l'est désormais aussi dans le
-  formulaire de création. Nécessite le module IA de génération d'e-mails.
+- **Autocomplétion client dans le modal « Nouveau ticket ».** En tapant le début
+  du nom **ou** de l'adresse e-mail d'un client (≥ 2 caractères), une liste des
+  clients déjà connus du système (concordance sur nom/e-mail/société) s'affiche
+  sous le champ. Un clic remplit **les deux champs** (nom + e-mail) — plus besoin
+  de retaper un client existant ; la saisie libre reste possible pour un nouveau
+  client. Nouvelle server action `searchCustomersForTicket` (accessible aux
+  agents, `requireAuth`), exclut le client système « AutresClients ». Navigation
+  clavier (↑/↓/Entrée/Échap).
+- **Assistant IA dans le modal « Nouveau ticket ».** Le panneau d'aide à la
+  rédaction (baguette → instruction → génération, avec sélecteur de langue et
+  Ctrl+Entrée), jusqu'ici réservé à la réponse à un ticket, est maintenant
+  disponible à la création : l'agent décrit le message voulu et l'IA rédige le
+  premier message sortant à partir du sujet/nom/e-mail déjà saisis. Gaté par le
+  plugin `ai_email_gen` (cadenas → `/settings/plugins` sinon), à l'identique de la
+  réponse. Nouvel endpoint `POST /email/compose` (ai-service, sans `ticketId`) et
+  composant `AiComposePanel` partagé entre la réponse et la création (une seule
+  UI IA à maintenir).
 
 ## [1.11.49] — 2026-07-12
 
-Deux correctifs de fiabilité de l'Assistant IA en mode abonnement Claude Code CLI.
+Deux correctifs autour du mode abonnement Claude Code CLI, dans la continuité des
+1.11.47/1.11.48.
 
 ### Corrigé
-- **Option « Claude Code CLI » indisponible à tort** (« CLI non détecté sur le
-  serveur ») : l'indicateur de connexion pouvait signaler le CLI comme
-  indisponible après une période d'inactivité, alors que l'abonnement restait
-  parfaitement connecté. L'état affiché reflète désormais la connexion réelle de
-  l'abonnement — l'option reste sélectionnable tant que la session est valide.
-- **Assistant IA basculant vers « clé API non configurée »** : dans certains cas,
-  le mode Claude sélectionné n'était pas reconnu et l'Assistant réclamait une clé
-  API. Le mode choisi est désormais respecté de façon robuste — plus de décrochage
-  silencieux.
-- **Identifiants Claude figés sur un ancien instantané** (montage Docker) : les
-  identifiants de l'abonnement étaient montés dans les conteneurs comme un
-  **fichier unique**, ce qui épinglait l'inode au démarrage. Quand le CLI Claude
-  fait tourner son jeton sur l'hôte (remplacement atomique du fichier), les
-  conteneurs continuaient de lire l'ancien instantané expiré → l'option
-  « Claude Code CLI » se grisait alors que l'abonnement restait valide. On monte
-  désormais le **répertoire** `~/.claude` (au lieu du seul fichier) : les
-  rotations de jeton sont visibles immédiatement, sans recréation de conteneur.
+- **Détection « Claude Code CLI » grisée à tort** (« CLI non détecté sur le
+  serveur ») : la sonde des réglages (`claude-cli-probe.ts`) basait l'état
+  « connecté » sur `claudeAiOauth.expiresAt` — l'**access token**, à durée de vie
+  courte (~heures). Dès que `ai-service` restait inactif assez longtemps pour ne
+  pas rafraîchir l'access token, l'option se grisait alors que le CLI est
+  parfaitement authentifié : le **refresh token** est valide et régénère un access
+  token au prochain appel. La sonde se base désormais sur le refresh token
+  (`refreshTokenExpiresAt`) — refresh valide ⇒ connecté ; refresh expiré ⇒
+  re-login requis. Fin du faux négatif récurrent.
+- **Mode Claude qui décrochait silencieusement vers la clé API** (« AI API key
+  not configured ») : la valeur `ai.provider` en base (colonne `Json`) pouvait
+  avoir dérivé (legacy `"claude"`, casse, espaces, double-encodage
+  `"\"claude_cli\""`). Le formulaire la normalisait déjà, mais `ai-service` et le
+  préflight web la comparaient en strict `=== "claude_cli"` : toute variante
+  retombait sur le mode `api_key`. Un `normalizeProvider` canonique est maintenant
+  appliqué à chaque point de décision back-end (`getAiProvider` d'`ai-service`,
+  préflight web) — défense en profondeur, le mode sélectionné ne décroche plus.
 
-### Note de mise à jour
-Ce correctif touche le montage des volumes : la mise à jour **doit recréer les
-conteneurs**. Utiliser :
-`cd /opt/ticketbrainy && git pull && docker compose up -d --force-recreate`
-Si l'option Claude reste indisponible ensuite, c'est que la session d'abonnement a
-réellement expiré : une simple reconnexion (`claude` sur l'hôte) suffit.
+### Note d'exploitation
+Aucune action manuelle requise. Si l'option Claude reste grisée après mise à jour,
+vérifier que le token n'est pas réellement expiré :
+`docker compose exec -u appuser ai-service claude` → `/login`.
 
 ## [1.11.48] — 2026-07-11
 
-Correctif de la cause racine des erreurs d'authentification récurrentes de
-l'Assistant IA (mode abonnement Claude Code CLI).
+Correction de la **cause racine** du 401 récurrent en mode abonnement Claude
+Code CLI (le `refresh_token_reused` d'hier, le `401 Invalid credentials`
+d'aujourd'hui). Les correctifs précédents (`cp -au` anti-clobber, suppression du
+fallback Codex) ne traitaient qu'un symptôme : la vraie cause est une **course
+au refresh du token OAuth**.
+
+Le token d'abonnement est un OAuth à refresh token **à usage unique** : chaque
+rafraîchissement le consomme et le remplace. Or `AI_MAX_CONCURRENCY=4` laissait
+`ai-service` lancer jusqu'à 4 `claude` en parallèle, et la sonde de statut côté
+`web` en lançait un de plus — tous sur le **même** fichier de credentials du
+volume partagé `claude-config`. À l'expiration de l'access token (~8 h), ces
+appels rafraîchissaient simultanément avec le **même** refresh token → le
+serveur d'auth détectait la réutilisation et **révoquait toute la famille de
+tokens** → 401 persistant jusqu'à re-login manuel. (Reproductible en prod sous
+charge réelle, invisible en local faute de concurrence.)
 
 ### Corrigé
-- **Fin des erreurs 401 récurrentes de l'Assistant IA** : sous charge, plusieurs
-  requêtes IA simultanées pouvaient invalider le jeton de connexion et provoquer
-  une erreur d'authentification persistante jusqu'à une reconnexion manuelle. Les
-  appels au moteur IA sont désormais traités un à la fois, ce qui supprime la
-  cause à la racine — l'Assistant reste disponible de façon fiable.
-- **Indicateur de connexion IA fiable et sans effet de bord** : le badge de
-  statut des réglages reflète l'état réel du jeton (connecté / expiré) en lisant
-  simplement sa date d'expiration, sans solliciter le moteur — plus de faux
-  négatifs ni de charge inutile.
+- **Sérialisation des appels au CLI Claude** : tous les spawns `claude` de
+  `ai-service` passent désormais par un mutex FIFO in-process (`lib/serialize.ts`)
+  — un seul processus CLI à la fois, donc **un seul refresh à la fois**. Le token
+  rote proprement au lieu de se faire révoquer. Le débit de triage devient
+  séquentiel (négligeable pour un volume support ; réglable ultérieurement).
+- **Sonde de statut sans effet de bord** : le badge « Claude Code CLI connecté »
+  des réglages ne lance plus `claude` (c'était une source de course
+  supplémentaire, côté `web`, sur le token partagé). Il lit l'`expiresAt` du
+  fichier de credentials : token présent et non expiré ⇒ connecté ; expiré ou
+  absent ⇒ re-login requis. Honnête, zéro spawn, zéro refresh.
 
-### Note de mise à jour
-Si l'Assistant affichait déjà l'erreur avant cette mise à jour, une reconnexion
-unique reste nécessaire pour repartir d'un jeton sain ; ensuite, le problème ne
-se reproduit plus.
+### Note d'exploitation
+Après mise à jour, si le token est déjà révoqué (état actuel), faire **une**
+reconnexion : `docker compose exec -u appuser ai-service claude` → `/login`.
+Le volume `claude-config` étant partagé web ↔ ai-service, les deux voient
+aussitôt le token frais, et la sérialisation empêche toute nouvelle révocation.
 
 ## [1.11.47] — 2026-07-11
 
-Correctif de fiabilité de l'Assistant IA, signalé de façon récurrente.
+Correctif de fond du bug récurrent « l'Assistant IA plante » avec une erreur
+Codex `401 refresh_token_reused` — alors que le fournisseur sélectionné est
+l'abonnement **Claude**, pas Codex. Trois causes qui se cumulaient sont
+traitées (badge de statut trompeur, fallback Codex silencieux, token Claude
+écrasé dans le conteneur), en plus de l'invalidation du cache fournisseur.
 
 ### Corrigé
-- **Fin des erreurs intermittentes de l'Assistant IA** : dans certains cas,
-  l'Assistant IA cessait de répondre et affichait une erreur d'authentification,
-  alors que la configuration était correcte. La cause profonde est traitée et
-  l'Assistant reste disponible de façon fiable.
-- **Statut de connexion IA fiable** : l'indicateur de connexion dans les
-  réglages reflète désormais l'état réel de l'authentification, et non la seule
-  présence de l'outil — plus de faux « connecté ».
-- **Changement de fournisseur IA immédiat** : basculer de fournisseur ou mettre
-  à jour une clé dans les réglages prend effet aussitôt, sans redémarrage.
+- **Fournisseur IA figé en mémoire** : `ai-service` mettait en cache le mode
+  fournisseur (`ai.provider`) et le client clé API (`ai.apiKey`) pour toute la
+  durée de vie du process, sans aucune invalidation — la fonction de reset
+  existante n'avait aucun appelant. Comme le réglage est écrit par `web` (un
+  process distinct), basculer de fournisseur dans l'UI restait sans effet sur
+  `ai-service` jusqu'au prochain redémarrage.
+- **Badge « Claude Code CLI connecté » trompeur** : le statut affiché dans
+  Settings ne testait que `claude --version` (présence du binaire), jamais
+  l'authentification — il restait donc vert avec un token OAuth mort. Il
+  exécute désormais une vraie sonde qui échoue si le token renvoie 401.
+- **Fallback Codex silencieux** : en mode abonnement Claude, une erreur d'auth
+  Claude basculait en douce sur Codex CLI, dont l'OAuth mort produisait le
+  `refresh_token_reused` trompeur qui masquait le vrai 401 Claude. Le fallback
+  est supprimé : le fournisseur sélectionné assume ses propres erreurs.
+- **Token Claude écrasé dans le conteneur** : la boucle de synchronisation des
+  credentials écrasait (`cp -f`) le token OAuth fraîchement rafraîchi/tourné
+  dans le conteneur par la copie host périmée → 401 récurrent. Synchronisation
+  passée en update-only (`cp -au`), comme le fait déjà Codex depuis la 1.10.147797.
+
+### Ajouté
+- **Invalidation cross-process du cache IA** : les caches de `ai-service`
+  portent désormais un TTL de 60 s (filet auto-cicatrisant), et `web` publie un
+  message Redis `ai:settings-changed` à chaque sauvegarde du fournisseur/clé ;
+  `ai-service` y souscrit et vide son cache aussitôt → bascule effective
+  immédiate, sans redémarrage. En l'absence de Redis, le TTL prend le relais.
 
 ## [1.11.46] — 2026-06-13
 
-Correctif d'un blocage signalé par les équipes de support.
+Correctif d'un blocage collaboratif majeur signalé par les agents : un ticket
+laissé ouvert verrouillait la réponse pour tout le monde.
 
 ### Corrigé
-- **Plus de ticket « verrouillé » pour les autres agents** : lorsqu'un agent
-  ouvrait un ticket et passait à autre chose sans fermer l'onglet, la zone de
-  réponse devenait inaccessible à tous les autres agents. Désormais, le composer
-  n'est plus jamais bloqué : si un collègue rédige déjà une réponse sur le même
-  ticket, une simple bannière d'information l'indique. L'indicateur disparaît
-  automatiquement après une minute d'inactivité.
+- **Ticket verrouillé à vie pour les autres agents** : dès qu'un agent touchait
+  le composer (frappe, brouillon IA, insertion d'un modèle ou d'un article KB),
+  un verrou d'édition exclusif était posé — puis rafraîchi par un heartbeat
+  toutes les 10 s **tant que l'onglet restait ouvert**, sans tenir compte de
+  l'activité réelle. Le TTL serveur de 30 s n'expirait donc jamais : un agent
+  qui ouvrait un ticket puis passait à autre chose **sans fermer l'onglet**
+  bloquait la réponse pour tous les autres agents indéfiniment.
+- Le verrou d'édition est désormais **purement informatif** : le composer des
+  autres agents n'est plus jamais désactivé (une bannière « X rédige aussi une
+  réponse » les avertit simplement). De plus, le verrou se **libère
+  automatiquement après ~60 s d'inactivité**, donc un onglet abandonné ne
+  laisse plus de signal résiduel pour les collègues.
 
 ## [1.11.45] — 2026-06-08
 
-Suite des améliorations du flux e-mail.
+Suite des correctifs du flux e-mail : nettoyage des extraits de mails
+entrants ré-injectés vers le client et les agents (cas d'école : ticket #99).
 
 ### Corrigé
-- **Accusé de réception plus lisible** : le rappel du message d'origine dans
-  l'accusé automatique envoyé au client est désormais nettoyé — plus de codes
-  d'images parasites (`[cid:…]`), de liens de passerelle de sécurité illisibles
-  ni de bloc signature recopié, et la coupure se fait proprement en fin de mot.
-- **Aperçus de tickets cohérents** : le même nettoyage s'applique aux aperçus
-  des notifications agents (nouveau ticket, réponse client) et à l'aperçu
-  Telegram. Le message complet conservé dans le ticket reste inchangé.
+- **Accusé de réception illisible (#99)** : le bloc « Message original » de
+  l'accusé automatique ne ré-injecte plus le message brut du client. Sont
+  désormais retirés les placeholders d'images inline (`[cid:…]`), les liens
+  réécrits par les passerelles e-mail (Sophos/Proofpoint/Mimecast — le
+  domaine de destination est restitué quand il est lisible, sinon le lien est
+  supprimé) et le bloc signature (coupe conservatrice sur `-- ` ou la première
+  ligne `[cid:…]`). La troncature se fait sur une frontière de mot avec « … »
+  au lieu d'une coupe brute à 500 octets en plein milieu d'une URL.
+- **Cohérence des extraits** : le même assainissement est appliqué aux aperçus
+  envoyés aux agents (notifications « nouveau ticket » et « réponse client »),
+  à l'aperçu Telegram et à la notification admin. Le corps complet stocké du
+  message reste inchangé (la dé-citation à l'affichage, introduite en 1.11.21,
+  n'est pas affectée).
 
 ## [1.11.44] — 2026-06-04
 
-Améliorations du flux e-mail des tickets, en réponse aux retours clients et
-agents.
+Correctifs majeurs du flux e-mail, en réponse aux plaintes clients et agents
+(cas d'école : ticket #79).
 
 ### Corrigé
-- **Attribution d'un client** : changer le client d'un ticket envoie désormais
-  un message d'attribution clair au nouveau contact (« Le ticket #N vous a été
-  attribué… »), citant la demande d'origine, au lieu de l'accusé de réception
-  générique « Nous avons bien reçu votre demande » qui prêtait à confusion.
-- **Suivi des envois automatiques** : les accusés de réception et messages
-  d'attribution apparaissent maintenant dans le fil du ticket, visibles et
-  traçables côté agent.
-- **Regroupement des e-mails** : réponses et accusés portent les bons en-têtes
-  de conversation (References) et un objet « Re: [Ticket #N] … » cohérent, ce
-  qui évite les conversations dédoublées (notamment sous Outlook).
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+- **Changement de client (BUG 1)** : affecter ou changer le client d'un
+  ticket n'envoie plus l'accusé de réception entrant « Nous avons bien reçu
+  votre demande » — formulation fausse pour un contact qui n'a rien demandé,
+  à l'origine du « Je ne vois pas qui est à l'origine de l'ouverture du
+  ticket ? ». À la place, un message d'attribution dédié part vers le nouveau
+  contact (« Le ticket #N « … » vous a été attribué… »), en citant la demande
+  d'origine, et uniquement lorsque l'adresse change réellement.
+- **Traçabilité des auto-réponses (BUG 2)** : tout envoi automatique (accusé
+  de réception, message d'attribution) est désormais journalisé comme message
+  `AUTO_REPLY`, visible dans le fil du ticket et auditable. Auparavant ces
+  e-mails partaient sans laisser aucune trace côté agent, d'où la perception
+  « le client n'a reçu aucune notification ».
+- **Threading e-mail (BUG 3)** : l'en-tête `References` (chaîne RFC 5322
+  complète) est maintenant émis sur les réponses agent et les accusés de
+  réception, et le sujet des accusés générés par le listener IMAP est aligné
+  sur `Re: [Ticket #N] …`. Évite les conversations dédoublées sous Outlook et
+  fiabilise le rattachement des réponses client au bon ticket.
 
 ## [1.11.43] — 2026-06-02
 
-Sécurité : mise à jour de Next.js (16.2.4 → 16.2.6) intégrant les correctifs
-de sécurité critiques publiés par Vercel. Mise à jour recommandée.
+Sécurité : montée de Next.js 16.2.4 → 16.2.6. La 16.2.4 était exposée à
+plusieurs vulnérabilités (PoCs publics, dont CVE-2026-44578 / CVSS 8.6) ;
+la 16.2.6 embarque les 13 correctifs de sécurité critiques publiés par
+Vercel (déni de service, contournement middleware/proxy, SSRF, cache
+poisoning, XSS, + une faille React amont). On reste volontairement en
+16.2.6 plutôt que 16.2.7 : tout le contenu sécurité est dans 16.2.6, alors
+que 16.2.7 (publiée la veille) n'apporte que des correctifs de bugs et
+n'avait pas encore passé la quarantaine supply-chain de 7 jours.
 
-### Sécurité
-- **Next.js 16.2.6** : 13 correctifs de sécurité (déni de service,
-  contournement middleware/proxy, SSRF, empoisonnement de cache, XSS, plus
-  une faille React amont), dont CVE-2026-44578 (CVSS 8.6). Aucun changement
-  fonctionnel côté application.
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+Mise à jour : `docker compose pull && docker compose up -d`.
 
 ## [1.11.42] — 2026-06-01
 
-Confort : la fenêtre « Nouveau ticket » (création manuelle d'un ticket) était
-trop étroite pour rédiger un message à l'aise.
+Confort : la fenêtre « Nouveau ticket » (création manuelle) était trop étroite
+pour rédiger un message à l'aise.
 
 ### Améliorations
-- **Fenêtre de création élargie** : modal nettement plus large et plus haut, et
-  zone de saisie du message agrandie, pour rédiger confortablement.
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+- **Modal de création élargi** : largeur portée à `max-w-4xl` (~896 px,
+  responsive `95vw` sur petit écran) et hauteur max `92vh` ; la zone de saisie
+  du message passe de 150–260 px à 260–460 px de haut. Le contenu reste
+  scrollable.
 
 ## [1.11.41] — 2026-06-01
 
-Correctif : lors de la création manuelle d'un ticket depuis l'interface, le
-client reçoit désormais le message rédigé par l'agent — et non plus un accusé
-de réception générique.
+Correctif : la création manuelle de ticket envoie désormais au client le
+message rédigé par l'agent — et non plus un accusé de réception générique.
+Repéré en prod sur un ticket créé depuis l'UI (canal WEB) : le client recevait
+« Votre demande a bien été enregistrée sous le numéro #N… » au lieu du texte de
+l'agent, qui n'apparaissait que dans la notification interne.
 
-### Correctif
-- Le message saisi par l'agent à la création d'un ticket est bien transmis au
-  client (destinataire, copies Cc/Bcc et expéditeur de la boîte inchangés) et
-  s'affiche du bon côté de la conversation, comme une réponse sortante.
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+### Corrections
+- **Message agent → client** : le job e-mail sortant de `createTicket` porte
+  maintenant le corps rédigé par l'agent (`to`, `cc`, `bcc` et l'expéditeur de
+  la boîte restent inchangés). Le numéro de ticket reste dans le sujet
+  (`[Ticket #N] …`).
+- **Sens du message dans le fil** : le message initial d'un ticket créé
+  manuellement est désormais persisté comme une réponse sortante (agent →
+  client) et s'affiche du bon côté de la conversation, avec gestion des images
+  inline et de la signature de boîte comme une réponse normale.
+- **Notification interne** : le bloc d'aperçu « nouveau ticket » affiche le
+  premier message du fil quel que soit son type (libellé neutre « Message »),
+  pour ne pas rester vide sur les tickets créés manuellement.
 
 ## [1.11.40] — 2026-05-31
 
-Vues sauvegardées dans la file de tickets. Chaque agent peut nommer et persister
-un jeu de filtres et le rappeler en un clic depuis la barre latérale.
+Vues sauvegardées dans la file de tickets (finding produit #28 de l'audit
+2026-05-29 — dernier item de l'audit). Chaque agent peut nommer et persister un
+jeu de filtres et le rappeler en un clic.
 
 ### Fonctionnalités
-- **Vues sauvegardées (privées)** : un bouton « Sauvegarder la vue » dans la
-  barre de filtres enregistre les filtres actifs (statut, priorité, boîte,
-  assigné, tag, recherche, tri) sous un nom ; la barre latérale liste vos vues
-  pour les rappeler ou les supprimer en un clic.
+- **Vues sauvegardées (privées par agent)** : bouton « Sauvegarder la vue » dans
+  la toolbar de filtres (capture `status, priority, mailboxId, assignedToId,
+  tagId, category, search` + tri non-défaut), et section « Vues sauvegardées »
+  dans la sidebar pour les rappeler / supprimer. Réutilise le mécanisme de
+  searchParams existant : cliquer une vue applique les filtres via l'URL.
+- Nouveau modèle `SavedView` (table neuve, `userId` + `filters` JSON,
+  `@@unique([userId, name])`). Server Actions scopées `userId` (ownership).
 
 ### Notes
-- Vues privées à chaque agent. Aucune migration de données (nouvelle table créée
-  automatiquement au déploiement).
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+- Portée volontairement bornée : vues privées (pas de partage équipe), pas de
+  capture de vue prédéfinie. Table neuve → créée par `db push` au déploiement,
+  aucune migration de données.
 
 ## [1.11.39] — 2026-05-31
 
-Correctif de déploiement pour la 1.11.38 : la création de la contrainte d'unicité
-Message-ID pouvait faire échouer l'étape de migration au démarrage. L'index est
-désormais créé directement par la migration (idempotente), sans interruption.
+Hotfix de la migration 1.11.38 : l'ajout de la contrainte `@@unique([ticketId,
+messageId])` faisait échouer le conteneur `migrate` au déploiement. `prisma db
+push` refuse d'ALTER une table existante pour y ajouter une contrainte unique
+sans `--accept-data-loss` (garde-fou générique, levé même sans doublon) — et la
+commande migrate utilise volontairement `db push` sans ce flag pour préserver ce
+garde-fou sur tous les autres changements de schéma.
 
 ### Correctif
-- La contrainte d'unicité (ticketId, Message-ID) est créée par la migration
-  elle-même, évitant l'échec de l'étape de migration au déploiement.
+- L'index unique est désormais créé en **SQL brut** (`CREATE UNIQUE INDEX IF NOT
+  EXISTS "TicketMessage_ticketId_messageId_key"`) à la fin de la migration de
+  dédup, AVANT `db push`. db push le trouve déjà présent → « in sync », aucun
+  ALTER, aucun flag. Nom = convention Prisma `@@unique`. Idempotent.
+- La dédup (1.11.38) est inchangée ; sur une instance déjà passée par le migrate
+  1.11.38, elle est un no-op (doublons déjà supprimés).
 
 ### Notes
-- Aucun changement fonctionnel. Aucune action manuelle requise.
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
+- Pas de changement fonctionnel ni de nouvelle migration de données.
+- Aucune action manuelle requise : le `migrate` au déploiement crée l'index puis
+  passe « in sync ».
 
 ## [1.11.38] — 2026-05-31
 
-Fiabilité : protection contre la double-ingestion d'un même email dans un fil de
-ticket, avec déduplication automatique des éventuels doublons déjà présents au
-déploiement.
+Fiabilité du pipeline mail (finding P1 de l'audit 2026-05-29). Une course
+force-poll/listener pouvait ré-ingérer le même email entrant deux fois dans un
+même fil de ticket (lignes `TicketMessage` dupliquées partageant le Message-ID).
 
 ### Fiabilité
-- Un même email entrant ne peut plus créer de message en double dans un fil de
-  ticket (course de relève force-poll/listener), grâce à une contrainte
-  d'unicité Message-ID par ticket.
-- La mise à jour déduplique automatiquement les doublons existants (migration
-  idempotente, sans intervention manuelle).
+- Contrainte **`@@unique([ticketId, messageId])`** sur `TicketMessage` : backstop
+  DB contre l'ajout en double d'un même Message-ID dans un fil. **Portée par
+  ticket** (pas globale) pour rester compatible avec le soft-delete/fusion — les
+  tickets supprimés conservent leurs messages, et l'unicité globale rejetterait
+  une ré-ingestion légitime post-fusion. `messageId` NULL (brouillons / legacy)
+  exempté (NULLs distincts en Postgres).
+- Migration de **dédup idempotente** (`prisma/migrations/20260531_dedup_messageid_unique`,
+  branchée dans `run-raw-migrations.mjs` → avant `prisma db push`) : normalise les
+  Message-ID vides en NULL, puis pour chaque doublon `(ticketId, messageId)` garde
+  le plus ancien en **re-pointant les pièces jointes** avant suppression (cascade-safe).
+  S'exécute automatiquement au déploiement, politique fatal-on-error.
 
 ### Notes
+- Les doublons **cross-ticket** (même email → deux tickets) ne sont pas fusionnés
+  par cette migration (autorisés par la contrainte par-ticket) ; à traiter via la
+  fusion de tickets si nécessaire. Non bloquant.
 - Aucun changement fonctionnel visible.
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
 
 ## [1.11.37] — 2026-05-31
 
-Durcissement sécurité : les valeurs fournies par le client (sujet du ticket,
-nom du client, premier message) sont désormais systématiquement échappées dans
-les emails sortants (notifications aux agents, accusés de résolution, relances
-d'auto-clôture, réponses automatiques). Un contenu porteur de balisage HTML ne
-peut plus altérer le rendu d'un email envoyé.
+Durcissement sécurité (suite du sweep injection HTML de l'audit 2026-05-29) :
+échappement systématique des valeurs **contrôlées par le client** (sujet du
+ticket, nom du client, premier message) interpolées dans les corps d'emails
+sortants.
 
 ### Sécurité
-- Échappement systématique des champs contrôlés par le client interpolés dans
-  les corps d'emails.
-- Le gabarit d'email déclare explicitement la nature (HTML ou texte) de chaque
-  corps, supprimant une heuristique de détection de contenu contournable.
+- Les emails de **notification aux agents**, de **résolution**, de **relance
+  d'auto-clôture** et les **réponses automatiques** échappent désormais les
+  champs fournis par le client. Un sujet ou un nom contenant du balisage HTML
+  (`<img onerror=…>`, etc.) ne peut plus être injecté dans le rendu de l'email.
+- Le gabarit (`wrapInTemplate`, mail-service) ne **devine** plus HTML vs texte à
+  partir du contenu — une heuristique contournable : un champ client porteur de
+  `<…>` faisait basculer un corps texte en mode HTML brut et court-circuitait
+  l'échappement. Chaque émetteur déclare maintenant explicitement la nature du
+  corps via le flag `bodyIsHtml` (`MailJob` → consumer → sender → wrapper) ;
+  l'heuristique ne subsiste qu'en repli pour les appelants historiques.
+- Nouvel util partagé `apps/web/src/lib/html-escape.ts` (`escapeHtml` 5 entités
+  + `isHtmlTemplate`). Tests : `smtp/templates.test.ts` (node:test) +
+  `lib/html-escape.vitest.ts` (vitest).
 
 ### Notes
 - Aucun changement fonctionnel visible ni migration de base de données.
-
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
 
 ## [1.11.36] — 2026-05-31
 
@@ -510,1209 +702,1533 @@ parallèle, cela pouvait saturer le CPU/RAM ou faire dépasser le quota de l'API
 - Aucun changement de comportement fonctionnel : mêmes appels, mêmes résultats ; seule
   la simultanéité est bornée. Aucune migration de base de données.
 
-### Mise à jour
-
-```bash
-cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
-```
-
 ## [1.11.35] — 2026-05-30
 
-> Correctif de performance — **service d'envoi d'emails**.
+Performance du mail-service (finding P2 de l'audit 2026-05-29). Le consumer de la file
+d'envoi (`queue/consumer.ts`) exécutait un `BRPOP "mail:outgoing" 5` **bloquant** sur la
+**connexion Redis partagée** (`getRedis()`) — la même, dans le même process, que celle utilisée
+par les producteurs pour `lpush "mail:outgoing"` (`imap/listener.ts` ×6, `scheduler/auto-close.ts`
+×2), les `publish` et les `get`/`set` (lock journalier backup). Une commande bloquante tient sa
+connexion ; comme la boucle re-bloque en continu, **toute** commande non-bloquante émise pendant
+ce temps était mise en file derrière le BRPOP et stallait **jusqu'à 5 s**. 0 migration,
+mail-service uniquement.
 
 ### Performance
+- Le `BRPOP` tourne désormais sur une **connexion Redis dédiée** (`getBlockingRedis()`),
+  séparée de la connexion partagée. Les `lpush`/`publish`/`get`/`set` ne stallent plus derrière
+  lui — fin de la latence d'envoi (jusqu'à 5 s) et des stalls en cascade sur le lock backup et
+  les notifications.
+- `disconnectRedis()` ferme proprement les deux connexions au shutdown.
 
-- Le service de messagerie n'immobilise plus sa connexion Redis pendant l'attente de nouveaux
-  emails à envoyer : la lecture bloquante de la file tourne désormais sur une connexion dédiée.
-  Les opérations en parallèle (mise en file des emails sortants, notifications, supervision des
-  sauvegardes) ne sont plus retardées (jusqu'à 5 secondes auparavant). Comportement d'envoi
-  inchangé.
+### Notes
+- Aucun changement de comportement : même file `mail:outgoing`, même BRPOP timeout 5 s, mêmes
+  producteurs. Pure isolation de connexion (pratique standard ioredis pour les commandes
+  bloquantes). `poll-trigger.ts` et `backup-listener.ts` étaient déjà sur connexions dédiées.
 
-Aucune migration de base de données. Mise à jour applicative simple.
+### Tests
+- Harnais runtime contre le vrai Redis : un `PING` émis pendant un `BRPOP` en vol mesuré à
+  **~2027 ms** sur connexion partagée (bug) contre **0 ms** sur connexion dédiée (fix).
 
 ## [1.11.34] — 2026-05-30
 
-> Correctif de performance — **analyse approfondie (Deep Analysis)**.
+Performance de la Deep Analysis (finding P2 de l'audit 2026-05-29). Le composant
+`AnalysisStream` (`ai-sidebar/analysis-stream.tsx`) ouvrait, au clic « Run Deep Analysis »,
+un flux **SSE** ET un **polling** concurrents : le `useEffect` de polling tapait
+`/api/ai/analysis/<ticketId>` (lecture DB) **toutes les 1,5 s pendant toute la durée du SSE**
+(~60-120 s), soit **~40-80 requêtes redondantes** avec le SSE qui streamait déjà la même
+progression. Aucun changement de comportement visible, 0 migration, client-only.
 
 ### Performance
+- Le **SSE est désormais le flux unique** quand l'utilisateur lance/relance une analyse — plus
+  de polling concurrent. Suppression des ~40-80 lectures DB redondantes par analyse.
+- Le polling reste réservé à deux cas mutuellement exclusifs du SSE : (a) **resume au montage**
+  d'une analyse déjà en cours (autre onglet / après refresh) ; (b) **fallback** si le SSE tombe
+  après l'ouverture de connexion — on rejoint le job via la DB (le worker continue côté
+  ai-service) au lieu d'afficher une fausse erreur « service non démarré ».
 
-- Lancer une analyse approfondie d'un ticket n'ouvre plus qu'**un seul flux temps réel** au lieu
-  de deux requêtes concurrentes (le suivi en direct et une interrogation répétée de la base toutes
-  les 1,5 s tournaient en parallèle). La charge sur la base et le service IA pendant une analyse
-  est nettement réduite, sans changement visible côté interface.
-- Si la connexion temps réel est interrompue en cours d'analyse, l'interface rejoint
-  automatiquement l'analyse en arrière-plan (qui continue côté serveur) au lieu d'afficher une
-  erreur — et un « Relancer » ne risque plus de déclencher une analyse en double.
+### Fiabilité
+- Helper pur `classifySseClose({completed, closed, started})` (testable) route la décision sur
+  erreur/close. `started` bascule sur `es.onopen` (connexion ouverte = le backend a créé/va créer
+  la ligne `DEEP_ANALYSIS`, même avant le 1er événement d'étape pendant le RAG-crawl), pour ne
+  pas laisser un job orphelin ni risquer une analyse en double via Retry.
+- `es.close()` conservé sur erreur (empêche l'auto-reconnect d'`EventSource` qui relancerait une
+  analyse).
 
-Aucune migration de base de données. Mise à jour applicative simple.
+### Tests
+- 4 tests unitaires (vitest) sur `classifySseClose` (table de décision complète). Aucun
+  changement serveur (route SSE + route statut inchangées), aucune donnée.
 
 ## [1.11.33] — 2026-05-30
 
-> Correctif de performance — **rattachement des tickets orphelins**.
+Performance de `backfillCustomerLinks` (finding P2 de l'audit 2026-05-29,
+`customer.actions.ts:237-282`). L'action admin « Rattacher les orphelins » ré-exécutait
+le résolveur `resolveCustomerIdByEmail` (jusqu'à **3 requêtes**) pour **chaque** ticket
+candidat (orphelins + AutresClients), puis faisait **un `UPDATE` par ticket** — boucle N+1
+séquentielle (`1 + 3N + N`) non bornée, pouvant scanner des milliers d'orphelins. Sortie
+**inchangée** (même `preview`, mêmes `scanned`/`linked`, état final identique), 0 migration.
 
 ### Performance
+- **Une seule requête** charge tous les `Customer` → 3 lookups en mémoire (email exact,
+  domaine non-système le plus ancien, catch-all système) via `loadCustomerLookups`, reproduisant
+  fidèlement les 3 stratégies du résolveur single. Résolution de chaque candidat désormais en
+  mémoire (0 requête/ticket).
+- Écritures **groupées par client cible** : `updateMany({ id: { in: [...] }})` découpé en chunks
+  de 1000 ids (sous la limite de bind-params Postgres), au lieu de N `update` séquentiels.
+- Bilan : `1 (clients) + 1 (candidats) + chunks d'updateMany` contre `1 + 3N + N`.
 
-- L'outil « Rattacher les orphelins » (Réglages → Clients) traite désormais l'ensemble des
-  tickets en **un nombre de requêtes constant** au lieu de plusieurs requêtes par ticket. Sur
-  les installations avec un grand historique de tickets non rattachés, l'opération est nettement
-  plus rapide et ne risque plus de saturer la base. Le résultat (tickets rattachés) est
-  **strictement identique**.
+### Architecture
+- Helper pur `resolveFromMaps(email, lookups)` (testable) + batch `loadCustomerLookups(db)`
+  ajoutés à `auto-link.ts` ; `resolveCustomerIdByEmail` (3 hot-paths single) **intact**.
 
-Aucune migration de base de données. Mise à jour applicative simple.
+### Tests
+- 6 tests unitaires (vitest) sur `resolveFromMaps` (3 stratégies, email l'emporte sur domaine,
+  email invalide, pas d'autresId) + validation par **diff sur base réelle** (123 candidats :
+  résolution batch identique au résolveur single ; apply groupé repositionne au bon client).
+- Clés des lookups stockées **verbatim** (= match exact `findUnique`/`findFirst`, Postgres
+  sensible à la casse), lookup avec email d'entrée normalisé.
 
 ## [1.11.32] — 2026-05-30
 
-> Correctif de performance — **rapports de temps**.
+Performance du rapport de temps (finding P2 de l'audit 2026-05-29,
+`time-reports.actions.ts:25-40`). `getTimeReport` (`settings/time-reports`)
+chargeait **toutes** les `TimeEntry` filtrées en RAM — sans plafond, avec leurs
+relations imbriquées (`user`, `ticket`, `customer`) — puis agrégeait en JS, sur une
+table sans index `createdAt`. Résultat : seq-scan + tri en mémoire + matérialisation
+non bornée. C'était le seul endpoint reporting sans cap (contre `REPORT_HARD_CAP`
+ailleurs). Sortie **inchangée** (mêmes totaux), +1 champ `truncated`, 0 migration.
 
 ### Performance
+- Totaux (`totalMinutes`, `billableMinutes`, `totalAmount`) désormais calculés en
+  **une requête d'agrégat SQL** (`SUM("minutes")`, `SUM(…) FILTER (WHERE …)`,
+  `SUM("minutes"*"hourlyRate") FILTER … / 60`) sur l'ensemble complet du filtre —
+  KPI exacts, plus jamais matérialisés en RAM.
+- Liste des entrées **plafonnée à 5000 lignes** (`take: REPORT_HARD_CAP + 1`) avec un
+  drapeau `truncated` et un bandeau d'avertissement i18n dans l'UI (« affinez vos
+  filtres », 5 locales), à l'identique du rapport tickets.
+- Deux index ajoutés sur `TimeEntry` : `@@index([createdAt])` (filtre date + tri
+  `createdAt DESC LIMIT`) et `@@index([userId, createdAt])` (filtre par agent + tri).
 
-- Les totaux des rapports de temps (heures totales, heures facturables, montant) sont
-  désormais calculés directement en base de données sur **l'ensemble** des entrées
-  correspondant à vos filtres — plus rapides et exacts, même sur de très gros volumes.
-- La liste affichée est limitée à 5000 lignes, avec un message d'avertissement invitant à
-  affiner les filtres au-delà ; les totaux, eux, restent calculés sur l'ensemble.
-- La table des temps est désormais indexée pour accélérer le filtrage par date et par agent.
+### Architecture
+- Découpage en 3 couches comme #18/sidebar : `time-reports.actions.ts` (`"use server"`,
+  `requireAuth` + délégation), `time-reports.queries.ts` (`computeTimeReport(db, …)` —
+  agrégat `$queryRaw` + `findMany` borné en `Promise.all`), `time-reports.helpers.ts`
+  (assemblage **pur** : cap/slice/`truncated`/arrondi, testé en vitest).
 
-Aucune migration de base de données. Mise à jour applicative simple.
+### Tests
+- 4 tests unitaires (vitest) sur l'assemblage pur (boundaries cap/cap+1, arrondi, set
+  vide) + validation par **diff ancien/nouveau sur base réelle** (4 filtres : aucun,
+  facturable, par agent, par date — totaux identiques, `entries` identiques sous le cap).
+- 0 migration : les index s'appliquent via le `prisma db push` du conteneur `migrate`
+  au déploiement.
 
 ## [1.11.31] — 2026-05-30
 
-> Correctif de performance — **chargement de la barre latérale**.
+Performance de la sidebar (finding N+1 de l'audit 2026-05-29). Les badges de
+comptage par boîte mail (`getSidebarData`) étaient calculés via **4 requêtes SQL
+par boîte**, chacune avec une sous-requête corrélée « dernier message », rejouées
+toutes les 30 s pour chaque utilisateur connecté — la requête la plus chaude de
+l'app, à risque de saturation Postgres. Sortie **inchangée** (compteurs identiques),
+0 migration.
 
 ### Performance
+- **Une seule requête groupée** remplace la boucle `4 × M` : `GROUP BY "mailboxId"`
+  + `COUNT(*) FILTER (…)` pour les 4 compteurs (total/non-assignés/miens/spam).
+- Le « dernier message » de chaque ticket est résolu via un `LEFT JOIN LATERAL …
+  ORDER BY "createdAt" DESC LIMIT 1` **scopé aux boîtes concernées** (index
+  `(ticketId, createdAt)`), au lieu d'une sous-requête corrélée rejouée 3×, et sans
+  trier toute la table des messages.
 
-- Les compteurs de tickets par boîte mail affichés dans la barre latérale (rafraîchis
-  automatiquement toutes les 30 secondes) sont désormais calculés en **une seule requête**
-  au lieu de plusieurs par boîte. Sur les installations à fort volume, cela réduit
-  nettement la charge base de données de l'écran le plus consulté. Les compteurs affichés
-  sont **strictement identiques**.
-
-Aucune migration de base de données. Mise à jour applicative simple.
+### Tests
+- 3 tests unitaires (vitest) sur l'assemblage pur + validation par diff
+  ancien/nouveau sur base réelle (8 cas couvrant les 4 compteurs et le quirk spam,
+  sortie identique).
 
 ## [1.11.3] — 2026-05-30
 
-> Version mineure — **exactitude et performance des analyses SLA & CSAT**.
+Performance et exactitude des analytics SLA et CSAT (finding #18 de l'audit
+2026-05-29). Les rapports de conformité SLA et de satisfaction (CSAT) sont
+recalculés via des agrégats SQL au lieu de charger jusqu'à 2000/1000 lignes en
+mémoire et d'agréger en JavaScript. Le contrat d'affichage est inchangé ; aucune
+migration de base.
 
 ### Corrigé
-
-- Les tableaux de bord **Conformité SLA** et **Satisfaction (CSAT)** calculent
-  désormais leurs indicateurs (taux de conformité, moyennes, histogrammes,
-  distributions) sur **l'intégralité** de la période sélectionnée. Auparavant, au-delà
-  d'un certain volume de tickets ou de réponses, les chiffres étaient calculés sur un
-  échantillon tronqué — et donc potentiellement inexacts — sans aucun avertissement.
-- La liste des tickets en dépassement de SLA s'affiche dans un ordre stable.
+- **KPI faux sur gros volumes** : les anciens plafonds (`take: 2000` pour le SLA,
+  `take: 1000` pour le CSAT) calculaient les taux de conformité, moyennes,
+  histogrammes et distributions sur un sous-ensemble tronqué des tickets/réponses
+  de la période, sans aucun signal. Les agrégats portent désormais sur l'ensemble
+  complet de la fenêtre — les chiffres sont exacts quel que soit le volume.
+- **Ordre déterministe** des tickets en dépassement SLA (tie-breaker `createdAt`).
 
 ### Performance
+- Agrégation déplacée en base (`COUNT FILTER`, `GROUP BY`, `AVG`, jointures) :
+  plus de matérialisation de milliers d'objets en RAM Node à chaque ouverture des
+  pages Analytics SLA / CSAT.
 
-- Les pages Analyses SLA et CSAT s'appuient désormais sur des agrégations en base de
-  données, réduisant l'empreinte mémoire et le temps de chargement sur les grands
-  volumes.
-
-Aucune migration de base de données. Mise à jour applicative simple.
+### Tests
+- 17 tests unitaires (vitest) sur les couches d'assemblage pures + validation
+  par diff ancien/nouveau sur base réelle (sortie identique à isovolume,
+  troncature corrigée au-delà du plafond).
 
 ## [1.11.21] — 2026-05-30
 
-> Correctif — **lisibilité des fils de tickets** : meilleure suppression des
-> citations recopiées dans les mails entrants.
+Correctif d'affichage : la dé-citation des mails entrants devient réellement
+efficace dans le fil de tickets (le trim côté affichage existant — v147791 —
+ratait des cas et masquait son propre toggle). Non-destructif (le brut reste en
+base, toggle « Afficher le message complet »), sans migration ni changement
+mail-service.
 
 ### Corrigé
+- **Réponses courtes jamais tronquées** : le garde-fou abaissé (20 → 1 caractère,
+  « vide seulement ») laisse enfin tronquer les réponses courtes (« Merci », un
+  numéro) et affiche le toggle — c'était la cause n°1 du « toggle invisible ».
+- **Citation Outlook non retirée** : nouveaux marqueurs Outlook Web/Exchange
+  (`x_divRplyFwdMsg`, `OutlookMessageHeader`), séparateur desktop `border-top`
+  (ancré sur l'unité `pt` pour ne pas toucher les dividers de newsletters/Word),
+  et en-têtes allemands (`Von:`/`Gesendet:`). La réponse agent citée par le client
+  ne s'affiche plus en doublon.
+- **Bannières de passerelle** : la bannière Sophos préfixée est excisée (scan de
+  `<div>` équilibré).
+- **Périmètre** : le trim s'applique désormais aussi au premier message
+  (`INITIAL`), plus seulement aux réponses client.
 
-- Les citations de l'historique recopiées par le client (Outlook bureau et web,
-  Gmail, Apple Mail, Thunderbird) sont désormais bien masquées dans les réponses
-  entrantes — y compris sur les **réponses courtes** (« Merci », un numéro), qui
-  affichaient auparavant tout l'historique. Un bouton « Afficher le message
-  complet » reste disponible pour dérouler le message d'origine.
-- Les bannières ajoutées par les passerelles de sécurité (ex. Sophos) en tête de
-  message sont retirées de l'affichage.
-- Le masquage s'applique aussi au premier message d'un ticket, pas seulement aux
-  réponses.
-
-Affichage uniquement : le message d'origine reste intégralement conservé.
+### Tests
+- 19 tests unitaires (vitest) sur le module de dé-citation (marqueurs par vendor,
+  garde-fou, bannière, composition, anti-faux-positifs). Validé sur 90 messages
+  entrants réels (34/34 réponses client propres).
 
 ## [1.11.2] — 2026-05-29
 
-> Version mineure — **localisation des enquêtes de satisfaction** et
-> internationalisation côté serveur.
+Suite de la localisation (audit 2026-05-29) : code-split i18n côté serveur (#19)
+et localisation de la chaîne CSAT destinataire (#11), plus deux correctifs issus
+de la revue Codex gpt-5.5/xhigh.
 
 ### Ajouté
+- **Code-split i18n (#19)** : la locale est désormais résolue côté serveur
+  (cookie `tb-locale` → `Accept-Language` → `en`) dans le root layout, le
+  dictionnaire actif est passé en props au `I18nProvider`. Les dictionnaires de
+  traduction ne sont plus embarqués dans le bundle client (bundle JS allégé,
+  locales absentes de `.next/static`). Migration one-shot localStorage → cookie
+  pour les utilisateurs existants.
+- **Localisation CSAT destinataire (#11)** : l'email d'enquête, l'interstitiel
+  de confirmation et la page de remerciement publique respectent la langue de
+  l'agent expéditeur, propagée via `&lang=` jusqu'aux pages publiques (sans
+  session). 19 nouvelles clés `csat.*` par locale, parité stricte sur les 5.
 
-- Les enquêtes de satisfaction (CSAT) sont désormais entièrement localisées :
-  email d'enquête, page de confirmation et page de remerciement s'affichent
-  dans la langue de l'agent qui les déclenche, dans les 5 langues (français,
-  anglais, allemand, espagnol, italien).
-- Résolution de la langue côté serveur (cookie `tb-locale`, repli sur la langue
-  du navigateur). Les dictionnaires de traduction ne sont plus embarqués dans le
-  JavaScript envoyé au navigateur, ce qui allège le bundle client.
-
-### Modifié
-
-- Le triage et l'analyse IA respectent désormais la langue choisie dans
-  l'interface.
-
-### Sécurité
-
-- Le sujet du ticket est échappé dans le corps HTML de l'email d'enquête CSAT
-  (prévention d'injection de balises).
+### Corrigé
+- **Injection HTML (CSAT)** : `ticket.subject` (contrôlé par le client) est
+  désormais échappé avant interpolation dans le corps HTML de l'email d'enquête.
+- **Locale IA (revue Codex P2)** : le triage et l'analyse approfondie lisent la
+  locale active via le contexte i18n (cookie) au lieu de `localStorage`
+  (clé périmée depuis #19) — l'IA répond dans la langue choisie de l'UI.
 
 ## [1.11.1] — 2026-05-29
 
-> Version mineure — **localisation** des écrans clés.
+Campagne de localisation P1 (audit 2026-05-29) : extraction des chaînes
+codées en dur vers les 5 locales (FR/EN/DE/ES/IT) sur les écrans clés.
 
 ### Ajouté
-
-- Localisation complète de la page de connexion et de la cloche de
-  notifications (temps relatif inclus) dans les 5 langues (français, anglais,
-  allemand, espagnol, italien).
-- Extraction des libellés codés en dur vers les traductions sur le badge SLA,
-  la recherche globale, le tableau de bord, les axes du graphique d'activité,
-  la file de tickets et l'éditeur de réponse.
+- Localisation complète de la page de connexion (titre, sous-titre SSO,
+  bannière bootstrap, libellés, boutons, erreurs, tagline) et de la cloche
+  de notifications, avec temps relatif via `Intl.RelativeTimeFormat`.
+- ~50 nouvelles clés i18n par locale, à parité stricte sur les 5 langues,
+  couvrant badge SLA, recherche globale, dashboard, axes du graphique
+  d'activité, file de tickets et composer.
 
 ### Modifié
-
-- L'alerte d'expiration de licence respecte désormais la langue choisie.
+- `getLicenseWarning` renvoie désormais un code (`expired` /
+  `expiresInDays` + `days`) traduit côté composant, au lieu de chaînes
+  anglaises codées en dur (audit #10).
 
 ### Corrigé
+- Mismatch d'hydratation potentiel (React #418) sur le badge SLA après son
+  passage en Client Component : le calcul temporel est différé après le
+  montage. Findings P2 (cloche non câblée) et P3 (hydratation SLA) de la
+  revue Codex gpt-5.5/xhigh corrigés.
 
-- Correction d'un scintillement possible du badge SLA au chargement de la page
-  d'un ticket.
+### Différé en 1.11.2
+- Localisation de la page CSAT publique (résolution de locale
+  mailbox/customer, audit #11) et items Perf #18/#19.
 
 ## [1.11.0] — 2026-05-29
 
-> Version mineure — durcissement **sécurité & fiabilité recommandé**.
+Release mineure : durcissement sécurité + fiabilité issu de l'audit P1
+(batches A + B), revu en deux passes adversariales Codex (gpt-5.5/xhigh).
 
 ### Sécurité
 
-- Cloisonnement par boîte mail renforcé sur l'ensemble des actions sensibles :
-  fusion de tickets, gestion des tags et des clients réservées aux
-  administrateurs / superviseurs ; liaison client, génération et partage
-  d'articles de base de connaissances limités au périmètre de l'agent.
-- Durcissement du crawler de la base de connaissances (RAG) contre les accès
-  réseau internes (protection SSRF, y compris re-bind DNS).
-- Les données clients envoyées à l'IA (tri, analyse, résumé) sont désormais
-  expurgées de leurs informations personnelles ; le contenu web externe est
-  traité comme une source non fiable.
-- Jetons OAuth isolés par boîte mail (plus de partage entre boîtes) ;
-  connexion SSO Keycloak refusée tant que l'e-mail n'est pas vérifié ;
-  image du moteur de recherche interne épinglée et secret régénéré.
+- **Frontière d'autorisation** étendue : `getTicketsForMerge`, gestion des tags
+  et CRUD clients réservés ADMIN/SUPERVISOR ; `linkCustomerToTicket`,
+  `autoLinkCustomer`, `generateKbArticle` scopés par accès au ticket ;
+  `shareKbArticle` scopé à la boîte mail de l'agent (anti-spoofing).
+- **SSRF du crawler RAG** : blocage des adresses internes/metadata par
+  classification d'IP (ipaddr.js), redirections suivies manuellement et
+  re-validées à chaque saut, et **validation de l'IP au moment du connect**
+  (dispatcher undici) qui ferme la fenêtre de DNS-rebinding.
+- **PII → LLM** : redaction (sanitize) des corps de messages avant envoi au
+  modèle en triage / deep analysis / résumé ; bloc de connaissances externes
+  encadré comme « source non fiable » (anti prompt-injection de second ordre).
+- **OAuth** : cache de token et verrou anti-stampede keyés par boîte mail (fin
+  de la fuite de jeton cross-tenant) ; invalidation forçant un vrai refresh.
+- **Divers** : `email_verified` exigé avant liaison/création de compte Keycloak
+  SSO ; identifiant de log d'activation passé en HMAC-SHA256 keyé ; image
+  SearXNG épinglée + secret généré ; sanitization du partage KB par e-mail.
 
-### Performance & fiabilité
+### Performance
 
-- File de tickets : index optimisé pour la vue par défaut ; le filtre de boîte
-  mail d'un agent n'est plus écrasé.
-- Statistiques CSAT corrigées (agrégation par agent, taux borné à 100 %).
-- Disparition des avertissements d'affichage (heures relatives) sur la file et
-  le tableau de bord.
+- Index composite `Ticket [deletedAt, isSpam, createdAt]` sur le hot path de
+  la file par défaut.
 
-### À noter pour les administrateurs
+### Fixed
 
-- **SSO Keycloak** : assurez-vous que votre realm émet le claim
-  `email_verified` (un compte sans e-mail vérifié sera refusé). Testez une
-  connexion SSO après mise à jour.
+- `getTickets` : le filtre de boîte mail explicite d'un agent est intersecté
+  avec ses boîtes autorisées (au lieu d'être écrasé), sans jamais l'élargir.
+- CSAT : top agents agrégés par identifiant (et non par nom, non unique) ;
+  taux de réponse borné à 100 %.
+- Hydration : heures relatives rendues côté client (fin des avertissements
+  React #418 sur la file et le dashboard) ; carte de triage robuste aux
+  données malformées.
+
+### Tests
+
+- Harnais **vitest** (mocks NextAuth + Prisma) : 45 tests — autorisations par
+  action, verrou anti-fraude, helpers purs (scope mailbox, dates UTC backup,
+  log-hash). Les tests `tsx` historiques restent inchangés.
+
+### À vérifier au déploiement
+
+- **SSO Keycloak** : le garde `email_verified` n'est pas testable hors d'un
+  Keycloak réel — valider un login SSO sur staging avant la bascule prod, et
+  s'assurer que le realm émet bien le claim `email_verified` (sinon les
+  comptes sans claim sont refusés).
+
+### Différé (v1.11.x)
+
+- Contrainte unique `messageId` (migration + dédup des données existantes),
+  index trigram ILIKE, agrégats SQL SLA/CSAT, code-split i18n, et le batch
+  i18n/a11y/produit (localisation d'écrans, navigation clavier, colonne SLA,
+  vues sauvegardées).
 
 ## [1.10.147802] — 2026-05-29
 
-> Mise à jour de sécurité **recommandée** (complète la 1.10.147801).
+### Sécurité — Correctifs P0 (suite, re-review Codex gpt-5.5/xhigh)
 
-### Sécurité
+Une seconde passe de review adversariale (modèle renforcé) avant déploiement a
+identifié deux failles supplémentaires de la même famille que le P0, plus une
+régression dans le correctif de relève manuelle :
 
-- Les identifiants OAuth d'une boîte mail ne peuvent plus être définis que par
-  un administrateur (auparavant aussi accessibles aux superviseurs), au même
-  titre que les identifiants IMAP/SMTP.
-- La création d'un ticket est désormais restreinte aux boîtes mail dont l'agent
-  est membre : un agent ne peut plus créer de ticket — ni déclencher d'e-mail
-  d'accusé — depuis la boîte d'une autre équipe.
+- **OAuth credentials réservés aux ADMIN** : `initiateOAuth` exigeait
+  ADMIN/SUPERVISOR — désormais ADMIN seul, comme les autres credentials de
+  boîte mail (CWE-915). Un superviseur ne peut plus pointer une boîte vers une
+  application OAuth tierce.
+- **Création de ticket scopée par boîte** : `createTicket` vérifie désormais
+  l'appartenance de l'agent à la boîte ciblée. Sans cela, un agent pouvait
+  créer un ticket dans la boîte d'une autre équipe et déclencher un e-mail
+  d'accusé envoyé *depuis* cette boîte (CWE-639 / anti-spoofing).
 
-### Corrigé
+### Fixed
 
-- Relève manuelle des e-mails : la récupération « supprimer un ticket →
-  marquer le mail non lu → relancer la relève » recrée à nouveau le ticket
-  (régression de la 1.10.147801).
+- **Relève manuelle (force-poll)** : la déduplication ignore désormais les
+  tickets supprimés (`deletedAt`), alignée sur le listener — le flux de
+  récupération « supprimer → marquer non-lu → re-fetch » fonctionne à nouveau
+  par cette voie (régression introduite en 1.10.147801).
+
+### Tests
+
+- 2 nouveaux tests d'autorisation (création de ticket hors périmètre, OAuth
+  réservé ADMIN). 30 tests vitest au total.
 
 ## [1.10.147801] — 2026-05-29
 
-> Mise à jour de sécurité et de fiabilité **recommandée**.
+### Sécurité — Correctifs P0 (audit multi-agents)
 
-### Sécurité
+Renforcement de la frontière d'autorisation intra-application : plusieurs
+chemins faisaient confiance à un simple `requireAuth()` là où il fallait un
+contrôle de scope mailbox (`assertTicketAccess`) ou de rôle (`requireRole`).
 
-- Renforcement du cloisonnement par boîte mail : un agent n'accède qu'aux
-  tickets, pièces jointes et résultats de recherche de ses propres boîtes
-  (corrections d'isolation inter-boîtes sur la recherche, les pièces jointes,
-  le verrou d'édition et le changement de client d'un ticket).
-- Les règles d'exclusion d'e-mails entrants, ainsi que la définition des
-  identifiants IMAP/SMTP à la création d'une boîte mail, sont réservées aux
-  administrateurs / superviseurs.
-- Le verrou anti-fraude de licence s'applique désormais aussi aux modules
-  premium, et non plus au seul cœur de l'application.
+- **IDOR recherche** : `searchTickets` filtre désormais par mailbox pour les
+  AGENT (un agent ne voit que les tickets de ses boîtes) ; les ADMIN/SUPERVISOR
+  conservent la vue globale. Garde de débordement int4 sur la recherche par
+  numéro de ticket.
+- **IDOR ré-assignation client** : `changeTicketCustomer` vérifie l'accès au
+  ticket avant de réécrire le client et de déclencher un auto-reply.
+- **IDOR pièces jointes / verrou** : `/api/attachments/[id]` et
+  `/api/tickets/[id]/lock` (POST/GET/DELETE) appliquent le scope mailbox AGENT
+  (403 hors périmètre).
+- **RBAC règles d'exclusion mail** : les 4 actions de `mailbox-exclusions`
+  exigent ADMIN/SUPERVISOR (un AGENT ne peut plus faire disparaître
+  silencieusement des mails entrants).
+- **CWE-915 création de mailbox** : `createMailbox` réapplique le verrou ADMIN
+  sur les champs credentials (hôtes/ports/mots de passe/OAuth), au même titre
+  que `updateMailbox` — y compris contre l'envoi de champs dupliqués.
+- **Anti-fraude** : `hasFeature()` refuse désormais les fonctionnalités premium
+  quand l'instance est `fraud_locked` (le verrou n'était appliqué qu'au cœur).
+- **SLA** : `applySlaToTicket` exige authentification + accès au ticket.
 
-### Corrigé
+### Fixed
 
-- Relève manuelle des e-mails : plus de tickets ni de notifications en double,
-  et une réponse n'est plus rattachée à un ticket supprimé.
-- L'IA (tri, analyse, résumé) n'inclut plus les brouillons d'agent dans son
-  contexte.
-- Commande Telegram `/backup` : dates comparées en UTC — fin des faux
-  « manquant » / « erreur » selon le fuseau horaire du serveur.
+- **Relève manuelle (force-poll)** : déduplication par `messageId` (plus de
+  tickets/notifications en double en cas de course avec le listener) et le
+  threading ne ré-attache plus de réponse à un ticket supprimé (`deletedAt`).
+- **Contexte IA** : les brouillons d'agent (`isDraft`) sont exclus du triage,
+  de la deep analysis et du résumé (plus de fuite de brouillon dans le LLM).
+- **Telegram `/backup`** : les rapports quotidien et hebdomadaire comparent les
+  dates en **UTC**, alignés sur l'écriture UTC de `BackupCheck.date` par le
+  mail-service (fin des faux `MISSING`/`ERROR` en fuseau ≠ UTC).
+
+### Tests
+
+- Mise en place d'un harnais de tests **vitest** (`apps/web`) avec mocks
+  NextAuth + Prisma ; tests d'autorisation par action, du verrou anti-fraude,
+  et des helpers purs (scope mailbox, dates UTC du backup). 28 tests vitest +
+  helpers Telegram. Les tests `tsx` historiques restent inchangés.
 
 ## [1.10.147800] — 2026-05-28
 
-### Changed
+### Changed — Pièces jointes affichées en haut du message
 
-- **Pièces jointes affichées en haut du message.** Dans un ticket, les pièces
-  jointes (icône trombone, nom du fichier et taille) apparaissent désormais en
-  haut du message — sous les indicateurs SPF/DKIM/DMARC et près de la ligne
-  « En copie » — plutôt que sous le corps du message, pour les repérer
-  immédiatement.
+- Dans le fil de conversation, les pièces jointes (trombone + nom + taille +
+  badge de scan) sont désormais affichées **en haut du message**, sous les
+  badges SPF/DKIM/DMARC et à côté de la ligne « En copie : », au lieu d'être
+  reléguées sous le corps. L'agent voit les PJ avant de lire le message.
+  Changement UI ciblé dans `conversation.tsx`.
 
 ## [1.10.147799] — 2026-05-28
 
-### Added
+### Added — Reply-all automatique + brouillon de réponse auto-sauvegardé
 
-- **Réponse « à tous » automatique.** Lorsqu'un client met des personnes en
-  copie (CC) en créant un ticket, votre réponse depuis l'interface inclut
-  désormais ces destinataires d'office : le champ CC est **pré-rempli et
-  visible**, et reste **modifiable** — vous pouvez retirer une adresse avant
-  d'envoyer. Un ticket sans CC n'envoie qu'à l'expéditeur, comme avant.
-- **Brouillon de réponse conservé automatiquement.** Si vous saisissez une
-  réponse sans l'envoyer puis quittez le ticket, rafraîchissez la page ou
-  changez de poste, votre texte (et les CC/BCC) est **restauré** à votre retour
-  avec un badge « Brouillon ». Le badge disparaît dès que vous modifiez le
-  message. Les brouillons sont automatiquement supprimés après 48 h.
+**Reply-all (CC) sur les réponses**
+
+- Quand un client crée un ticket avec des personnes en **copie (CC)** — ou
+  adresse plusieurs équipes en `To` — le composer de réponse **pré-remplit
+  désormais le champ CC** avec ces destinataires (vrai reply-all), panneau
+  CC/BCC ouvert d'office pour qu'ils soient visibles et **éditables** : l'agent
+  peut en retirer une avant d'envoyer (elle ne reçoit alors rien).
+- Source = **dernier message entrant** du client (`INITIAL`/`CUSTOMER_REPLY`).
+  Exclusions : l'adresse de la mailbox du ticket et l'e-mail du client (déjà
+  dans `To`). Parsing `"Nom <email>"` + listes `,`/`;`, dédup insensible à la
+  casse. Helper pur `apps/web/src/lib/reply-all-cc.ts` + 15 tests unitaires.
+- Backend `addReply` inchangé : le CC reste piloté par l'UI (aucun forçage
+  serveur d'une adresse retirée par l'agent).
+
+**Brouillon de réponse auto-sauvegardé**
+
+- Une réponse saisie mais non envoyée est **auto-sauvegardée en brouillon**
+  (autosave débouncé 1,5 s + flush au changement d'onglet). Au retour sur le
+  ticket — après refresh, navigation, ou depuis un autre poste — le texte
+  (et les CC/BCC) est **restauré** dans le composer avec un badge
+  **« Brouillon »** qui disparaît à la première modification.
+- Implémenté sur l'infra existante `TicketMessage.isDraft` (aucune migration) :
+  un brouillon par (ticket, agent), supprimé à l'envoi, purgé après 48 h par le
+  scheduler `draft-cleanup` du mail-service.
+- Server actions `getReplyDraft` / `saveReplyDraft` / `deleteReplyDraft`.
+- Les brouillons sont **exclus partout** où ils pollueraient : fil de
+  conversation (`getTicket`), compteur + aperçu de la liste tickets,
+  threading `In-Reply-To` (`addReply`, `csat`, `ticket-notify`) et contexte
+  LLM du générateur de réponse IA (`ai-service/drafter.ts`).
 
 ## [1.10.147798] — 2026-05-28
 
-### Added
+### Added — Cc / Cci à la création d'un ticket manuel
 
-- **Adresses Cc / Cci à la création d'un ticket manuel.** Le formulaire
-  « Nouveau ticket » propose désormais un bouton « Ajouter Cc / Cci » qui
-  déplie deux champs CC et CCI. Les destinataires renseignés reçoivent une
-  copie de l'email d'accusé de réception envoyé au client et apparaissent
-  dans le fil de conversation du ticket.
+- Le formulaire **Nouveau ticket** affiche désormais un bouton
+  « Ajouter Cc / Cci » dépliant deux champs CC et CCI (même UX que le
+  composer de réponse).
+- Les adresses saisies sont **copiées sur l'email d'accusé de réception**
+  envoyé au client à la création (auparavant `cc`/`bcc` étaient forcés à
+  `null`) et stockées sur le message initial du ticket — donc visibles dans
+  le fil de conversation.
 
 ## [1.10.147797] — 2026-05-26
 
-### Fixed
+### Fixed — Assistant IA / Codex : erreur `refresh_token_reused` (401)
 
-- **Assistant IA / génération de réponse en erreur `refresh_token_reused`.**
-  Sur les instances utilisant le compte Codex/OpenAI du serveur, l'Assistant
-  IA pouvait cesser de fonctionner au bout de quelques heures avec une erreur
-  `401 refresh_token_reused`. Cause : le jeton d'authentification est
-  renouvelé automatiquement à l'intérieur du conteneur, mais la synchronisation
-  interne écrasait périodiquement ce jeton fraîchement renouvelé par l'ancienne
-  copie (déjà consommée) présente sur le serveur hôte. La synchronisation passe
-  désormais en mode « mise à jour uniquement » : le jeton renouvelé par le
-  conteneur est préservé, tandis qu'un nouveau `codex login` sur l'hôte continue
-  de se propager normalement.
-  - *Récupération sur une instance déjà affectée* : exécuter `codex login` sur
-    le serveur hôte, puis
-    `docker compose up -d --force-recreate ai-service web`.
+- **Cause racine** : le token OAuth Codex (`auth.json`) est tourné **dans le
+  conteneur** quand le token d'accès expire — les refresh tokens OpenAI sont
+  à usage unique (rotation). La copie host (`/root/.codex`, bind-mount RO)
+  n'est jamais tournée. La boucle de re-sync de `docker-claude-init.sh` faisait
+  un `cp -a` **inconditionnel** toutes les 5 min, écrasant le token fraîchement
+  tourné du volume par la copie host **déjà consommée** → la prochaine
+  génération IA rejouait un refresh token mort → `401 refresh_token_reused`.
+- **Correctif** : passage à `cp -au` (update-only basé sur la mtime) pour la
+  synchro Codex host→volume, au démarrage et dans la boucle. Un token tourné
+  par le conteneur (volume plus récent) est désormais préservé ; un re-login
+  host (host plus récent) ou un premier boot (volume vide) se propage toujours.
+  Le conteneur devient auto-suffisant pour la rotation Codex.
+- **Récupération** sur une instance déjà cassée : `codex login` sur le host
+  puis `docker compose up -d --force-recreate ai-service web`.
 
 ## [1.10.147796] — 2026-05-26
 
-### Fixed
+### Fixed — Réponses ticket bloquées par le WAF (PowerShell, scripts, regex)
 
-- **Réponses ticket contenant du code technique bloquées sans message.**
-  Lorsqu'un agent envoyait une réponse (ou créait un ticket / une note
-  interne) contenant un script PowerShell, une commande shell, une
-  expression régulière ou une requête SQL, l'envoi pouvait échouer
-  silencieusement : aucun message n'apparaissait dans le fil et l'agent
-  pensait son message parti. Cause : votre WAF / Cloudflare considère ces
-  patterns techniques comme des tentatives d'injection (RCE/XSS/SQLi) et
-  rejette le POST en 403 avant qu'il n'atteigne l'application. Le contenu
-  rédigé par l'agent est désormais encodé de façon transparente avant
-  l'envoi et décodé côté serveur, ce qui contourne la règle WAF sans rien
-  changer au stockage ni à l'affichage. Ce traitement, déjà appliqué aux
-  articles de la base de connaissances en 1.10.147795, couvre maintenant
-  les réponses publiques, les notes internes et la création de tickets.
-- **Message d'erreur explicite en cas de blocage.** Si un envoi échoue
-  malgré tout (autre motif côté WAF, coupure réseau), un message
-  « Envoi bloqué — réessayez ou contactez l'administrateur » s'affiche
-  désormais, au lieu d'un silence trompeur.
+- **Cause racine** : sur une instance derrière Sophos XGS + Cloudflare, une
+  réponse d'agent contenant un script technique (PowerShell
+  `Get-WinEvent -FilterHashtable @{…} | Where-Object { $_.Id -in … }`,
+  bash, regex avec `|` `\.`, SQL pédagogique) matche les règles managées
+  OWASP CRS (RCE/XSS/SQLi) et le POST de la Server Action est 403 AVANT
+  d'atteindre le container — aucune trace serveur, et l'UI ne signalait
+  rien (l'agent croyait son message parti). Même cause que la sauvegarde
+  KB corrigée en v1.10.147795.
+- **Fix applicatif** (les règles WAF ne sont PAS relâchées) : nouveau
+  helper partagé `apps/web/src/lib/waf-encoding.ts`
+  (`encodeBodyForWaf` / `decodeBodyFromWaf`, préfixe `b64:`). Le contenu
+  rédigé par l'agent est base64-encodé côté client et décodé côté serveur,
+  rendant le payload opaque au pattern-matching du WAF. Appliqué à la
+  **réponse publique** (`addReply`), la **note interne** (`createNote`) et
+  la **création de ticket** (`createTicket`). Le KB réutilise désormais ce
+  même helper. DB inchangée (HTML/texte clair), rendu identique,
+  backwards-compatible avec les payloads non préfixés.
+- **Remontée d'erreur** : si un POST échoue malgré l'encodage (autre
+  pattern WAF, timeout, réponse non exploitable), un toast explicite
+  « Envoi bloqué — … » s'affiche désormais sur la réponse, l'envoi-et-
+  clôture, la note interne (qui avalait toute erreur silencieusement) et
+  la création de ticket.
 
 ## [1.10.147795] — 2026-05-25
 
-### Fixed
+### Fixed — Sauvegarde KB bloquée par le WAF après reformatage IA
 
-- **Sauvegarde d'article KB bloquée après reformatage IA.** Quand vous
-  cliquiez sur **✨ Améliorer avec IA** puis sur **Mettre à jour
-  l'article**, l'enregistrement échouait avec un toast générique
-  « Échec de l'enregistrement ». Cause : votre WAF / Cloudflare bloque
-  les patterns de callouts GitHub-style (`> [!WARNING]`, `> [!TIP]`,
-  `> [!INFO]`) que Claude insère systématiquement dans le markdown
-  reformaté, les considérant comme une tentative d'injection XSS — le
-  POST était rejeté en 403 avant même d'atteindre l'application. Le
-  contenu KB est désormais transparenté encodé avant l'envoi
-  (préfixe `b64:`) et décodé côté serveur, ce qui contourne la règle
-  WAF sans rien changer au stockage en base ni à l'affichage des
-  articles.
+- **Cause racine** : le markdown généré par Claude (`/api/ai/kb/format`)
+  utilise les callouts GitHub-style `> [!WARNING]`, `> [!TIP]`,
+  `> [!INFO]`. La règle managée Cloudflare WAF "XSS/Injection" matche le
+  pattern `[!XXX]` et 403 le POST Server Action AVANT qu'il n'atteigne
+  le container — donc aucune trace côté serveur, juste un toast
+  générique côté UI. Reproduisible aussi en collant manuellement le
+  contenu IA dans un article neuf.
+- **Fix** : `apps/web/src/app/(dashboard)/kb/[id]/article-editor.tsx`
+  encode désormais le `content` markdown en `b64:<base64>` avant le
+  POST. `apps/web/src/lib/actions/kb.actions.ts` (createArticle +
+  updateArticle) détecte le préfixe `b64:` et décode transparently.
+  Le DB stocke toujours du markdown clair, le rendu reste identique.
+  Backwards-compatible avec les payloads non préfixés.
 
-### Changed — IMPORTANT pour les opérateurs
+### Fixed — Server Actions 403 + duplicate Tiptap Link
 
-- **Nouvelle variable d'environnement requise** :
-  `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`. Sans cette variable, chaque
-  redéploiement Docker générait des identifiants de Server Actions
-  différents, ce qui cassait tous les onglets actuellement ouverts
-  par vos agents (erreur **403 / Failed to find Server Action** lors
-  du premier clic après une mise à jour, résolu uniquement par un
-  hard-refresh). Avec une clé stable, les onglets ouverts continuent
-  de fonctionner après chaque redéploiement.
-  - **À faire** : générer la clé une seule fois et l'ajouter dans
-    votre `.env` :
-    ```
-    openssl rand -base64 32
-    ```
-    puis ajouter dans `/opt/ticketbrainy/.env` :
-    ```
-    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<la-valeur-générée>
-    ```
-  - **Sans rotation** : gardez la même valeur. Ne la changez que si
-    vous suspectez une fuite (auquel cas tous les onglets ouverts
-    redeviendront invalides, comportement attendu).
-
-- `SERVER_ACTIONS_ALLOWED_ORIGINS` (optionnelle) — l'hôte extrait de
-  `APP_URL` est désormais autorisé automatiquement pour les Server
-  Actions derrière reverse proxy / WAF. Définissez cette variable
-  uniquement si vous servez l'application depuis plusieurs noms de
-  domaine.
+- `experimental.serverActions.allowedOrigins` lit désormais
+  automatiquement le host de `APP_URL` (plus besoin de config manuelle
+  derrière un reverse proxy). Override possible via
+  `SERVER_ACTIONS_ALLOWED_ORIGINS=host1,host2:port`.
+- `experimental.serverActions.bodySizeLimit` passé à 2MB pour les
+  articles KB longs.
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (env var) passée au build via
+  Docker build arg → IDs Server Actions stables entre rebuilds. Sans
+  cette clé, chaque redeploy cassait tous les onglets ouverts (403
+  "Failed to find Server Action" jusqu'au hard-refresh).
+- `KbEditor` désactive explicitement le Link de StarterKit Tiptap v3
+  pour ne plus avoir le warning `Duplicate extension names: ['link']`.
+- Toast d'erreur du save expose le message Next.js réel au lieu du
+  générique "Échec de l'enregistrement".
 
 ## [1.10.147793] — 2026-05-25
 
-### Added
+### Added — KB : bouton « ✨ Améliorer avec IA » dans l'éditeur d'article
 
-- **Bouton « ✨ Améliorer avec IA » dans l'éditeur d'article KB.**
-  L'éditeur visuel introduit en v147792 restait passif : un texte brut
-  collé (par exemple une procédure pas-à-pas) restait brut. Vous pouvez
-  désormais cliquer sur **✨ Améliorer avec IA** en haut à droite de la
-  barre d'outils pour que Claude reformate le contenu en article
-  structuré : sections **Contexte / Diagnostic / Procédure / Conseils**,
-  étapes numérotées avec titres d'action (`### Étape 1 : Vérifier
-  l'alimentation`), encarts **Conseil / Attention / Info** insérés
-  automatiquement aux bons endroits, valeurs techniques (commandes,
-  chemins, durées) préservées à l'identique. Aucune invention de
-  contenu. Utilise le même modèle que SmartReply (réglable dans
-  *Paramètres → XpertTeamIA*).
+- L'éditeur Tiptap (v147792) restait passif : un texte brut collé restait
+  brut. L'utilisateur s'attendait à ce que la KB **retravaille** la mise
+  en page. Ajout d'un bouton dégradé violet/fuchsia à droite de la
+  toolbar qui POST le contenu courant à `/api/ai/kb/format` (proxy →
+  `ai-service` `/kb/format`).
+- `apps/ai-service/src/kb/formatter.ts` — appelle Claude avec un prompt
+  système strict : structure `## 🔍 Contexte / ## 📋 Diagnostic /
+  ## ✅ Procédure (### Étape N : <titre action-orienté>) / ## 💡 Conseils`,
+  insertion de callouts `> [!TIP/WARNING/INFO]` aux bons endroits,
+  préservation littérale des valeurs techniques (commandes, durées,
+  paths), pas d'invention. Réutilise le model setting `ai.smartReplyModel`.
+- `apps/ai-service/src/routes/kb.ts` — route `POST /kb/format`, garde-fou
+  50 000 chars, registered dans `server.ts`.
+- `apps/web/src/app/api/ai/[...path]/route.ts` — ajout de `kb/format` à
+  l'allowlist (rate-limit AI standard appliqué).
+- `apps/web/src/components/kb/kb-editor.tsx` — handler `enhanceWithAI` :
+  confirm avant écrasement d'un article déjà structuré, loading spinner,
+  toast success/error, conversion MD→HTML pour réinjecter dans Tiptap.
 
 ## [1.10.147792] — 2026-05-25
 
-### Fixed
+### Fixed — Génération KB depuis ticket résolu : HTML brut + résolution tronquée
 
-- **Création KB depuis ticket résolu : contenu nettoyé et complet.** Le
-  bouton « Résolu + Créer KB » générait un article qui (1) affichait du
-  HTML brut (`<html><head>…`) quand la réponse agent n'avait pas de
-  partie texte, et (2) tronquait la procédure à 300 caractères — les
-  étapes `Step 1`, `Step 2`, etc. de la réponse agent étaient perdues.
-  Désormais : l'HTML est nettoyé, les brouillons non envoyés sont
-  ignorés, la dernière réponse réellement envoyée par l'agent est
-  utilisée comme source, et les marqueurs `Step N` / `Étape N` sont
-  convertis en sections Markdown `### Étape N : …` complètes.
+- **Cause racine** : `generateKbArticle()` concaténait `m.bodyText || m.body`
+  pour tous les messages du ticket, puis coupait à 300 caractères. Quand
+  `bodyText` était vide (CUSTOMER_REPLY HTML mal parsé), le `body` HTML
+  brut (`<html><head>…`) atterrissait dans l'article ; la coupure à 300
+  caractères mangeait toutes les `Step 1..10` rédigées par l'agent ;
+  enfin les brouillons (`isDraft=true`) polluaient la source.
+- **Fix** : trois helpers isolés et testés
+  (`apps/web/src/lib/kb-generator/content.ts`) :
+  - `messageToPlainText(body, bodyText)` — strip HTML, decode entities,
+    coupe signatures (`--`, `Sent from my iPhone`, etc.) ;
+  - `pickResolutionSourceText(messages)` — prend la dernière REPLY agent
+    non-draft (puis FORWARDED, puis INITIAL en dernier recours) ;
+  - `buildFallbackResolutionMarkdown(text)` — détecte `Step 1:` … `Step N:`
+    et émet `### Étape N : <première phrase>` + corps complet, sans
+    troncature. Accepte aussi les marqueurs français `Étape N`.
+- 19 tests unitaires (`apps/web/tests/kb-generator-content.test.mjs`),
+  exécutables via `npx tsx --test`.
 
-### Changed
+### Changed — KB : éditeur WYSIWYG Tiptap remplace le textarea Markdown
 
-- **Éditeur d'articles KB désormais en mode visuel (WYSIWYG).** L'écran
-  de création / édition d'article (`/kb/new`, `/kb/[id]`) utilisait un
-  textarea Markdown brut, qui figeait sur les longs contenus et obligeait
-  les agents à taper la syntaxe Markdown à la main. Remplacé par un
-  éditeur Tiptap avec barre d'outils visuelle (gras, italique, code,
-  titres, listes, citation, lien, et boutons dédiés pour insérer les
-  encarts **Conseil / Attention / Info**). La sauvegarde reste en
-  Markdown, donc les articles existants s'ouvrent sans conversion.
+- L'écran d'édition d'article (`/kb/[id]`, `/kb/new`) figeait sur de longs
+  contenus (re-render Markdown synchrone à chaque keystroke) et imposait
+  la saisie Markdown brute aux agents non-développeurs.
+- Nouveau composant `KbEditor` (`apps/web/src/components/kb/kb-editor.tsx`) :
+  Tiptap 3 avec toolbar visuelle (B/I/Code, H2/H3, listes, citation, lien,
+  + boutons Conseil/Attention/Info qui insèrent les callouts
+  `> [!TIP/WARNING/INFO]`). Persistance toujours en Markdown :
+  conversion `marked` (MD→HTML) à l'ouverture, `turndown` + plugin GFM
+  (HTML→MD) débouncé à 250ms à la sortie. Les callouts existants
+  survivent l'aller-retour et restent stylisés en lecture.
+- Dépendances ajoutées : `marked@18.0.3`, `turndown@7.2.4`,
+  `turndown-plugin-gfm@1.0.2`, `@types/turndown@5.0.6` (toutes
+  ≥ 7 jours, quarantaine supply-chain OK).
 
 ## [1.10.147790] — 2026-05-21
 
-### Fixed
+### Fixed — Rapport backup quotidien : task hebdomadaire toujours "✅" tous les jours
 
-- **BackupMonitor — rapport Telegram quotidien : un job hebdomadaire
-  apparaissait ✅ tous les jours.** Si vous aviez configuré un backup
-  qui ne tourne qu'un seul jour de la semaine (ex. SBTP EXT-USB le
-  vendredi), son ✅ du vendredi continuait d'apparaître sur le rapport
-  quotidien de 06h00 tous les jours suivants, jusqu'au vendredi
-  suivant. Les jobs Lun-Ven n'étaient pas concernés car ils avaient
-  une ligne « légitime » du jour précédent qui poussait la stale via
-  la dédup interne. Désormais, le rapport ne regarde plus
-  « les lignes touchées dans les 24h » mais « la date cible du backup
-  selon le planning configuré » :
-  - SBTP EXT-USB (Vendredi 12-18) → apparaît dans le rapport du
-    **samedi matin** uniquement, le reste de la semaine il est marqué
-    `➖ SBTP EXT-USB — --` (NOT_SCHEDULED).
-  - Backup Mon-Fri overnight (21h-06h) → apparaît du mardi matin au
-    samedi matin. Lundi/Dimanche → `➖`.
-  - Backup quotidien → apparaît tous les matins comme avant.
-  Aucune action requise côté client : l'emoji `➖` était déjà
-  supporté depuis v1.10.147783.
+- **Cause racine** : `runBackupCycle` (mail-service) ré-écrit
+  `BackupCheck.checkedAt = now()` à chaque cycle (toutes les ~5 min)
+  pour TOUTE ligne dont l'email correspondant est encore dans la
+  fenêtre IMAP de 192h. Le rapport quotidien filtrait par
+  `checkedAt >= now - 24h` → la ligne SUCCESS du vendredi 15/05
+  apparaissait comme « fraîche de moins de 24h » tous les jours du
+  samedi au vendredi suivant. Symptôme uniquement visible sur les
+  tasks à planning hebdomadaire (vendredi-only) car les tasks
+  Lun-Ven avaient toujours une ligne récente légitime qui poussait
+  la stale via la dédup « dernier check par task ».
+- **Fix** : le rapport ne filtre plus par `checkedAt` mais par
+  `BackupCheck.date` (= date cible du backup, déterministe via
+  `determineCheckDate()`). Pour chaque task activée, calcul de
+  `lastCompletedScheduledDate(task, now)` = dernier jour planifié
+  dont la fenêtre est fermée. Si cette fenêtre s'est fermée dans les
+  dernières 24h → on remonte le `BackupCheck` correspondant et on
+  rend son statut. Sinon → ligne `NOT_SCHEDULED` (➖).
+  Résultat concret : SBTP EXT-USB (Vendredi 12-18) apparaît
+  ✅/⚠️/❌ uniquement dans le rapport du **samedi matin** ; Lun-Dim
+  → ➖ « SBTP EXT-USB — -- ». Mon-Fri overnight (21h-06h) apparaît
+  Mar-Sam ; Lun/Dim → ➖.
+- **Défensif** : Step 1 ne ré-écrit plus la ligne BackupCheck si
+  rien n'a changé matériellement (status/emailSubject/found/detail
+  identiques). Ceinture + bretelles : même si quelqu'un réintroduit
+  un filtre `checkedAt` plus tard, l'aliasing ne pourra plus se
+  manifester. Économise aussi ~7 writes inutiles par task par cycle.
+- L'emoji `➖ NOT_SCHEDULED` était déjà supporté côté telegram-bot
+  depuis v1.10.147783, aucun changement requis côté notif.
 
 ## [1.10.147789] — 2026-05-21
 
-### Fixed
+### Fixed — Visibilité de la fusion de tickets
 
-- **Fusion de tickets — la trace côté UI était invisible.** Quand
-  vous fusionnez plusieurs tickets dans un seul (action « Fusionner »
-  depuis la liste des tickets), le travail de regroupement (messages,
-  notes, étiquettes, temps passé) était bien fait en base, mais
-  l'interface n'affichait **aucune** indication visible une fois la
-  page rouverte : pas de bandeau, pas de ligne dans l'historique
-  d'activité, et l'URL d'un ticket fusionné renvoyait une page
-  pratiquement vide sans message explicatif.
-  Cette release ajoute :
-  1. Un **bandeau violet persistant** en tête du ticket cible
-     listant les tickets sources qui ont été absorbés
-     (« Ce ticket a absorbé #32 « Dylan », #45 « … » »).
-  2. Une **ligne dédiée dans le flux d'activité** (« a fusionné les
-     tickets #32 « Dylan » dans celui-ci »).
-  3. Une **redirection automatique** depuis l'URL d'un ticket fusionné
-     vers le ticket cible, avec un message « Le ticket #N a été
-     fusionné dans celui-ci. ». Plus de page vide ou de 404 obscur.
-  4. Traduction complète FR/EN/DE/ES/IT.
-  Note : les tickets déjà fusionnés avant cette release continueront
-  d'afficher une page vide quand on ouvre leur URL source (pas de
-  données rétroactives à reconstituer) — le bandeau côté cible, lui,
-  reste visible pour toutes les fusions historiques grâce à
-  l'historique d'activité.
+- **Bandeau persistant sur le ticket cible** quand un merge a eu lieu :
+  la page ticket lit les activités `tickets_merged` déjà chargées et
+  affiche en tête un encart violet listant tous les tickets sources
+  absorbés (« Tickets fusionnés — Ce ticket a absorbé #32 « Dylan » »).
+  Reproduit le bug constaté en prod sur les tickets #29 / #32 :
+  la fusion fonctionnait en base, mais l'UI n'affichait aucune trace
+  visible côté ticket cible une fois la page rouverte.
+- **Ligne dédiée dans le flux d'activité** : le composant
+  `ActivityFeed` (apps/web/src/app/(dashboard)/tickets/[id]/activity-feed.tsx)
+  ne savait pas rendre `action === "tickets_merged"` → la ligne tombait
+  silencieusement dans le fallback générique. Ajout d'une branche
+  `case "tickets_merged"` qui formatte la liste `mergedTickets`
+  (`{ number, subject }[]`) et utilise les nouvelles clés i18n
+  `activity.ticketsMerged` / `activity.ticketsMergedInto`.
+- **Redirection 302 depuis le ticket source soft-supprimé** vers le
+  ticket cible, avec toast explicite « Le ticket #N a été fusionné dans
+  celui-ci. ». Le modèle `Ticket` gagne un champ
+  `mergedIntoTicketId String?` (nullable, indexé) renseigné par
+  `mergeTickets()` dans la même transaction que `deletedAt`. Sans ce
+  champ, ouvrir l'URL d'un ticket source soft-supprimé rendait une
+  page vide (messages/activities transférés vers la cible) sans
+  indication de la fusion.
+- Traductions ajoutées dans les 5 locales (fr/en/de/es/it) :
+  `activity.ticketsMerged`, `activity.ticketsMergedInto`,
+  `tickets.mergedBanner.title`, `tickets.mergedBanner.body`,
+  `tickets.mergedRedirect.toast`, plus 3 clés
+  `tickets.mergedSource.*` réservées pour un fallback futur.
+
+### Schema
+
+- `Ticket.mergedIntoTicketId String?` + `@@index([mergedIntoTicketId])`.
+  Migration appliquée par le service `migrate` au démarrage
+  (`prisma db push`). Aucune donnée existante n'est rétro-fillée :
+  les tickets fusionnés avant cette release continueront d'afficher
+  une page vide quand on ouvre leur URL source (l'activité
+  `tickets_merged` côté cible, elle, reste visible grâce au bandeau).
 
 ## [1.10.147788] — 2026-05-20
 
 ### Security — Supply chain hardening (Phase 1)
 
-- **Images Docker maintenant pinées par version exacte au lieu de
-  `:latest`.** Le `docker-compose.yml` référence désormais
-  `ghcr.io/kr1s57/ticketbrainy-{web,ai,mail,telegram,migrate}:1.10.147788`
-  et `searxng/searxng@sha256:b5d4892d…` au lieu de `:latest`. Plus
-  aucune image ne peut être tirée silencieusement par `docker compose
-  pull` sans avoir été validée par une release TB explicite (anti
-  supply-chain). Le workflow opérateur ne change pas :
-  `cd /opt/ticketbrainy && git pull && docker compose pull && docker
-  compose up -d` synchronise le compose à la nouvelle version épinglée,
-  puis pull exactement cette version. Aucune action manuelle requise
-  pour les installations existantes.
-- **Avertissement au démarrage si `SECURITY_ALLOWLIST_BYPASS=true`** —
-  bannière `console.warn` encadrée dans `docker logs aidesk-web-1` à
-  chaque boot du conteneur web tant que le bypass break-glass de
-  l'allowlist IP admin est actif. Évite de laisser le bypass actif par
-  inattention après une intervention de récupération.
+- **Toutes les images Docker sont maintenant pinées par tag de version
+  explicite.** Le `docker-compose.yml` public référençait jusqu'ici
+  `ghcr.io/kr1s57/ticketbrainy-{web,ai,mail,telegram,migrate}:latest`
+  pour les 5 services applicatifs, plus `searxng/searxng:latest` pour
+  le moteur de recherche du builder RAG. Conséquence : un `docker
+  compose pull` pouvait télécharger silencieusement une image que
+  l'opérateur n'avait jamais validée (régression amont, ou pire,
+  compromission de la chaîne d'approvisionnement). Le compose pin
+  maintenant chaque image TB à la version exacte de la release
+  (`:1.10.147788` ici) et SearXNG à son digest SHA-256
+  (`@sha256:b5d4892d…`). Le workflow opérateur reste identique
+  (`git pull && docker compose pull && docker compose up -d`) : le
+  `git pull` synchronise le compose à la nouvelle version épinglée,
+  puis `docker compose pull` télécharge exactement cette version.
+  Aucune perte de reproductibilité, plus de pull silencieux d'image
+  inconnue.
+- **`scripts/release-lockstep.sh` réécrit automatiquement les tags
+  épinglés du compose public à chaque release** (`sed` sur les 5
+  lignes `ghcr.io/kr1s57/ticketbrainy-*`). Garantit que le `git pull`
+  côté client tire bien la version qui vient d'être poussée, et qu'on
+  ne dérive plus jamais sur des `:latest` non synchronisés.
+- **Avertissement explicite au boot quand `SECURITY_ALLOWLIST_BYPASS=true`.**
+  Le bypass break-glass de l'allowlist IP admin / geo-block / paramètres
+  sécurité écrivait déjà une ligne dans le journal d'audit à chaque
+  utilisation, mais ne signalait rien lors du démarrage du conteneur
+  web. `apps/web/src/instrumentation.ts` affiche maintenant une
+  bannière `console.warn` encadrée si la variable est active — visible
+  immédiatement dans `docker logs aidesk-web-1`. Aucun impact
+  fonctionnel sinon (la variable reste vide par défaut).
 
 ## [1.10.147787] — 2026-05-20
 
 ### Added
 
-- **Visibilité des personnes en copie sur chaque ticket.** Quand un
-  client envoie un mail à votre helpdesk en mettant plusieurs personnes
-  en copie (Cc), le ticket conserve désormais la liste complète des
-  destinataires et chaque message du fil affiche une ligne
-  « En copie : … » sous le nom de l'expéditeur. Avant ce patch, ces
-  contacts étaient perdus à la réception : votre agent n'avait aucun
-  moyen de savoir qui d'autre suivait l'échange, ce qui pouvait poser
-  problème pour les tickets multi-interlocuteurs (client + son
-  prestataire, client + son responsable, etc.). Rétro-compatible : les
-  tickets déjà reçus avant ce patch ne montrent rien (aucune donnée à
-  rejouer), seuls les nouveaux mails entrants exposent les Cc.
+- **Visibilité des destinataires en copie (CC) sur les tickets.** Quand
+  un client envoie un mail à l'helpdesk avec plusieurs personnes en
+  copie, le ticket est désormais créé en conservant la liste complète
+  des CC, et chaque message du fil affiche une ligne « En copie : … »
+  sous l'en-tête expéditeur/date. Avant ce patch, la colonne
+  `TicketMessage.cc` existait en base mais n'était jamais peuplée :
+  `apps/mail-service/src/imap/parser.ts` n'extrayait que `from` et `to`
+  depuis `mailparser`, et `apps/mail-service/src/imap/listener.ts`
+  créait les messages INITIAL et CUSTOMER_REPLY sans `cc`/`bcc`. Le
+  parser expose maintenant `cc` et `bcc` (typés comme `to`), le
+  listener calcule la chaîne via `buildCcString()` (déduplication +
+  exclusion de la mailbox et de l'expéditeur pour éviter le bruit) et
+  `apps/web/src/app/(dashboard)/tickets/[id]/conversation.tsx` rend le
+  bloc CC discrètement quand il est présent. Rétro-compatible : les
+  anciens tickets dont la colonne `cc` est `NULL` ne montrent rien.
+  Clé i18n `tickets.message.cc` ajoutée pour les 5 langues.
 
 ## [1.10.147786] — 2026-05-20
 
 ### Fixed
 
-- **Régression critique — vos agents ne recevaient plus aucune notif
-  "Nouveau ticket" pour les tickets créés à la main depuis l'interface.**
-  Cas reproductible : un agent voit un mail client dans Outlook avant
-  que TicketBrainy n'ait fini son tour de relève IMAP, clique sur
-  « Nouveau ticket » dans la barre d'outils pour ne pas attendre, le
-  ticket est créé… mais aucun agent ne reçoit la notification email,
-  ni la notification dans la cloche en haut à droite, ni l'alerte
-  Telegram. Seul l'accusé de réception au client était envoyé.
-  La fan-out était isolée dans le flux IMAP : tout ticket créé hors d'un
-  mail entrant (création manuelle, bouton « Forcer la collecte »)
-  passait à travers. La diffusion (cloche, email aux agents abonnés,
-  Telegram) est désormais déclenchée depuis tous les points d'entrée —
-  un tenant frais sans abonnement explicite tombe en fallback sur les
-  admins et les superviseurs.
+- **Régression critique — Notifications "Nouveau ticket" muettes pour
+  les tickets créés via l'UI web.** Reproduit en prod : un agent crée
+  un ticket à la main pour un client (appel téléphonique, mail vu dans
+  Outlook avant que l'IMAP polle), aucun agent ne reçoit la notif email
+  ni in-app ni Telegram. Seul l'accusé de réception au client part. La
+  fan-out vivait uniquement dans `apps/mail-service/src/imap/listener.ts`
+  et `notifyNewTicket()` côté web était défini mais jamais appelé (et
+  cassé : `publishMailJob` avec `mailboxId: ""` faisait crasher
+  `getTransporter` dans le mail-service). Réécriture de
+  `notifyNewTicket()` pour mirror le bloc du listener (subscribers +
+  fallback admins/supervisors, `mail:outgoing` par destinataire avec
+  vrai `mailboxId`/`from`, `db.notification.createMany`, publish Redis
+  `ticket:new` pour Telegram), et appel ajouté dans :
+  - `apps/web/src/lib/actions/ticket.actions.ts` (`createTicket`) —
+    chemin manuel UI.
+  - `apps/web/src/lib/actions/mailbox-fetch.actions.ts` — chemin
+    force-poll côté web (bypass mail-service).
 
 ## [1.10.147785] — 2026-05-19
 
 ### Fixed
 
 - **Captures d'écran collées dans une réponse : enfin visibles dans le
-  fil du ticket.** Depuis l'ajout du collage de captures d'écran
-  (1.10.147765), votre client recevait bien l'image mais celle-ci
-  n'apparaissait pas dans votre réponse côté agent — seule une pièce
-  jointe attachée au mail était visible. L'image collée est désormais
-  (a) visible directement dans le bubble de réponse de la conversation,
-  (b) intégrée inline dans le mail reçu par le client (et non plus
-  envoyée comme pièce jointe séparée), (c) toujours téléchargeable
-  depuis la liste des pièces jointes du ticket.
+  fil du ticket.** Depuis l'ajout du paste-from-clipboard (v1.10.147765),
+  le client recevait bien la pièce jointe mais l'image n'apparaissait
+  pas dans le bubble de réponse côté agent. Deux bugs en cascade :
+  1. `html-sanitize.ts` n'autorisait que les `<img src="/api/uploads/…">`
+     et `data:image/…` ; le tag `<img src="/api/attachments/view/drafts/…">`
+     inséré par Tiptap était strippé avant stockage. Ajout de
+     `/api/attachments/view/` à l'allowlist.
+  2. `extractInlineImages` comparait l'URL du `<img>` (qui pointe sur
+     `drafts/<userId>/<uuid>.<ext>`) à `Attachment.storagePath` (qui
+     pointe sur `messages/<msgId>/<uuid>.<ext>` après le `linkDraftAttachments`),
+     donc aucun match → aucune réécriture `cid:` → aucune inline image
+     dans le mail sortant. `linkDraftAttachments` renvoie désormais
+     `originalPath` (le chemin draft pré-déplacement) et `extractInlineImages`
+     matche en priorité dessus.
+
+  Résultat : la capture est désormais (a) visible dans le fil de
+  conversation TB via le rewrite `cid: → /api/attachments/<id>`,
+  (b) embedée inline dans l'email reçu par le client (et non plus
+  envoyée comme PJ séparée), (c) toujours téléchargeable depuis la
+  liste des PJ du ticket.
 
 ## [1.10.147784] — 2026-05-19
 
 ### Fixed
 
-- **Sidebar mailbox : le dépliage ne se réinitialise plus quand vous
-  cliquez sur un ticket.** L'état d'expansion (boîtes ouvertes / fermées)
-  est désormais persisté dans le navigateur. Une boîte que vous avez
+- **Sidebar mailbox : le dépliage ne se réinitialise plus en cliquant
+  sur un ticket.** Les sets `expandedMailboxes` et `userCollapsed` sont
+  désormais persistés en `localStorage` (`tb.sidebar.expanded` /
+  `tb.sidebar.collapsed`) et hydratés via `useEffect` après mount pour
+  éviter une mismatch SSR/CSR (anti React #418). L'auto-expand sur
+  activité respecte les replis explicites de l'utilisateur : une boite
   fermée manuellement reste fermée même si un nouveau mail arrive,
-  jusqu'à ce que vous la rouvriez explicitement.
+  jusqu'à ce que l'utilisateur la rouvre.
 - **Collision tickets : le lock d'édition ne peut plus être volé.**
-  Auparavant, si un agent rédigeait une réponse et qu'un second agent
-  ouvrait le même ticket, certaines actions du second (coller du
-  contenu, déclencher un draft IA, ou simplement focus l'éditeur)
-  pouvaient voler le verrou d'édition au premier — qui se voyait
-  alors bloqué avec le message « un autre agent est en cours
-  d'édition ». Le serveur protège désormais le verrou actif : le
-  second agent voit le ticket en **mode consultation** avec un message
-  clair indiquant qui détient l'édition, sans interférer avec l'agent
-  qui travaille. Le verrou se libère automatiquement après 30 s sans
-  heartbeat (fermeture d'onglet, crash navigateur).
-
-### Mise à jour
-
-```bash
-docker compose pull
-docker compose up -d
-```
+  Bug : le POST `/api/tickets/[id]/lock?mode=editing` écrasait
+  inconditionnellement `editingBy`. Conséquence : si l'agent A était
+  en train de rédiger et que l'agent B ouvrait le même ticket (et
+  qu'un événement Tiptap — paste, draft IA, focus — déclenchait
+  `startEditing` chez B), A se voyait bloqué avec l'overlay « un autre
+  agent est en cours d'édition ». Le serveur vérifie maintenant que
+  le lock est libre / périmé / déjà détenu par l'appelant avant
+  d'overwrite, sinon il renvoie **409** + identité du titulaire.
+  Côté client, `useEditingLock.startEditing` lit le 409 et bascule le
+  composer en read-only (Tiptap `editable: false`, overlay
+  « Agent X en cours d'édition ») au lieu de démarrer le heartbeat.
+  Le heartbeat lui-même revalide à chaque cycle et abandonne s'il
+  perd la propriété.
 
 ## [1.10.147783] — 2026-05-19
 
 ### Fixed
 
 - **Rapport backup Telegram : doublons par tâche (6-7 lignes par job).**
-  Bug introduit en v1.10.14778. Le rapport listait désormais ligne par
-  ligne chacun des checks historiques (jusqu'à 8 jours) à chaque cycle,
-  d'où la duplication massive. Le rapport ne montre désormais que le
-  check le plus récent de chaque tâche.
-- **Rapport backup : format remis à celui que les admins
-  connaissaient.** Header avec jour en français, séparateur `━━━`,
-  ligne par tâche au format
-  `<emoji> <taskName> — <sujet email tronqué> (HH:MM)`, résumé
-  `Résultat: X/Y ✅ | Z/Y ⚠️ | W/Y ❌` en bas. Les tâches sans email
-  du jour sont visibles en `⚪ <taskName> — --`.
+  Bug introduit en v1.10.14778 : la query filtrait sur
+  `checkedAt: last 24h`, or le Step 1 du polling met à jour `checkedAt`
+  sur **tous** les checks historiques (jusqu'à 8 jours) à chaque cycle
+  pour les emails qui matchent. Résultat : tous les checks historiques
+  remontaient dans le rapport, dupliqués par tâche. Corrigé : on liste
+  toutes les tasks actives, puis pour chaque task on garde le check
+  le plus récent (Map de dédup côté mail-service).
+- **Rapport backup : format restauré à celui que les admins
+  connaissent.** Header avec jour en français (`lundi 18/05/2026`),
+  séparateur `━━━`, ligne par tâche au format
+  `<emoji> <taskName> — <sujet email tronqué> (HH:MM)`, ligne `--`
+  pour les tâches sans email du jour, séparateur de fin, résumé
+  `Résultat: X/Y ✅ | Z/Y ⚠️ | W/Y ❌`.
+- **Tâches sans check du jour désormais visibles.** Avant cette
+  version, une tâche enabled sans email récent disparaissait du
+  rapport. Désormais elle apparaît en `⚪ <taskName> — --`.
 
 ### Added
 
-- **Bot Telegram : détection explicite du 409 Conflict.** Si une autre
-  instance polle avec le même token (ancien container, webhook actif),
-  le bot log un message clair avec les commandes de diagnostic. Au
-  démarrage, le bot supprime aussi tout webhook stale qui aurait pu
-  causer le 409.
-
-### Mise à jour
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-**Si vous voyez encore des doublons** ou si le bot logue 409 Conflict
-en boucle, vérifiez qu'un seul container `telegram-bot` tourne :
-
-```bash
-docker ps | grep telegram
-# devrait afficher UNE seule ligne
-```
-
-Si plusieurs containers tournent avec le même token, stoppez les
-orphelins :
-
-```bash
-docker stop <container-id-orphelin>
-docker rm <container-id-orphelin>
-```
+- **Bot Telegram : log explicite des erreurs 409 Conflict.** Si une
+  autre instance polle avec le même token (vieux container, webhook
+  actif), le bot log un message clair pointant vers `docker ps |
+  grep telegram` et `getWebhookInfo`. Au démarrage, on appelle aussi
+  `deleteWebHook` pour éliminer un webhook stale qui causerait le 409.
 
 ## [1.10.147782] — 2026-05-19
 
 ### Fixed
 
-- **Bot Telegram : aucune notification ne partait quand les Chat IDs
-  étaient saisis via l'UI.** L'UI envoyait une chaîne brute
-  (`"1602363121, 9999"`) mais le bot ne lisait que les tableaux —
-  l'envoi était silencieusement coupé. Désormais la chaîne est
-  normalisée en tableau côté web ET le bot accepte les deux formats
-  défensivement.
-- **Toggle Telegram impossible à désactiver dans certains cas.**
-  Pour les anciennes installations dont le routing était stocké en
-  boolean simple, cliquer « off » dans l'UI n'avait aucun effet.
-  Le code lit maintenant les deux schémas (boolean legacy ou
-  `{ enabled }` actuel).
-- **Rapport backup quotidien envoyé plusieurs fois après un restart.**
-  Le drapeau « déjà envoyé aujourd'hui » était en mémoire — à chaque
-  redémarrage du service mail, le rapport pouvait repartir. Il est
-  désormais persisté dans Redis avec un verrou atomique : un seul
-  rapport par jour, garanti.
-- **Erreurs Telegram silencieuses.** Les échecs d'envoi (token
-  invalide, Chat ID interdit, MarkdownV2 mal échappé) sont maintenant
-  loggés dans `docker compose logs telegram-bot`, ce qui rend le
-  diagnostic possible.
+- **Bot Telegram : aucune notification ne partait quand `allowedChatIds`
+  était saisi via l'UI.** L'UI envoyait une string brute
+  (`"1602363121, 9999"`) mais le bot ne lisait que les arrays — l'envoi
+  était silencieusement coupé. Corrigé des deux côtés :
+  - Côté web : `saveTelegramConfig` normalise la string en
+    `string[]` avant `db.setting.upsert`.
+  - Côté bot : `parseChatIds` accepte string ou array (split sur
+    virgules + espaces).
+- **Toggle Telegram impossible à désactiver quand la valeur stockée
+  était un boolean legacy.** Le code lisait
+  `routing[key]?.enabled ?? true` — sur un boolean `false`, ça
+  retournait `true` (impossible à éteindre). Désormais `parseRoutingFlag`
+  reconnaît à la fois `boolean` (legacy) et `{enabled: bool}` (nouveau
+  schéma).
+- **Rapport backup quotidien : ré-émission sur restart du container.**
+  Le drapeau « déjà tiré aujourd'hui » était en mémoire — chaque
+  restart du `mail-service` le reset, donc le rapport pouvait repartir
+  plusieurs fois. Persisté maintenant dans Redis avec `SET NX` atomique
+  + TTL 48h. Plus de doublons.
+- **`bot.sendMessage(...).catch(() => {})` silencieux.** Toute erreur
+  Telegram (token invalide, chatId interdit, MarkdownV2 mal échappé)
+  était avalée. Les trois subscribers loggent maintenant
+  `console.warn` avec le message d'erreur.
 
-### Mise à jour
+### Refactored
 
-```bash
-docker compose pull
-docker compose up -d
-```
+- Factorisation de `getNotificationTargets()`, `isRoutingEnabled()` et
+  `getTicketRouting()` dans `apps/telegram-bot/src/lib/telegram-config.ts`.
+  Les trois subscribers (backup, ticket, security) utilisent maintenant
+  la même implémentation robuste.
 
 ## [1.10.147781] — 2026-05-19
 
 ### Changed
 
 - **Heure du rapport backup Telegram accessible depuis Paramètres →
-  Telegram.** Jusqu'ici, l'heure d'envoi du rapport quotidien devait
-  être configurée dans Paramètres → Email backup. Elle est désormais
-  aussi visible juste sous le toggle « Rapports de backup », là où on
-  s'attend à la trouver. Les deux pages éditent le même paramètre, la
-  donnée reste unique.
-
-### Mise à jour
-
-```bash
-docker compose pull
-docker compose up -d
-```
+  Telegram.** Le sélecteur de l'heure d'envoi (jusqu'ici uniquement
+  dans Paramètres → Email backup) est désormais aussi visible juste
+  sous le toggle « Rapports de backup », là où on l'attend. La donnée
+  reste stockée dans `backup-email.checkTime` — les deux pages
+  modifient le même paramètre. i18n fr/en/de/es/it.
 
 ## [1.10.14778] — 2026-05-19
 
 ### Changed
 
 - **Notifications backup Telegram — un seul rapport quotidien groupé.**
-  Plus aucune alerte individuelle au fil de l'eau quand les mails de
-  backup arrivent. Le bot envoie maintenant un unique message à
-  l'heure configurée (Paramètres → Email backup → « Heure du rapport
-  Telegram »), avec emoji par statut et blocs Échecs / Avertissements
-  / Réussis. L'auto-création de tickets sur ERROR/MISSING est
-  conservée. La fenêtre du rapport couvre les dernières 24 heures, ce
-  qui capture les backups qui traversent minuit.
-- **Heure du rapport en fuseau local.** Nouvelle variable `TZ` dans
-  `.env.example` (défaut `Europe/Paris`) propagée aux services
-  `mail-service` et `telegram-bot`. L'heure sélectionnée dans l'UI
-  est désormais interprétée dans le fuseau du serveur (et non plus
-  en UTC).
+  Plus aucune alerte individuelle au fil de l'eau : le bot publie un
+  message unique à l'heure configurée (Settings → Email backup →
+  « Heure du rapport Telegram »), avec emoji par statut et bloc
+  Échecs / Avertissements / Réussis. Auto-création de tickets sur
+  ERROR/MISSING conservée. La fenêtre du rapport couvre les dernières
+  24h (capture les backups qui traversent minuit).
+- **Fuseau horaire local pour le scheduler.** Ajout de
+  `TZ=${TZ:-Europe/Paris}` sur `mail-service` et `telegram-bot` dans
+  `docker-compose.prod.yml` + nouvelle variable `TZ` dans
+  `.env.example`. L'heure choisie en UI est interprétée dans le fuseau
+  du serveur (et non plus en UTC).
 
 ### Added
 
-- **Notifications Telegram « Nouveau ticket » réellement fonctionnelles.**
-  Avant cette version, le toggle existait mais aucun événement
-  n'était publié vers le bot. Maintenant, à chaque nouveau ticket
-  (mail entrant ou création UI/API), un message formaté est envoyé
-  sur Telegram : sujet, expéditeur, boîte mail, extrait, lien direct.
-- **Sélecteur de boîtes mail pour les notifications « Nouveau ticket ».**
-  Paramètres → Telegram → toggle « Nouveaux tickets » affiche
-  désormais une liste de cases à cocher des boîtes mail actives.
-  Aucune case cochée = notifications pour toutes les boîtes (ancien
-  comportement). Cocher une ou plusieurs boîtes = notifications
-  uniquement pour celles-là.
+- **Notifications Telegram « Nouveau ticket » fonctionnelles** —
+  publication d'un canal Redis `ticket:new` à la fois côté
+  `mail-service` (mails entrants) et côté web (`engine.notifyNewTicket`,
+  tickets créés via UI/API). Le bot souscrit et envoie un message
+  formaté (sujet, expéditeur, boîte, extrait, lien direct).
+- **Sélecteur de boîtes mail pour les notifications Telegram
+  « Nouveau ticket »** : Settings → Telegram → toggle « Nouveaux
+  tickets » affiche maintenant une liste de cases à cocher des boîtes
+  actives. Aucune case cochée = toutes les boîtes. Persisté dans
+  `routing.ticket_new = { enabled, mailboxIds[] }`.
 
-### Mise à jour
 
-> **Nouvelle variable `TZ`** dans `.env.example`. Ajoutez-la à votre
-> `.env` (sinon les containers tomberont sur la valeur par défaut
-> `Europe/Paris`).
 
-```bash
-git pull
-grep -q '^TZ=' .env || echo 'TZ=Europe/Paris' >> .env
-docker compose pull
-docker compose up -d --force-recreate
-```
+### Reverted
 
-Le `--force-recreate` est nécessaire pour que la variable `TZ` ajoutée
-au `docker-compose.yml` soit propagée aux containers `mail-service`
-et `telegram-bot`.
+- **Retour à l'auto-reload du `RSCErrorBoundary`** après la session
+  diagnostique de v1.10.147772. Le build diagnostic a permis
+  d'identifier la cause exacte : `Error: Connection closed.` lors
+  du streaming RSC d'une page ticket, et **pas** un mismatch
+  d'hydratation comme on l'avait supposé. C'est Cloudflare qui
+  coupe ou corrompt le stream RSC en transit (suspects probables :
+  Email Obfuscation, Auto Minify, Rocket Loader — chacun peut
+  corrompre le framing texte d'un payload streamé).
+
+  Le boundary retrouve son comportement initial (full document
+  reload silencieux sur erreur, anti-boucle à 5 s), donc l'UX
+  redevient celle de toujours : flash bref puis le ticket
+  s'affiche. **Le bug de fond reste à fixer côté Cloudflare**
+  (voir notes ci-dessous), mais on ne dégrade plus l'UX avec
+  l'écran rouge diagnostic.
+
+### Notes opérationnelles
+
+Pour éliminer définitivement le `Error: Connection closed.` côté
+production, désactiver depuis le **dashboard Cloudflare** (zone
+`ticketbrainy.com`) :
+- **Security → Settings → Scrape Shield → Email Address
+  Obfuscation : Off**
+- **Speed → Optimization → Auto Minify : tous Off** (HTML, CSS, JS)
+- **Speed → Optimization → Rocket Loader : Off**
+- **Speed → Optimization → Brotli** peut rester ON (compression
+  pure, ne touche pas au framing)
+
+L'application envoie déjà `Cache-Control: no-transform` via
+`middleware.ts` mais CF n'honore pas tous les "no-transform" pour
+ses features Apps/Scrape-Shield — il faut passer par le dashboard.
+
+## [1.10.147772] — 2026-05-18
+
+### Changed
+
+- **Build diagnostique — `RSCErrorBoundary` n'auto-reload plus,
+  affiche le message + stack + composant stack à l'écran.** Le
+  bouton « Reload » qui apparaissait brièvement à l'ouverture de
+  certains tickets persistait malgré les patches v1.10.147768,
+  v1.10.147769 (hydration mismatch text + HTML). Le boundary
+  attrapait toujours une erreur mais le reload auto effaçait la
+  trace avant qu'on puisse la lire. Cette release retire le
+  reload automatique et affiche directement à l'écran le message
+  d'erreur, la stack JS et le component stack React. Le bouton
+  Reload reste disponible pour un déclenchement manuel. À retirer
+  dès que la vraie cause aura été identifiée et corrigée — c'est
+  une release diagnostic temporaire.
 
 ## [1.10.147771] — 2026-05-18
 
 ### Fixed
 
-- **Erreurs `502 Bad Gateway` dans la console pour les logos
-  cassés des signatures clients.** Quand un mail entrant
-  contenait un logo société hébergé sur un serveur HTTP cassé
-  ou inaccessible, le proxy d'image renvoyait un 502 que le
-  navigateur affichait comme une erreur console et une icône
-  d'image cassée. Désormais, en cas d'échec upstream, le proxy
-  renvoie silencieusement une image transparente 1×1 — l'agent
-  voit le contenu du mail sans le logo mort, et la console
-  reste propre. Aucun changement pour les images valides.
+- **`/api/proxy-image` retournait des 502 dans la console pour les
+  logos cassés dans les signatures clients.** Quand un mail entrant
+  embarque un logo société hébergé sur un serveur HTTP qui ne répond
+  plus / refuse / renvoie une page d'erreur (cas le plus fréquent :
+  domaines OVH/hosting compromis, certificats expirés, mauvais
+  Content-Type), la route proxy renvoyait un `502 Bad Gateway` et
+  laissait le navigateur afficher une icône d'image cassée. Effet
+  visible : sur certains tickets (ceux qui contiennent une signature
+  client cassée), la console DevTools affichait
+  `GET https://…/api/proxy-image?url=… 502 (Bad Gateway)`,
+  parfois confondu avec un bug de l'application.
 
-### Mise à jour
+  Fix : la route renvoie désormais une **image PNG transparente
+  1×1 avec status 200** au lieu du 502/415/413 dans tous les cas
+  d'échec upstream (fetch failed, hostname banni, content-type non
+  image, redirect trop long, taille excessive). L'agent voit le
+  contenu de l'email sans le logo mort, plus aucune erreur console
+  ne pollue le diagnostic. Les bytes du placeholder sont cachés
+  côté navigateur pendant 24 h (`Cache-Control: private, max-age=86400`)
+  pour qu'un upstream mort ne soit pas re-sondé à chaque chargement
+  de la page. Les en-têtes `X-Proxy-Status: placeholder` et
+  `X-Proxy-Reason: …` restent disponibles pour debugger si besoin.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  Note : seul le cas « image inaccessible » est concerné. Les vraies
+  réponses image valides continuent à passer en `200` avec leur
+  Content-Type natif et leur cache de 1 h habituel.
 
 ## [1.10.14777] — 2026-05-18
 
 ### Fixed
 
-- **Listes à puces et listes numérotées perdues dans l'aperçu des
-  réponses agent.** Quand un agent répondait à un ticket avec une
-  liste à puces dans l'éditeur, l'aperçu du ticket dans
-  l'interface affichait les items sans puces ni indentation (juste
-  les textes sur des lignes successives), alors que le client
-  recevait bien l'email avec les puces intactes. Les listes, les
-  en-têtes, les blockquotes, le formatage gras/italique et les
-  images insérées en ligne dans les réponses s'affichent désormais
-  correctement dans l'aperçu, en cohérence avec ce que reçoit
-  le destinataire.
+- **Listes à puces / numérotées des réponses agent perdues dans
+  l'aperçu du ticket (mais correctes dans l'email reçu par le
+  client).** Quand un agent répondait avec une liste à puces dans
+  l'éditeur Tiptap (`<ul><li>point 1</li><li>point 2</li></ul>`),
+  l'aperçu du ticket affichait juste les items sur des lignes
+  successives, sans puces ni indentation :
+  ```
+  point 1
+  point 2
+  point 3
+  ```
+  alors que le client recevait l'email avec les puces correctement
+  formatées. Cause : `getDisplayHtml()` dans
+  `apps/web/src/app/(dashboard)/tickets/[id]/conversation.tsx`
+  retombait sur `bodyText` (texte brut, sans balises) pour les
+  messages `REPLY` / `AUTO_REPLY` — un héritage de l'époque où
+  l'ancien composer ajoutait un wrapper template HTML autour de
+  la réponse. Depuis la migration vers Tiptap (v1.10.147765), le
+  `body` stocké est de l'HTML propre sans wrapper, et la fallback
+  texte n'a plus de raison d'être.
 
-### Mise à jour
+  Fix : `getDisplayHtml()` rend désormais le `body` HTML pour les
+  replies agent, exactement comme pour les messages clients. La
+  fallback `bodyText` est conservée uniquement pour les très
+  vieux replies stockés sans HTML (avant Tiptap). Ajout aussi
+  d'une routine `rewriteCidImages()` qui mappe les références
+  `cid:att-<id>@ticketbrainy` (utilisées pour les images inline
+  dans les emails sortants) vers `/api/attachments/<id>` pour
+  que les images insérées dans une réponse apparaissent
+  correctement dans l'aperçu — sans cette routine, le navigateur
+  affichait une icône d'image cassée parce que le protocole
+  `cid:` n'est compréhensible que par les clients email.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  Impact : les listes à puces, listes numérotées, en-têtes,
+  blockquotes, gras/italique, liens et images inline des
+  réponses agent s'affichent maintenant correctement dans
+  l'aperçu du ticket. Aucun changement côté email envoyé au
+  client (qui marchait déjà).
 
 ## [1.10.147769] — 2026-05-18
 
 ### Fixed
 
-- **Page blanche + Reload auto à l'ouverture d'un ticket — vraie
-  cause racine.** Le patch précédent (v1.10.147768) avait éliminé
-  une partie du mismatch d'hydratation, mais l'erreur persistait en
-  production. Cause restante : le panneau IA collapsable du ticket
-  lisait `localStorage` directement dans son rendu initial, ce qui
-  faisait que le serveur rendait le panneau ouvert (sans accès au
-  storage navigateur) tandis que le client rendait potentiellement
-  le panneau fermé (storage lu) → structures DOM différentes → React
-  refusait l'hydratation → recharge automatique du ticket. La page
-  s'ouvre maintenant directement, sans aller-retour Reload, même
-  quand le panneau IA a été replié dans une session précédente.
+- **Page blanche + Reload auto à l'ouverture d'un ticket — patch 2/2
+  (vraie cause racine identifiée).** Le patch v1.10.147768 avait
+  éliminé les mismatches de **texte** (dates, traductions) mais
+  l'erreur React #418 persistait en prod sous la forme
+  `args[]=HTML` (mismatch de **structure HTML**, pas de texte).
+  L'origine était dans `apps/web/src/app/(dashboard)/tickets/[id]/collapsible-ai-panel.tsx`
+  : l'état initial du panneau IA collapsable lisait `localStorage`
+  dans l'initializer d'un `useState(() => …)` avec un test
+  `typeof window !== "undefined"`. Conséquence :
+  - **Côté serveur** (SSR, pas de `window`) : `collapsed = false`
+    → le composant rendait `{!collapsed && children}` → ENFANTS
+    PRÉSENTS dans le HTML envoyé.
+  - **Côté client** (hydratation) : `localStorage` était lu → si
+    l'utilisateur avait déjà replié le panneau dans une session
+    précédente, `collapsed = true` → `{!collapsed && children}`
+    devenait `false` → ENFANTS ABSENTS dans l'arbre React du
+    client.
 
-### Mise à jour
+  Résultat : le DOM serveur (avec les enfants) ne correspondait pas
+  au DOM client (sans les enfants) → React détectait un mismatch
+  de structure HTML → erreur #418 (`args[]=HTML`) → `RSCErrorBoundary`
+  attrapait et déclenchait un `window.location.reload()`. Le
+  symptôme « page blanche puis Reload puis ticket s'affiche »
+  correspondait exactement à ce cycle.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  Fix : passer à un état initial déterministe (`useState(false)`
+  partout) et déférer la lecture du `localStorage` dans un
+  `useEffect()` qui s'exécute après le mount. Le serveur et le
+  client rendent désormais le même HTML à l'hydratation ; si
+  l'utilisateur avait collapsé le panneau, il se replie après le
+  premier render (léger flash acceptable, exclusif à la première
+  visite de la session).
+
+  Note pour le futur : c'est un **anti-pattern** classique. Ne
+  jamais lire `localStorage` / `sessionStorage` / `window.*` dans
+  un initializer `useState(() => …)` d'un composant rendu côté
+  serveur. Toujours passer par un `useEffect` post-mount. La
+  même remarque vaut pour le `useI18n()` (déjà couvert en
+  v1.10.147768 via `suppressHydrationWarning` ciblé).
 
 ## [1.10.147768] — 2026-05-18
 
 ### Fixed
 
-- **Ouverture d'un ticket : page blanche fugace + reload automatique
-  avant que le ticket s'affiche.** Sur les déploiements derrière un
-  WAF (Sophos XGS, Cloudflare en mode proxy strict, etc.), un ticket
-  cliqué depuis la liste s'affichait en blanc pendant 1-2 secondes,
-  un bouton « Reload » apparaissait, puis la page rechargeait toute
-  seule avant d'afficher le ticket. Cause : erreur React #418
-  (« hydration mismatch »), c.-à-d. divergence entre le HTML rendu
-  côté serveur et celui réhydraté côté client. Plusieurs sources
-  cumulées sur la page ticket : le locale utilisateur (FR/EN/…)
-  n'était connu qu'après le mount client, les temps relatifs
-  (« 5m ago ») étaient calculés à deux instants différents, et le
-  buffering RSC du WAF désynchronisait les chunks volumineux du
-  HTML email. Désormais, les nœuds dont le contenu est légitimement
-  client-dépendant (dates, temps relatifs, HTML email sanitisé)
-  acceptent la version client après hydratation sans déclencher
-  d'erreur — la page s'ouvre directement, sans aller-retour Reload.
+- **Ouverture d'un ticket : page blanche + bouton « Reload » qui rafraîchit
+  automatiquement avant d'afficher le ticket.** Symptôme observé surtout
+  depuis la mise en service du WAF Sophos XGS : au clic sur un ticket
+  (navigation client RSC), la page s'affiche en blanc pendant 1-2
+  secondes, un bouton « Reload » apparaît brièvement puis le ticket
+  finit par s'afficher. Cause : la console DevTools révèle
+  `Uncaught Error: Minified React error #418` — c.-à-d. un **mismatch
+  d'hydratation** entre le HTML rendu par le serveur et le HTML
+  réhydraté par React côté client.
 
-### Mise à jour
+  Sources du mismatch identifiées sur la page ticket :
+  - **`useI18n()` charge le locale depuis `localStorage` après le
+    mount.** Le SSR rend donc systématiquement avec `locale = "en"` /
+    `dateLocale = "en-GB"`, puis le client repasse en `"fr"` /
+    `"fr-FR"` au premier `useEffect`. Tous les `Intl.DateTimeFormat`
+    et toutes les chaînes `t("…")` produisent un texte différent
+    SSR vs client → React jette #418. La page ticket est la plus
+    touchée parce qu'elle empile des dizaines de dates formatées
+    (chaque message, sidebar, activity feed) et de chaînes
+    traduites.
+  - **`relativeTime()` (activity-feed, notes-panel) compare
+    `Date.now()`** entre l'instant SSR et l'instant client → texte
+    « 5m ago » différent à chaque round-trip → #418.
+  - **`isomorphic-dompurify` normalise le HTML email différemment
+    sur JSDOM (server) et sur le DOM natif (client)** pour certains
+    mails entrants mal formés ; combiné au buffering RSC du WAF
+    XGS sur les chunks volumineux, le contenu HTML transmis ne
+    correspond pas toujours à celui que le client reconstruit
+    localement → #418.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  Fix retenu (surgical, sans flash, aligné sur le pattern déjà
+  utilisé dans `layout.tsx` et `client-text.tsx`) : ajout de
+  `suppressHydrationWarning` sur les nœuds DOM dont le contenu est
+  attendu différent SSR vs client :
+  - `apps/web/src/app/(dashboard)/tickets/[id]/conversation.tsx` :
+    span de la date du message + div HTML email sanitisé.
+  - `apps/web/src/app/(dashboard)/tickets/[id]/activity-feed.tsx` :
+    spans d'action traduite + temps relatif.
+  - `apps/web/src/app/(dashboard)/tickets/[id]/notes-panel.tsx` :
+    span du temps relatif des notes internes.
+  - `apps/web/src/app/(dashboard)/tickets/[id]/ticket-sidebar.tsx` :
+    4 cellules de date dans la card « Détails » (créé / mis à jour
+    / première réponse / fermé).
+
+  `suppressHydrationWarning` est un mécanisme React standard qui dit
+  « ce nœud peut légitimement diverger SSR vs client, accepte le
+  contenu client après hydratation ». Aucune fonctionnalité changée,
+  juste plus de tolérance sur les nœuds dont on sait qu'ils sont
+  client-dépendants (locale, time-relative, HTML email). La page
+  ticket se charge maintenant directement, sans l'aller-retour
+  Reload-auto déclenché par `RSCErrorBoundary`.
+
+  Note : la vraie correction de fond — passer le locale dans un
+  cookie pour qu'il soit connu côté serveur — fera l'objet d'une
+  release dédiée plus tard (refactor i18n complet).
 
 ## [1.10.147767] — 2026-05-18
 
 ### Added
 
-- **Nom de l'agent affiché au-dessus de chaque réponse dans un ticket.**
-  Dans la vue conversation d'un ticket, chaque bulle de réponse agent
-  était jusqu'ici étiquetée par le label générique « Agent ». Quand
-  plusieurs agents se relayaient sur un même ticket, plus rien dans
-  l'interface ne permettait de savoir qui avait posté quel message —
-  obligeant à reconstituer la chronologie depuis le log ou le mail.
-  Désormais, chaque nouvelle réponse est tagguée avec l'identifiant
-  de l'agent qui l'a postée, et son nom + ses initiales s'affichent
-  au-dessus de la bulle, à côté de la date/heure. Les messages
-  envoyés avant cette version conservent le label « Agent » (aucune
-  donnée historique n'est inventée), mais toutes les nouvelles
-  réponses sont nominatives. Le contenu envoyé au client par email
-  reste strictement inchangé (signature et corps identiques).
+- **Conversation ticket : le nom de l'agent qui a répondu s'affiche au-dessus
+  de chaque réponse.** Avant, chaque réponse agent dans la vue
+  conversation d'un ticket portait l'étiquette générique « Agent »,
+  rendant impossible la traçabilité dans les fils multi-agents (un
+  ticket peut être repassé entre plusieurs agents au cours de son
+  cycle de vie). Désormais, chaque message de type `REPLY` est tagué
+  avec l'`userId` de l'agent qui a cliqué « Envoyer », et le bandeau
+  au-dessus de la bulle de message affiche son nom (`message.sender.name`)
+  ainsi que ses initiales dans la pastille colorée. Les messages
+  hérités (créés avant ce patch, `senderUserId` NULL) retombent
+  gracieusement sur « Agent » / « AG », donc aucun écran ne casse.
 
-### Mise à jour
+  Modifications :
+  - **DB** : ajout d'une colonne nullable
+    `TicketMessage.senderUserId TEXT` avec
+    `FOREIGN KEY → User(id) ON DELETE SET NULL ON UPDATE CASCADE` et
+    un index `TicketMessage_senderUserId_idx`. Si un agent est
+    supprimé du système, ses messages restent visibles mais perdent
+    leur attribution (retour au fallback « Agent ») — pas de cascade
+    destructive sur l'historique.
+    Migration : `apps/web/prisma/migrations/20260518_message_sender_user/`.
+  - **Server Action** : `addReply` (`apps/web/src/lib/actions/ticket.actions.ts`)
+    écrit désormais `senderUserId: session.userId` à la création du
+    message ; `getTicket` étend l'`include` des messages avec
+    `sender: { select: { id: true, name: true } }`.
+  - **UI** : `conversation.tsx` (`MessageBubble`) lit
+    `message.sender?.name` pour les replies non-AUTO_REPLY, calcule
+    les initiales correspondantes pour l'avatar, et conserve les
+    libellés existants pour `INITIAL` / `CUSTOMER_REPLY` / `AUTO_REPLY`.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  Impact : aucun changement visible sur les threads existants tant
+  qu'aucune nouvelle réponse n'est envoyée. Dès qu'un agent répond
+  via la composer, son nom apparaît dans l'en-tête du message — y
+  compris quand un autre agent reprend le ticket par la suite. Les
+  vues client (par email) restent inchangées : la signature HTML
+  reste celle de l'agent qui a posté la réponse.
 
 ## [1.10.147766] — 2026-05-18
 
 ### Fixed
 
-- **Pièce jointe agent retournait `{"error":"Forbidden"}` (403) au clic.**
-  La colonne `storagePath` est écrite sous deux formats : chemin absolu
-  côté mail-service (mails entrants) et chemin relatif côté reply agent.
-  Le route handler résolvait les chemins relatifs sous le CWD du process
-  au lieu de `/data/uploads`, ce qui faisait sortir le chemin des deux
-  roots autorisées et déclenchait le `Forbidden`. Conséquence : toute
-  pièce jointe ou image inline uploadée par un agent dans une réponse
-  était inaccessible au clic. Les attachements venant des mails entrants
-  fonctionnaient. Fix : résolution des chemins relatifs sous
-  `UPLOAD_ROOT` avant le contrôle de containment.
+- **Clic sur une pièce jointe agent renvoyait `{"error":"Forbidden"}` (403).**
+  La colonne `Attachment.storagePath` est écrite sous deux formats selon
+  l'origine :
+  - `mail-service` (mails entrants) écrit un chemin **absolu**
+    `/data/attachments/<uuid>.<ext>` (`apps/mail-service/src/imap/parser.ts`).
+  - `linkDraftAttachments` (replies agent) écrit un chemin **relatif**
+    `messages/<msgId>/<leaf>` (`apps/web/src/lib/attachments.ts`).
 
-### Mise à jour
+  Dans `apps/web/src/app/api/attachments/[id]/route.ts`, l'appel
+  `resolve(att.storagePath)` produisait un chemin sous le CWD du process
+  Node pour les chemins relatifs (`/app/messages/<msgId>/<leaf>`), qui
+  sortait des deux roots autorisées (`/data/attachments` et
+  `/data/uploads`) → branche `Forbidden` 403. Conséquence : chaque
+  pièce jointe ou image inline uploadée par un agent dans un reply
+  retournait 403 quand on cliquait dessus, y compris pour l'auteur du
+  message. Les attachements venant des mails entrants (chemins
+  absolus) fonctionnaient.
 
-```bash
-docker compose pull
-docker compose up -d
-```
+  Fix : si `storagePath` ne commence pas par `/`, on le résout sous
+  `UPLOAD_ROOT` avant le contrôle de containment. Comportement
+  inchangé pour les chemins déjà absolus.
 
 ## [1.10.147765] — 2026-05-18
 
 ### Fixed
 
-- **Éditeur de réponse ticket — listes à puces visibles + paste d'images
-  presse-papier.** Les classes Tailwind `prose` n'étaient pas activées dans
-  le build, donc le reset preflight rendait tous les `<ul>` / `<ol>`
-  invisibles : bouton "liste à puces" sans effet apparent, raccourci `- `
-  qui consommait le tiret sans rien afficher, et structure de liste perdue
-  visuellement après un copier/coller depuis Gmail/Word. Ajout de styles
-  CSS ciblés `.ProseMirror` qui restaurent listes, en-têtes, blockquotes,
-  code et liens dans l'éditeur. Le HTML envoyé au destinataire n'a jamais
-  été affecté.
-- **Coller une capture d'écran dans la zone de réponse.** Tiptap ne gère
-  pas l'image du presse-papier par défaut. Ajout de handlers `handlePaste`
-  et `handleDrop` qui détectent les fichiers `image/*` dans le
-  presse-papier ou un drag-and-drop, les uploadent via la route
-  d'attachements existante, et insèrent l'image au point d'insertion.
+- **Éditeur de réponse ticket — listes à puces enfin visibles + paste d'images
+  presse-papier.** L'éditeur Tiptap utilisait les classes `prose prose-sm` mais
+  le plugin `@tailwindcss/typography` n'est pas installé, donc le reset
+  preflight de Tailwind (`ul, ol { list-style: none; padding: 0 }`) rendait
+  toutes les listes invisibles. Trois symptômes pour la même cause :
+  - Le bouton "Liste à puces" de la toolbar semblait sans effet (le `<ul><li>`
+    était bien créé, mais sans marker ni indentation).
+  - Taper `- ` au début d'une ligne déclenchait l'input rule, consommait le
+    tiret, mais aucune puce ne s'affichait.
+  - Le copier/coller depuis Gmail/Word préservait la structure de liste mais
+    elle restait invisible.
 
-### Mise à jour
+  Fix : règles CSS ciblées sur `.ProseMirror` dans `globals.css` qui restaurent
+  `list-style`, l'indentation, les tailles de heading (h1-h3), le rendu des
+  blockquotes, code, code blocks, liens et la barre horizontale. Aucun nouveau
+  package, pas de bump de dépendances.
 
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
+- **Paste d'une capture d'écran dans la zone de réponse.** L'extension
+  `@tiptap/extension-image` ne gère pas le presse-papier d'image par défaut.
+  Ajout de `editorProps.handlePaste` et `handleDrop` dans
+  `rich-text-editor.tsx` qui détectent les fichiers `image/*` dans
+  `clipboardData` / `dataTransfer`, les uploadent via le handler
+  `onImageUpload` déjà câblé sur `attachments.uploadInlineImage`, puis
+  insèrent le node image au point d'insertion (paste) ou aux coordonnées du
+  drop (drag-and-drop). Le texte/HTML continue d'être collé normalement.
 
 ## [1.10.147764] — 2026-05-18
 
-### Added
-
-- **Settings > Plugins — affiche l'email lié à votre licence.**
-  Sous "Manage your licensed plugins and features" la page
-  affiche désormais `Licenses bound to <email>` — l'adresse
-  utilisée lors de l'activation initiale de l'instance.
-  Pratique pour identifier rapidement un instance dev vs prod
-  ou pour le support. L'information est persistée localement
-  (table `SystemConfig`, colonne `activationEmail`) — pour les
-  instances déjà déployées avant cette release, l'email n'est
-  pas connu et restera vide tant qu'aucune réactivation n'a
-  lieu. Si tu veux le backfill manuellement, l'administrateur
-  peut le faire via :
-  ```sql
-  UPDATE "SystemConfig" SET "activationEmail" = 'your@email'
-   WHERE id = 'global';
-  ```
-
 ### Changed
 
-- **Marketplace VigilanceKey — toutes les licences existantes
-  affichent désormais une échéance annuelle.** Avant cette
-  release, les licences `enterprise_pack` (et certaines autres)
-  apparaissaient comme "Permanent" sur l'admin VigilanceKey
-  parce que leur `expires_at` était fixé à 2099. Pour harmoniser
-  avec le passage en abonnement annuel, toutes les licences
-  TicketBrainy existantes ont été migrées vers une échéance à
-  +1 an depuis aujourd'hui (sauf `core` qui reste permanent et
-  `slack_connect` qui est retiré). Si tu remarques que ta
-  licence "permanente" originale apparait soudain avec une
-  échéance, c'est normal — au moment du renouvellement annuel,
-  le tarif sera identique à celui annoncé sur la marketplace.
+- **VigilanceKey — toutes les licences existantes migrées en annuel.**
+  Suite à v1.10.147763 où Enterprise Pack est passé en annuel,
+  l'admin VigilanceKey affichait encore les licences déjà émises
+  comme "Permanent" (parce que leur `expires_at = 2099-12-31` est
+  filtré par `service/license.go:767` qui omet le champ du payload
+  signé quand l'année >= 2099). Migration appliquée :
+  ```
+  UPDATE licenses SET expires_at = NOW() + INTERVAL '1 year'
+   WHERE product = 'ticketbrainy'
+     AND expires_at >= '2099-01-01'
+     AND plugin_slug NOT IN ('core', 'slack_connect');
+  ```
+  13 licences mises à jour. `core` reste permanent (plan gratuit
+  baseline), `slack_connect` est laissé tel quel (plugin retiré).
+  L'entité Go `entity/license.go` aligne aussi tous les plugins
+  payants restants sur `"year"` (csat_feedback, time_tracking_pro,
+  email_templates, telegram_bot, backup_monitor) — l'entité
+  marketplace était la source de vérité côté backend, et certains
+  plugins traînaient encore en `one-shot` désynchronisés de TB.
 
-### Update
+### Added
 
-```bash
-cd /opt/ticketbrainy
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
+- **Settings > Plugins — affiche l'email d'activation.** Sous le
+  sous-titre "Manage your licensed plugins and features",
+  l'instance affiche maintenant `Licenses bound to <email>` (la
+  valeur passée à `/api/activate` lors du fresh deploy). Utile
+  pour le support et pour distinguer rapidement dev/prod.
+  Persisté dans `SystemConfig.activationEmail` (nouvelle colonne,
+  nullable, migration `20260518_systemconfig_activation_email`).
+  L'instance dev a été backfillée manuellement avec
+  `christophe.reitano@it-secure.lu` ; les instances clientes
+  l'auront automatiquement après la prochaine activation ou
+  peuvent être backfillées par SQL si besoin.
 
 ## [1.10.147763] — 2026-05-18
 
 ### Changed
 
-- **Enterprise Pack — prix passé en annuel.** Le plugin
-  Enterprise Pack devient **99€/an** (au lieu de 99€/unique
-  jusqu'ici) pour s'aligner sur tous les autres plugins payants
-  qui sont déjà en abonnement annuel. Côté marketplace VGXKey
-  comme côté UI plugin store dans TB, l'affichage passe de
-  "/unique" à "/an". Les licences `enterprise_pack` déjà émises
-  en one-shot avant cette release restent **valides indéfiniment**
-  — la modification ne s'applique qu'aux nouvelles activations.
-  Un Sync Licence depuis Settings > Plugins remonte le nouveau
-  modèle pour l'UI.
-
-### Update
-
-```bash
-cd /opt/ticketbrainy
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
+- **Enterprise Pack — pricing harmonisé en annuel.** Le plugin
+  Enterprise Pack passe de 99€ one-shot à 99€/an pour s'aligner sur
+  tous les autres plugins payants (qui sont déjà en `year`). Modifié
+  dans `apps/web/src/lib/license/features.ts` côté TB et dans le
+  marketplace VGXKey (`/opt/vigilanceKey/frontend/src/App.tsx`
+  ligne 112, `/opt/vigilanceKey/backend/internal/entity/license.go`
+  ligne 30 — prix backend aussi aligné 89 → 99). VGXKey frontend +
+  backend rebuild + restart effectués (`docker compose build
+  frontend backend && up -d`).
+  Instances clientes : un Sync Licence depuis Settings > Plugins
+  remontera le nouveau modèle. Les licences `enterprise_pack` déjà
+  émises en one-shot avant cette release restent valides
+  indéfiniment (pas de migration agressive — on ne désactive aucune
+  licence existante).
 
 ## [1.10.147762] — 2026-05-18
 
 ### Added
 
-- **Liste des tickets — bouton "Marquer comme lu" et auto-clear du
-  point bleu quand on Résout/Ferme un ticket.** Quand un agent
-  traite un ticket par téléphone et bascule simplement le statut en
-  **Résolu** ou **Fermé** sans rédiger de réponse, le point bleu
-  "en attente de réponse" restait visible dans la liste — il était
-  calculé uniquement à partir du type du dernier message
-  (`INITIAL` ou `CUSTOMER_REPLY`). Le modèle `Ticket` a maintenant
-  une colonne `agentReadAt` qui est :
-  1. **automatiquement** mise à jour à `now()` lors de toute
-     transition vers Résolu / Fermé ;
-  2. **manuellement** mise à jour via un nouveau bouton
-     **"Marquer comme lu"** qui apparaît dans la barre de
-     sélection multiple (à côté de "Supprimer la sélection"),
-     pour les tickets que l'agent veut acquitter sans changer
-     leur statut.
+- **Liste tickets — "Marquer comme lu" + auto-clear sur Résolu/Fermé.**
+  When an agent handles a ticket out-of-band (e.g. calls the customer
+  and switches the status to Résolu/Fermé without typing a reply),
+  the blue "awaiting response" dot used to keep showing because it
+  was derived purely from the type of the last message. Now the
+  Ticket model has an `agentReadAt: DateTime?` column. The dot logic
+  becomes: `(last message is INITIAL or CUSTOMER_REPLY) AND
+  (agentReadAt IS NULL OR last message createdAt > agentReadAt)`.
+  Two ways to set the field:
+  1. **Auto** — any transition to RESOLVED or CLOSED stamps
+     `agentReadAt = now()` in the same `updateTicket` call.
+  2. **Manual bulk** — a new "Marquer comme lu" button appears next
+     to "Supprimer la sélection" when at least one ticket is checked
+     in the list; clicking it calls the new
+     `bulkMarkTicketsAsRead(ids)` server action which writes
+     `agentReadAt = now()` on every accessible ticket in the
+     selection (capped at 500, AGENT scope-restricted via the
+     existing `filterTicketsByAccess`).
+  The sidebar mailbox badges (awaiting / unassigned-awaiting /
+  mine-awaiting) are also corrected via the same `agentReadAt`
+  comparison in `sidebar.actions.ts`. A subsequent inbound
+  CUSTOMER_REPLY whose `createdAt > agentReadAt` automatically
+  re-triggers the dot — no state to reset.
 
-  Le point bleu (et les compteurs latéraux de mailbox) restent
-  affichés tant qu'aucun acquittement n'a eu lieu OU qu'un nouveau
-  message client est arrivé après l'acquittement — c'est
-  automatique, pas besoin de réinitialiser.
+### Files touched
 
-### Update
-
-```bash
-cd /opt/ticketbrainy
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-> La migration Prisma `20260518_ticket_agent_read_at` ajoute
-> la colonne `Ticket.agentReadAt` (nullable). Elle est appliquée
-> automatiquement par le conteneur `migrate` au boot, aucune
-> action manuelle requise.
+- `apps/web/prisma/schema.prisma` + new migration
+  `20260518_ticket_agent_read_at` — adds `Ticket.agentReadAt`.
+- `apps/web/src/lib/actions/ticket.actions.ts` — auto-set in
+  `updateTicket` on RESOLVED/CLOSED, new `bulkMarkTicketsAsRead`,
+  list query includes `messages.createdAt`.
+- `apps/web/src/lib/actions/sidebar.actions.ts` — 3 raw SQL
+  badge queries amended with the `agentReadAt` comparison.
+- `apps/web/src/app/(dashboard)/tickets/ticket-table.tsx` —
+  recomputes `awaitingResponse`, new `MailOpen` button.
+- `apps/web/src/lib/i18n/locales/{fr,en,de,es,it}.ts` —
+  `tickets.markSelectedAsRead`, `tickets.bulkMarkReadSuccess`.
 
 ## [1.10.147761] — 2026-05-17
 
 ### Fixed
 
-- **Email d'activation Keycloak — `apply-config.sh` ne mourait plus
-  silencieusement.** v1.10.14776 ajoutait `emailTheme: ticketbrainy`
-  au PUT de hardening du realm, mais sur les installations existantes
-  `apply-config.sh` pouvait sortir sans aucun log lors du fetch du
-  token admin (combinaison `curl -sf` + `set -e` qui avalent les
-  réponses 4xx). Conséquence : `emailTheme` jamais appliqué sur le
-  realm → l'agent recevait l'ancien template (sans section
-  "Connexion au portail"). Le déclencheur typique : la protection
-  brute-force du realm master (5 échecs, lockout 15 min) qui
-  s'accumule pendant un cycle de déploiement répété, et bloque
-  ensuite tous les essais suivants. La nouvelle version (1) loggue
-  toujours le code HTTP + le corps de réponse quand le token est
-  refusé, (2) refait un essai après 10 s pour absorber les
-  conditions de course au boot froid, (3) imprime une instruction
-  claire `bash scripts/keycloak-reset-admin.sh --mode unlock` quand
-  le code 401 indique un lockout, ou `--mode recovery <NEW_PASSWORD>`
-  pour un 400/403 (password mismatch). Le template de realm
-  (`keycloak/ticketbrainy-realm.json`) embarque aussi désormais
-  `emailTheme: ticketbrainy` pour que les installations fraîches
-  l'aient dès le `--import-realm`, sans dépendre du token admin.
+- **apply-config.sh — silent admin lockout failure visible at last.**
+  v1.10.14776 added `emailTheme: ticketbrainy` to the realm hardening
+  PUT, but on existing installs apply-config.sh could die invisibly at
+  the admin token fetch (`curl -sf` + `set -e` swallowing 4xx
+  responses), leaving `emailTheme` unset on the realm. Concrete trigger
+  observed: master-realm brute-force protection (Step 7 — 5 fails,
+  15 min lockout) accumulating from repeated keycloak-init recreations
+  during a deployment cycle, then locking out `admin` for the rest of
+  the window. The script now (1) always logs the actual HTTP status
+  code + response body when the token endpoint rejects auth,
+  (2) retries once with a 10s backoff to absorb cold-boot races on
+  slow disks, (3) prints a clear, actionable hint pointing at
+  `scripts/keycloak-reset-admin.sh --mode unlock` when it sees 401, or
+  at `--mode recovery` when it sees 400/403 (password mismatch). The
+  realm template `ticketbrainy-realm.json` also gets a baked-in
+  `emailTheme: ticketbrainy` so fresh installs no longer depend on the
+  admin token round-trip to wire up the activation email template.
 
 ### Update
 
-```bash
-cd /opt/ticketbrainy
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-> **Si tu es resté sur l'ancien email après v1.10.14776 :** ton
-> admin master est probablement lockout. Lance d'abord :
+> If your existing prod is on v1.10.14776 and the activation email
+> still uses the base template (no portal section), the admin user
+> is locked out. Run:
 >
 > ```bash
+> cd /opt/ticketbrainy
+> git pull
 > bash scripts/keycloak-reset-admin.sh --mode unlock
 > docker compose up -d --force-recreate --no-deps keycloak-init
-> docker logs ticketbrainy-keycloak-init-1
+> docker logs ticketbrainy-keycloak-init-1   # expect emailTheme=ticketbrainy
 > ```
->
-> Tu dois voir la ligne `[apply-config] verification: ... emailTheme=ticketbrainy ...`.
-> Recrée alors un user de test dans Keycloak → email avec les
-> 2 sections.
 
 ## [1.10.14776] — 2026-05-17
 
 ### Added
 
-- **Email d'activation Keycloak enrichi : portail TicketBrainy en clair.**
-  Quand un administrateur crée un agent et déclenche l'envoi de
-  l'email "Mise à jour du mot de passe", le courriel reçu était
-  jusque-là incomplet : il proposait uniquement le lien Keycloak
-  (mise à jour du compte) sans indiquer où se connecter ensuite.
-  Le destinataire devait deviner l'URL du portail. Le nouveau
-  template ajoute une seconde section **"2. Connexion au
-  portail TicketBrainy"** sous l'action d'activation, avec un
-  bouton CTA et l'URL en clair pour fallback. La première
-  section reste identique (instructions Keycloak natives,
-  expiration du lien à 12h). Disponible en FR / EN / DE / ES / IT.
-  L'URL est injectée à partir d'`APP_URL` au démarrage du
-  conteneur Keycloak — aucune configuration manuelle requise.
+- **Keycloak activation email — section 2 with TicketBrainy portal link.**
+  When an admin creates a new agent in Keycloak, the recipient
+  receives a "Mise à jour du mot de passe" email containing only
+  the account-update link — no hint about where to log in once
+  activated. The new custom email theme (`keycloak/themes/
+  ticketbrainy/email/`) extends the base `executeActions.ftl` to
+  add a second section **"Connexion au portail TicketBrainy"**
+  with a CTA button + cleartext URL. The placeholder
+  `__TB_PORTAL_URL__` is substituted with `$APP_URL` by
+  `keycloak/docker-entrypoint.sh` before Keycloak boots. The
+  realm-config script (`keycloak/apply-config.sh`) now pins
+  `emailTheme=ticketbrainy` on the realm. Available in FR/EN/DE/
+  ES/IT.
 
-- **Rôle Superviseur : accès lecture seule à Paramètres.**
-  Les utilisateurs Superviseur (SUPERVISOR) pouvaient déjà
-  s'authentifier mais étaient redirigés vers `/settings` dès
-  qu'ils cliquaient sur Time tracking, Catégories IA ou les
-  pages Déploiement & Sécurité. Ils peuvent désormais
-  **consulter** tous les paramètres (configuration mailbox,
-  sécurité, équipes, plugins, etc.) sans pouvoir modifier quoi
-  que ce soit — une bannière "Mode lecture seule" rappelle la
-  restriction, et l'attribut HTML `inert` désactive toutes les
-  interactions du formulaire (boutons Save, inputs, dropdowns).
-  Les Server Actions de mutation conservent leur garde
-  `requireRole("ADMIN")` en défense en profondeur. AGENT reste
-  bloqué hors de Paramètres comme avant.
+- **Settings — read-only mode for SUPERVISOR role.**
+  Until v1.10.14775, SUPERVISOR users were redirected out of any
+  settings page that did `if (role !== "ADMIN") redirect()`
+  (time-tracking, AI categories, Deploy & Security `mode`/
+  `whitelist`/`audit`/`geo-block`). They can now **view** every
+  settings page. The settings layout is split into a
+  server-component `layout.tsx` (resolves `canEdit` from the
+  session) wrapping a client-component `settings-shell.tsx` that
+  renders the existing tabs + sidebar. When `canEdit=false`, a
+  yellow "Mode lecture seule" banner appears and the page content
+  wrapper uses the HTML `inert` attribute, which disables every
+  interactive form element underneath (inputs, buttons, selects,
+  switches) without breaking the tab/sidebar navigation. Server
+  actions that mutate state keep their `requireRole("ADMIN")`
+  guard as defense in depth — read-only loaders
+  (`getLiveConfig`, `getSavedConfig`, `getConfigDrift`,
+  `generateEnvFile`, `generateCaddyfile`, `getSecurityDashboardData`,
+  `getRateLimitConfig`, `detectMyCountry`, `getGeoBlockStats`) are
+  relaxed to `ADMIN + SUPERVISOR`. AGENT remains blocked from
+  `/settings` by the upper dashboard guard.
 
-### Update
+### Files touched
 
-```bash
-cd /opt/ticketbrainy
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-> Le redémarrage de Keycloak régénère automatiquement le thème
-> email avec votre `APP_URL`. Le rôle Superviseur n'a aucun
-> changement de schéma BDD à appliquer.
+- `keycloak/themes/ticketbrainy/email/` — new theme (theme.properties,
+  html/executeActions.ftl, text/executeActions.ftl, messages_{fr,en,de,es,it}.properties)
+- `keycloak/docker-entrypoint.sh` — render theme with TB_PORTAL_URL
+- `keycloak/apply-config.sh` — pin `emailTheme: ticketbrainy` on realm
+- `docker-compose.prod.yml`, public `docker-compose.yml` — mount as `themes-src`
+- `apps/web/src/app/(dashboard)/settings/layout.tsx` — new server wrapper
+- `apps/web/src/app/(dashboard)/settings/settings-shell.tsx` — banner + inert wrapper
+- `apps/web/src/lib/i18n/locales/{fr,en,de,es,it}.ts` — `settings.readonly.*`
+- 6 settings pages (time-tracking, ai/categories, deploy-security/audit, /geo-block, /mode, /whitelist)
+- 4 action files (deployment, geo-block, rate-limit, security-dashboard)
 
 ## [1.10.147751] — 2026-05-17
 
 ### Fixed
 
-- **XpertTeamIA : recommandations adaptées au provider IA actif.**
-  Les libellés "Recommandé : …" sous les sélecteurs de modèle
-  affichaient les noms Claude (Opus / Sonnet / Haiku) même quand
-  le provider Codex CLI était sélectionné — la liste déroulante
-  proposait bien GPT-5.x mais le texte d'aide parlait toujours
-  d'Haiku, créant une incohérence visuelle. Les trois
-  recommandations basculent maintenant automatiquement sur les
-  équivalents Codex (Deep Analysis → GPT-5.4 ou GPT-5.5,
-  Triage → GPT-5.4 Mini, SmartReply → GPT-5.4 Mini) selon le
-  provider actif. Correction propagée dans les 5 langues.
-
-### Update
-
-```bash
-cd /opt/ticketbrainy
-docker compose pull
-docker compose up -d --force-recreate
-```
+- **XpertTeamIA : recommandations de modèle dépendantes du provider.**
+  Les libellés "Recommandé : …" sous les 3 sélecteurs (Deep / Triage /
+  SmartReply) étaient hardcodés sur les noms Claude (Opus/Sonnet/Haiku)
+  même quand le provider actif était Codex CLI. Le sélecteur proposait
+  bien GPT-5.x mais le texte d'aide parlait toujours d'Haiku, créant
+  une incohérence visuelle. Trois nouvelles clés i18n
+  `*RecommendedCodex` ont été ajoutées (Deep → GPT-5.4 ou GPT-5.5,
+  Triage → GPT-5.4 Mini, SmartReply → GPT-5.4 Mini) ; la JSX bascule
+  désormais entre la version Claude et la version Codex selon
+  `provider === "codex_cli"`. Cohérent dans les 5 langues.
 
 ## [1.10.14775] — 2026-05-17
 
 ### Added
 
-- **XpertTeamIA : modèle IA configurable par tâche.** Jusqu'à
-  présent un seul "Modèle expert" pilotait à la fois la Deep
-  Analysis (raisonnement profond sur les tickets techniques),
-  le Tri automatique (classification rapide à l'arrivée des
-  mails) et la rédaction SmartReply IA (brouillons de
-  réponses). Comme ces trois tâches n'ont pas du tout les
-  mêmes exigences, c'était un compromis coûteux : payer Opus
-  pour rédiger un accusé de réception est du gaspillage de
-  tokens, et utiliser Haiku pour une analyse approfondie laisse
-  de la qualité sur la table. Désormais, depuis
-  **Réglages → XpertTeamIA**, vous choisissez un modèle distinct
-  pour chacune des trois tâches, avec une recommandation
-  affichée pour chacune (Opus/Sonnet pour Deep, Haiku pour
-  Triage et SmartReply). Au changement de provider AI (API Key
-  Anthropic / Claude Code CLI / Codex CLI), des défauts
-  intelligents sont appliqués automatiquement par tâche. Claude
-  Haiku 4.5 a été ajouté au catalogue côté Claude. Économies
-  de tokens immédiates sur les déploiements API Key, et
-  routage explicite sur les abonnements CLI.
+- **XpertTeamIA : sélecteurs de modèle IA par tâche.** Les admins
+  peuvent maintenant choisir un modèle distinct pour la Deep
+  Analysis, le Tri automatique et la rédaction SmartReply IA depuis
+  Réglages → XpertTeamIA. Permet d'optimiser l'usage tokens :
+  garder Opus (ou GPT-5.4) pour la Deep Analysis où le raisonnement
+  est critique, utiliser Haiku (ou GPT-5.4 Mini) pour le triage et
+  la rédaction d'emails où c'est largement suffisant. Trois clés
+  Setting indépendantes : `ai.expertModel`, `ai.triageModel`,
+  `ai.smartReplyModel`.
+- Claude Haiku 4.5 ajouté au catalogue de modèles côté Claude
+  (API Key + Claude Code CLI), aux côtés d'Opus 4 et Sonnet 4.
+- Défauts intelligents par tâche appliqués au changement de
+  provider : Opus/Sonnet pour Deep, Haiku/Mini pour Triage et
+  SmartReply.
 
-### Update
+### Changed
 
-```bash
-cd /opt/ticketbrainy
-docker compose pull
-docker compose up -d --force-recreate
-```
+- `apps/ai-service/src/email/drafter.ts` lit maintenant le réglage
+  `ai.smartReplyModel` au lieu de hardcoder Haiku. Fallback Haiku
+  4.5 si le réglage est absent.
 
 ## [1.10.14774] — 2026-05-16
 
 ### Changed
 
-- **Assistant IA de rédaction : formatage propre des brouillons
-  de réponses.** Le bouton "AI Draft" dans le composeur de
-  réponse générait des messages en un bloc compact, sans
-  paragraphes ni séparation visuelle — l'IA produisait du
-  plain-text alors que l'éditeur attend du HTML. Le prompt
-  impose désormais un sous-ensemble HTML clair (paragraphes,
-  listes à puces, gras parcimonieux) avec un guide de style :
-  un paragraphe par idée, listes pour les énumérations de 3+
-  items, gras sur 1-2 termes clés maximum. Le brouillon
-  s'affiche maintenant comme un email écrit par un agent
-  professionnel. Filet de sécurité : si l'IA renvoie quand même
-  du plain-text par erreur, conversion automatique des sauts
-  de ligne avant insertion dans l'éditeur — robustesse garantie.
-
-### Update
-
-```bash
-cd /opt/ticketbrainy
-docker compose pull
-docker compose up -d --force-recreate
-```
+- **Assistant IA de rédaction des réponses : formatage HTML
+  structuré au lieu de plain-text plat.** Le prompt système de
+  `apps/ai-service/src/email/drafter.ts` demandait à Claude de
+  produire du *plain text* avec `\n` pour les sauts de ligne — mais
+  l'éditeur Tiptap côté agent attend du HTML et collapse tous les
+  `\n` en espaces. Résultat : un brouillon généré arrivait dans la
+  zone de composition en un seul bloc compact, sans paragraphes ni
+  séparation, alors qu'un humain n'aurait jamais écrit ça. Le
+  prompt impose maintenant un sous-ensemble HTML clair
+  (`<p>`, `<br>`, `<ul>/<ol><li>`, `<strong>`, `<em>` — les autres
+  balises sont explicitement interdites) avec un guide de style :
+  un paragraphe par idée, listes à puces pour les énumérations de
+  3+ items, gras parcimonieux sur 1-2 termes clés. Le brouillon
+  s'affiche désormais comme un email écrit à la main par un agent
+  pro. Filet défensif côté `reply-composer.tsx` : si Claude
+  renvoyait quand même du plain-text (refusal, fallback), les
+  `\n\n` sont convertis en `</p><p>` et les `\n` simples en `<br>`
+  avant l'injection dans l'éditeur — robustesse garantie même en
+  cas de dérapage du modèle.
 
 ## [1.10.14773] — 2026-05-16
 
 ### Fixed
 
-- **Notifications agents sur nouveaux tickets entrants : trou
-  majeur comblé.** Quand un client envoyait un email à une boîte
-  TB, le ticket était bien créé et l'accusé partait au client —
-  mais les agents abonnés à la boîte ne recevaient **aucune**
-  notification par email. Seules des notifs in-app étaient créées,
-  et uniquement pour les rôles ADMIN / SUPERVISOR. Un agent
-  standard absent de l'interface n'était jamais averti qu'une
-  demande était en attente. Désormais, à chaque ticket entrant :
-  notification in-app **et** email pour chaque agent abonné à la
-  boîte (`Settings → Mailboxes → Subscribed users` avec
-  `notifyNewTicket=true`). L'email est expédié depuis l'adresse
-  de la boîte concernée, avec le sujet, l'expéditeur, l'extrait
-  du message et un lien direct vers le ticket. La préférence
-  d'email par utilisateur est respectée. Filet de sécurité : si
-  aucun agent n'est abonné à la boîte, fallback automatique sur
-  les admins et superviseurs pour ne jamais perdre un ticket.
+- **Notifications aux agents sur nouveaux tickets entrants par email :
+  trou de conception majeur comblé.** Quand un client envoyait un mail
+  dans une boîte TB, le ticket était créé et le client recevait bien
+  son accusé de réception — mais les agents abonnés à la boîte ne
+  recevaient **aucune** notification email. Seules des notifs in-app
+  étaient créées, et uniquement pour les rôles ADMIN/SUPERVISOR (les
+  agents standards étaient totalement ignorés). Résultat : un agent
+  absent de l'interface TB ne savait jamais qu'une demande était en
+  attente — alors que c'est le principe de base d'un système de
+  tickets. Le code mail-service à la création de ticket consulte
+  maintenant `UserMailbox.notifyNewTicket=true` pour la boîte concernée
+  et envoie pour chaque abonné (1) une notification in-app et (2) un
+  email expédié depuis l'adresse de la boîte avec sujet, expéditeur,
+  extrait du message et lien direct vers le ticket. Le préférence
+  d'email par utilisateur (`notify.${userId}.email`) est respectée.
+  Filet de sécurité : si aucun agent n'est abonné à la boîte, fallback
+  automatique sur les admins+superviseurs pour ne jamais perdre un
+  ticket. Aligne le comportement du mail-service sur celui de
+  l'engine de notifications côté web (`notifyNewTicket()` dans
+  `apps/web/src/lib/notifications/engine.ts`).
 
-- **Email d'alerte à l'agent assigné sur réponse client.** Même
-  cause, même solution pour les réponses : l'agent assigné au
-  ticket ne recevait qu'une notif in-app, jamais d'email. Il
-  reçoit maintenant aussi un email (et lui seul — pas
-  d'arrosage de toute l'équipe). Respecte la préférence
-  `notifyReply` par boîte de chaque utilisateur.
-
-### Update
-
-```bash
-cd /opt/ticketbrainy
-docker compose pull
-docker compose up -d --force-recreate
-```
+- **Email d'alerte à l'agent assigné sur réponse client.** Même cause,
+  même conséquence : sur réponse d'un client à un ticket existant,
+  l'agent assigné ne recevait qu'une notif in-app, jamais d'email.
+  Désormais, en plus de la notif in-app, un email est expédié à
+  l'agent assigné (et lui seul, pas d'arrosage de toute l'équipe).
+  Respecte la préférence `UserMailbox.notifyReply` de l'agent et son
+  opt-out global email.
 
 ## [1.10.14772] — 2026-05-16
 
 ### Fixed
 
-- **Logos clients dans les signatures de mails entrants ne
-  s'affichaient plus** quand l'URL était en HTTP simple. Le
-  navigateur bloque les images HTTP sur une page HTTPS (mixed
-  content) sans aucun message UI. Nouvelle route serveur
-  `/api/proxy-image?url=…` qui ramène l'image en HTTPS via TB. Le
-  rendu réécrit automatiquement chaque `<img src="http://...">`
-  vers le proxy — fix rétroactif, les anciens messages déjà en
-  base bénéficient aussi du correctif sans migration.
+- **Logos clients dans les signatures de mails entrants : images HTTP
+  bloquées par le navigateur (mixed content).** Beaucoup de
+  signatures embarquent leur logo via `<img src="http://cdn.client.com/…">`
+  (HTTP simple). L'UI TB est servie en HTTPS, donc le navigateur
+  bloque silencieusement le chargement HTTP et affiche un
+  placeholder cassé — pas de message UI, juste un warning dans la
+  console DevTools. Nouvelle route `/api/proxy-image?url=…` qui
+  récupère l'image côté serveur et la sert en HTTPS au navigateur
+  de l'agent connecté. Le rendu côté `conversation.tsx` réécrit
+  automatiquement chaque `<img src="http://...">` vers le proxy
+  juste avant DOMPurify, de sorte que les anciens messages déjà
+  stockés en DB bénéficient aussi du fix sans aucune migration.
 
 ### Security
 
-- Proxy d'images strictement défensif : session agent requise,
-  scheme `http`/`https` uniquement, blocage de toute IP privée /
-  loopback / link-local / multicast (anti-SSRF), 5 MB max,
-  timeout 5 s, max 3 redirects revalidés, aucun cookie ni Referer
-  transmis upstream, réponse `image/*` only.
+- **Proxy d'images : protection SSRF stricte.** `/api/proxy-image`
+  exige une session agent (`requireAuth()`), n'accepte que
+  `http://` / `https://`, résout l'hostname côté serveur et bloque
+  toute IP dans une plage privée / loopback / link-local /
+  unique-local / multicast / `*.localhost`. Limite de taille 5 MB,
+  timeout 5 s, max 3 redirects, et chaque redirection est re-validée
+  contre les mêmes règles. Ni cookie ni Referer transmis à
+  l'upstream. Réponse en `image/*` only (sinon 415).
 
 App image change uniquement — pull `:latest` (ou `:v1.10.14772`)
 sur les 5 services. Pas de migration.
@@ -1721,17 +2237,25 @@ sur les 5 services. Pas de migration.
 
 ### Fixed
 
-- **Numéro de ticket désormais présent dans le sujet de tous les
-  mails sortants.** Réponses agents, notifications de résolution,
-  auto-close, enquêtes CSAT, auto-replies et notifications de
-  changement de client utilisent désormais le format canonique
-  `[Ticket #N] <subject>` ou `Re: [Ticket #N] <subject>`. Le helper
-  unifié nettoie aussi les `Re:` et `[#N]` accumulés au fil des
-  échanges. Le client peut maintenant identifier le ticket
-  concerné dès l'aperçu de la boîte de réception.
-- **Threading par sujet : reconnaît `[Ticket #N]`** en plus du
-  legacy `[#N]`, pour les gateways qui strippent les headers
-  `In-Reply-To` / `References`.
+- **Sujets des emails sortants : numéro de ticket désormais
+  toujours présent.** Auparavant, les réponses agents, les
+  notifications de résolution, les mails d'auto-close, les
+  enquêtes CSAT, les auto-replies sur création de ticket et les
+  mails de changement de client utilisaient `Re: <subject>` sans
+  référence au ticket — un client recevant plusieurs mails ne
+  pouvait pas savoir lequel concernait quel ticket. Toutes les
+  voies de sortie passent désormais par un helper canonique
+  `buildOutboundSubject(ticketNumber, subject, mode)` qui
+  produit `[Ticket #N] <subject>` (création) ou `Re: [Ticket #N]
+  <subject>` (réponse). Le helper nettoie aussi les `Re:` /
+  `[#N]` / `[Ticket #N]` accumulés au passage, donc le client ne
+  verra jamais `Re: Re: [#7] [Ticket #7] ...`.
+- **Threading par sujet : reconnaît désormais `[Ticket #N]`.** La
+  méthode de fallback de thread-matching dans `mail-service`
+  parsait uniquement le pattern `[#N]`. Elle accepte désormais
+  aussi `[Ticket #N]` (la forme canonique). Cela renforce la
+  robustesse face aux gateways qui strippent `In-Reply-To` /
+  `References`.
 
 App image change uniquement — pull `:latest` (ou `:v1.10.14771`)
 sur les 5 services. Aucune migration.
@@ -1740,186 +2264,163 @@ sur les 5 services. Aucune migration.
 
 ### Fixed
 
-- **Re-fetcher un mail dont le ticket parent est dans la corbeille
-  ne créait pas de nouveau ticket.** Si l'opérateur supprimait un
-  ticket (soft-delete) puis remettait le mail en non-lu sur le
-  serveur IMAP pour le re-pousser, le mail-service le marquait
-  `\Seen` sans créer de nouveau ticket : la dedup `messageId` et le
-  threading par `In-Reply-To` / `[#N]` se ré-attachaient
-  silencieusement au ticket en corbeille. Les requêtes ignorent
-  désormais `Ticket.deletedAt != null`. Le mail "ressuscité"
-  produit maintenant un nouveau ticket comme attendu.
+- **Mail re-fetché silencieusement ignoré quand le ticket parent est
+  dans la corbeille.** Quand un opérateur supprime un ticket dans TB
+  (soft-delete, `Ticket.deletedAt`) puis remet le mail en non-lu sur
+  le serveur IMAP pour le re-pousser, le mail-service le marquait
+  `\Seen` sans créer de nouveau ticket. La dedup `messageId` et les
+  deux méthodes de threading (In-Reply-To / References + match
+  `[#N]` dans le sujet) ne filtraient pas sur `deletedAt`, donc le
+  message se ré-attachait silencieusement au ticket en corbeille.
+  Les trois requêtes ignorent désormais `ticket.deletedAt != null`,
+  de sorte qu'un mail "ressuscité" après mise à la corbeille produit
+  un nouveau ticket comme attendu.
 
-App image change uniquement — pull `:latest` (ou `:v1.10.14770`)
-sur les 5 services. Pas de migration.
+App image change — pull `:latest` (ou `:v1.10.14770`) sur les 5
+services. Pas de migration. Comportement strictly correctif —
+n'altère pas les tickets actifs.
 
 ## [1.10.14769] — 2026-05-15
 
 ### Fixed
 
-- **Modale "Nouveau ticket" : scroll cassé quand le message est
-  long.** La modale et l'éditeur n'avaient ni `max-height` ni
-  `overflow`, un message volumineux poussait la modale au-delà du
-  viewport et masquait les boutons. Modale en flex column avec corps
-  scrollable + footer collant, éditeur plafonné à 260px avec scroll
-  interne.
-- **Logos / images de signature absents dans les emails entrants.**
-  Le sanitizer mail strippait tous les `src="https://…"` (anti
-  pixel-tracker), supprimant aussi les logos CDN légitimes des
-  signatures. Le strip ne touche désormais plus les `<img>` ; en
-  contrepartie chaque `<img>` reçoit automatiquement
+- **Modale "Nouveau ticket" : impossible de scroller dans le message
+  ou la modale quand le contenu est long.** `DialogContent` n'avait
+  pas de `max-height` ni d'`overflow`, et le `RichTextEditor` n'avait
+  pas non plus de plafond. Un long message poussait la modale au-delà
+  de la fenêtre du navigateur, masquant les boutons Annuler/Créer.
+  La modale est désormais structurée en flex column avec corps
+  scrollable et footer collant, et l'éditeur a une hauteur max
+  (`maxHeight={260}`) avec scroll interne.
+- **Logos / images de signature absents des emails entrants.** Le
+  sanitizer côté mail-service strippait systématiquement tous les
+  `src="https://…"` des `<img>` (anti pixel-tracker), ce qui faisait
+  disparaître les logos hébergés sur le CDN du client. Le strip ne
+  s'applique désormais qu'aux balises non-`<img>`. Pour préserver la
+  posture anti-tracking, chaque `<img>` reçoit automatiquement
   `referrerpolicy="no-referrer" loading="lazy"` — le navigateur ne
-  fuit pas la page TB au serveur image et ne charge l'image que si
-  elle entre dans le viewport.
-- **Images inline `<img src="cid:…">` cassées (placeholders dans le
-  ticket).** Les images RFC 2392 Content-ID des mails entrants
-  n'étaient pas résolues vers les attachments stockés. Le parser
-  capture désormais le `cid` de chaque pièce inline et le
-  mail-service réécrit `src="cid:xxx"` en `/api/attachments/<id>`
-  après création du message.
-- **Pièces jointes d'emails entrants : 404 à l'ouverture.** Le
-  composant de conversation construisait
+  révèle plus la page TB au serveur de l'image, et l'image n'est
+  chargée que si elle entre dans le viewport.
+- **Images inline `<img src="cid:…">` cassées dans les emails.**
+  Les images embedded via RFC 2392 Content-ID n'étaient jamais
+  résolues vers les attachments stockés — le navigateur affichait
+  un placeholder cassé. Nouvelle colonne `Attachment.contentId`,
+  le parser mail capture le `cid` de chaque pièce inline, et après
+  création du `TicketMessage` le mail-service réécrit les
+  `src="cid:xxx"` vers `/api/attachments/<id>`.
+- **Pièces jointes des emails entrants : 404 à l'ouverture.** Le
+  rendu de la conversation construisait le href via
   `/api/uploads/${att.storagePath}` alors que `storagePath` est un
-  chemin absolu sur disque (`/data/attachments/…`). Nouvelle route
-  `/api/attachments/[id]` qui résout par ID Attachment, vérifie
-  l'auth ticket parent, et stream le fichier (inline pour images /
-  PDF, attachment pour le reste).
-- **Création manuelle d'un ticket : aucun mail au client.** Quand
-  un agent ouvre un ticket pour un client par téléphone ou walk-in,
-  aucun email de confirmation n'était envoyé. Le ticket de création
-  manuelle envoie désormais le même email d'acquittement *"Votre
-  demande a bien été enregistrée sous le numéro #N"* que pour un
-  ticket entrant, avec le logo et la signature de la mailbox.
+  absolute path (`/data/attachments/<uuid>.<ext>`). Le href généré
+  était `/api/uploads//data/attachments/<uuid>.<ext>` → 404 pur sur
+  toute pièce jointe d'email entrant. Nouvelle route
+  `/api/attachments/[id]` qui résout par id Attachment, vérifie
+  l'auth sur le ticket parent, et stream depuis `storagePath` avec
+  Content-Disposition adapté (inline images/PDF, attachment pour le
+  reste).
+- **Création manuelle d'un ticket : le client ne recevait aucune
+  notification.** Quand un agent ouvre un ticket pour un client par
+  téléphone, walk-in ou escalation interne, aucun mail
+  d'acquittement n'était envoyé — le client ne savait pas que sa
+  demande était enregistrée. Le ticket de création manuelle envoie
+  désormais le même email d'acquittement *"Votre demande a bien été
+  enregistrée sous le numéro #N"* que pour les tickets nés d'un mail
+  entrant, avec le logo et la signature de la mailbox correspondante.
 
 ### Added
 
-- **Migration Prisma : `Attachment.contentId`.** Colonne TEXT
-  nullable. Le container `migrate` l'applique automatiquement au
-  prochain démarrage — pas de migration manuelle à exécuter.
+- **`apps/web/prisma/schema.prisma`** — colonne `Attachment.contentId
+  String?`. Migration appliquée automatiquement par le container
+  `migrate` au prochain `up -d` (pas de migration manuelle requise).
 
 ### Upgrade
 
-Pull `:latest` (ou `:v1.10.14769`) sur les 5 services (`web`,
-`ai-service`, `mail-service`, `telegram-bot`, `migrate`). Migration
-Prisma automatique au boot. Les anciens messages avec des CID
-cassés restent inchangés (le rewrite ne s'applique qu'aux nouveaux
-emails entrants).
+Pull `:latest` (ou `:v1.10.14769`) sur les 5 services. Migration
+Prisma automatique au démarrage du container `migrate`. Aucun
+nettoyage post-déploiement à exécuter (les anciens messages avec
+des `<img src="cid:…">` cassés restent inchangés ; seuls les
+nouveaux mails entrants bénéficient du rewrite).
 
 ## [1.10.14768] — 2026-05-15
 
 ### Fixed
 
-- **RAG Knowledge Builder : sur-fragmentation et accumulation sans
-  plafond.** Avant ce fix, un seul article web pouvait remplir un
-  topic avec 13 chunks redondants (cas observé sur un article
-  `acronis.com` dans le topic `data-recovery`), et chaque nouveau
-  ticket déclenchait un nouveau crawl qui ajoutait des chunks **sans
-  jamais purger** : l'index grimpait à 210+ chunks répartis sur 9
-  topics, avec énormément de doublons sémantiques et de sources peu
-  pertinentes.
-  - Le découpage `chunkText()` plafonne désormais à **2 chunks
-    maximum par article** (au lieu d'autant de chunks de 2400 chars
-    qu'en contient l'article — jusqu'à 13 sur les articles longs).
-  - Nouvelle fonction `pruneTopic()` appelée après chaque crawl :
-    maintient l'invariant *au plus 5 URLs par topic, 1 chunk par URL
-    (le premier = intro de l'article)*, en privilégiant les sources
-    les plus récentes.
+- **RAG Knowledge Builder : sur-fragmentation des articles + pas de
+  plafond par topic.** Avant ce fix, un seul article web pouvait
+  remplir un topic avec 13 chunks redondants (cas observé sur
+  `acronis.com/blog/posts/hard-drive-crash` dans le topic
+  `data-recovery`), et chaque nouveau ticket ajoutait des chunks sans
+  jamais purger : l'index grimpait à 210 chunks répartis sur 9 topics,
+  avec énormément de doublons sémantiques.
+  - `apps/ai-service/src/rag/topic-crawler.ts:103` : `chunkText()`
+    plafonne désormais à `MAX_CHUNKS_PER_ARTICLE = 2` (au lieu de
+    découper l'article entier en autant de chunks de 2400 chars qu'il
+    en contient — jusqu'à 13 sur les articles longs).
+  - `apps/ai-service/src/rag/topic-crawler.ts:415` : nouvelle fonction
+    `pruneTopic()` appelée après chaque crawl. Maintient l'invariant
+    *au plus 5 URLs par topic, 1 chunk par URL (le premier = intro)*,
+    en privilégiant les sources les plus récentes.
 
-### Added
+### Changed
 
-- **`docs/ops/rag-cleanup-v1.10.14768.sql`** — script SQL idempotent
-  à exécuter une fois sur les instances existantes pour aligner la
-  table `AiKnowledgeChunk` avec le nouvel invariant (sans attendre
-  qu'un nouveau ticket re-déclenche un crawl). Voir l'en-tête du
-  fichier pour les commandes `docker cp` + `psql`.
+- Migration des données existantes effectuée manuellement au
+  déploiement (210 chunks → 44, 1 par URL, max 5 URLs/topic). Les
+  prod existantes doivent exécuter le SQL de cleanup décrit dans la
+  doc de release v1.10.14768 (voir `docs/ops/rag-cleanup-v1.10.14768.sql`).
 
-### Upgrade
-
-Pull `:latest` (ou `:v1.10.14768`) sur les 5 services (`web`,
-`ai-service`, `mail-service`, `telegram-bot`, `migrate`). Pas de
-migration Prisma. Recommandé après `up -d` : exécuter
-`docs/ops/rag-cleanup-v1.10.14768.sql` une seule fois pour purger
-les chunks accumulés avant ce fix.
-
-## Installer hotfix — 2026-05-15
-
-### Fixed
-
-- **`install.sh` Mode A : prompt manquant pour l'URL HTTPS publique.**
-  En Mode A (reverse proxy externe — Sophos XGS, nginx, Traefik…), le
-  wizard écrivait `APP_URL=http://${SERVER_IP}:4000` sans demander le
-  FQDN HTTPS public devant le proxy. Conséquences :
-    * **Microsoft 365 / Google Workspace OAuth refusait d'ajouter les
-      mailboxes** — Azure AD et Google rejettent les redirect URIs HTTP
-      hors `localhost`. L'écran d'erreur Microsoft générique *"Désolé,
-      nous rencontrons des problèmes pour vous connecter"* après le 2FA
-      vient quasi exclusivement de là.
-    * Cookies de session NextAuth non marqués `Secure` (vol de session
-      possible sur réseau partagé / hotspot).
-    * Redirect URI Keycloak SSO pointait sur l'IP LAN HTTP — KO pour
-      les clients qui se connectent depuis Internet.
-  Le wizard demande désormais l'**URL HTTPS publique optionnelle** en
-  Mode A. Si renseignée, elle alimente `APP_URL`, et donc par effet
-  d'héritage `NEXTAUTH_URL` et `KEYCLOAK_URL`. Si vide, comportement
-  identique à avant (LAN-only direct).
-- **Docs `INSTALL.md` + `deployment-modes.md` + `DEPLOYMENT-MODES.md` :**
-  notes dédiées au scénario Mode A + reverse proxy externe avec OAuth.
-  Précise explicitement la contrainte Azure / Google sur le HTTP
-  non-localhost et la procédure de rattrapage si le prompt n'a pas été
-  saisi à l'install (`.env` + `docker compose up -d --force-recreate
-  web keycloak`).
-
-Pas de changement d'image — installer script et documentation
-uniquement, aucun rebuild Docker requis. Les déploiements existants
-qui ont déjà patché manuellement `APP_URL` n'ont rien à faire.
+App image change — pull `:latest` (ou `:v1.10.14768`) sur les 5
+services. Aucune migration Prisma (pas de schéma changé), mais le SQL
+de cleanup ci-dessus est recommandé pour purger les chunks pré-fix.
 
 ## [1.10.14767] — 2026-05-14
 
 ### Removed
 
 - **Slack / Teams Connect plugin retired.** The webhook-based notification
-  integration for Slack and Microsoft Teams is removed from TicketBrainy.
-  Telegram remains the only first-class chat integration. Microsoft has
-  been retiring the Office 365 Connectors (MessageCard format) since 2024
-  and the limited one-way notification surface no longer matched the
-  product direction. Removed: the `Settings → Integrations` page, the
-  `WebhookIntegration` Prisma model (dropped by migration
-  `20260514_drop_webhook_integration`), the webhook dispatcher, and the
-  `slack_connect` plugin entry in the marketplace registry.
-
-App image change only — pull `:latest` (or `:v1.10.14767`) on the
-`web`, `ai-service`, `mail-service`, `telegram-bot`, and `migrate`
-services. The migrate container drops the now-orphaned
-`WebhookIntegration` table automatically on first run; the table holds
-no production data on any known deployment.
+  integration for Slack and Microsoft Teams has been removed from
+  TicketBrainy. Telegram remains the only first-class chat integration.
+  Microsoft has been retiring the Office 365 Connectors (MessageCard
+  format) since 2024, and the limited one-way notification surface no
+  longer matched the product direction. Removed code: the
+  `Settings → Integrations` page, the `WebhookIntegration` Prisma model,
+  the webhook dispatcher, the `slack_connect` plugin entry in the
+  marketplace registry, and ~37 i18n keys per locale (fr, en, es, de, it).
+  The `WebhookIntegration` table is dropped by migration
+  `20260514_drop_webhook_integration`; no customer data is lost on the
+  reference deployment (table was empty).
 
 ## [1.10.14766] — 2026-05-12
 
 ### Fixed
 
-- **"Assignés" no longer shows the current user's own tickets.** The
-  Tickets sidebar separates "Mes conversations" (assigned to me) from
+- **"Assignés" view no longer includes the current user's own tickets.**
+  The Tickets sidebar separates "Mes conversations" (assigned to me) from
   "Assignés" (assigned to someone else). The "Assignés" query was
-  `assignedToId != null`, which included my own tickets once I auto-
-  assigned myself by replying to an unassigned ticket. The query is
-  now `assignedToId != null AND assignedToId != currentUserId`. A
-  ticket belongs to exactly one of: "Non assignés", "Mes
+  `assignedToId != null`, which incorrectly returned my own tickets too
+  once I auto-assigned myself by replying to an unassigned ticket. The
+  query is now `assignedToId != null AND assignedToId != currentUserId`,
+  so each agent sees only their colleagues' assigned tickets in this
+  view. A ticket belongs to exactly one of: "Non assignés", "Mes
   conversations", "Assignés" — no overlap.
-- **AGENT role no longer sees mailboxes outside their access.** The
-  mailbox filter dropdown on `/tickets` loaded every active mailbox
-  regardless of `UserMailbox` scoping. The dropdown is now scoped to
-  the agent's assigned mailboxes (same rule already enforced on the
-  ticket data side).
+- **Agent role no longer sees mailboxes outside their access.** The
+  mailbox filter dropdown on the Tickets page loaded every active
+  mailbox regardless of `UserMailbox` scoping. An agent with access to
+  only one mailbox could pick another mailbox in the dropdown and (while
+  the ticket query was already scoped) the UI exposed mailbox names they
+  had no business seeing. The Tickets page now applies the same
+  `UserMailbox` filter to the dropdown source for `AGENT` users that
+  `getTickets()` already enforces on the data side.
 
 ### Removed
 
-- **"Tous les tickets" global sidebar entry.** The cross-mailbox
-  catch-all view is removed from the navigation. Per-mailbox folders
-  (Non assignés / Mes conversations / Assignés / Closed / Spam) and
-  the Favorites / Deleted global views remain.
-
-App image change only — pull `:latest` (or `:v1.10.14766`) on the
-`web` service to receive the fixes.
+- **"Tous les tickets" global view.** The catch-all sidebar entry that
+  aggregated tickets across every mailbox (resolved + unresolved + spam
+  excluded) is removed from the navigation. Per-mailbox folders
+  (Non assignés / Mes conversations / Assignés / Closed / Spam) and the
+  Favorites / Deleted global views remain. Bookmarks pointing at
+  `/tickets` with no `view` still resolve to a scoped list (filtered to
+  the agent's mailboxes), but the entry no longer encourages cross-
+  mailbox browsing.
 
 ## [1.10.14765] — 2026-05-11
 
@@ -1931,15 +2432,16 @@ App image change only — pull `:latest` (or `:v1.10.14766`) on the
   system already appends the agent's signature block (name + mailbox
   signature + logo) on send. The prompt now forbids any closing
   salutation, agent name, team name or company name in both the
-  Assistant AI draft and the "Generate email from resolution" path.
+  Assistant AI draft (drafter.ts) and the "Generate email from
+  resolution" path (generator.ts). The agent reviews a clean body and
+  the system handles the sign-off.
 - **CSAT thank-you page redirected customers to /login.** The
-  middleware whitelisted `/api/csat` (the rating endpoint) but not
-  the `/csat/[ticketId]` confirmation page, so after submitting their
-  rating customers were bounced to the staff login screen. The
+  middleware whitelisted `/api/csat` (the rating endpoint) but not the
+  `/csat/[ticketId]` confirmation page, so after submitting their
+  rating customers were bounced to the staff login screen — which they
+  have no account for. The page was already designed to render
+  publicly (no `requireAuth`, only branding + the rating param). The
   middleware now lets `/csat/*` through.
-
-App image change only — pull `:latest` (or `:v1.10.14765`) on the
-`web` service to receive the fixes.
 
 ## [1.10.14764] — 2026-05-11
 
@@ -1950,175 +2452,152 @@ App image change only — pull `:latest` (or `:v1.10.14765`) on the
   email to every subscriber on the mailbox, which agents found noisy
   (the triage summary is already visible in the ticket UI and in the
   Telegram alert when enabled). Email notifications are now reserved
-  for **Deep Analysis** (a manual agent action). Telegram
-  notifications for auto-triage are unchanged.
-
-App image change only — pull `:latest` (or `:v1.10.14764`) on the
-`web` service to receive the change.
+  for **Deep Analysis** (a manual agent action). Telegram notifications
+  for auto-triage are unchanged — flip the channel off in
+  Settings → Mailboxes if you don't want them.
 
 ## [1.10.14763] — 2026-05-11
 
 ### Fixed
 
-- **Mailbox logo oversized in reply email signatures.** Outlook and
-  many corporate mail clients ignore CSS `max-height`/`max-width` on
-  `<img>` tags; the per-mailbox logo injected at the top of agent
-  reply signatures was rendered at its native size in those clients.
-  The logo now ships with an explicit HTML `height="48"` attribute
-  alongside the existing CSS constraints, so it renders at ~48px tall
-  everywhere.
+- **Mailbox logo oversized in reply email signatures.** Outlook and many
+  corporate mail clients ignore CSS `max-height`/`max-width` on `<img>`
+  tags; the per-mailbox logo injected at the top of agent reply
+  signatures was rendered at its native size (often filling the screen)
+  in those clients. The logo now ships with an explicit HTML
+  `height="48"` attribute alongside the existing CSS constraints, so it
+  renders at ~48px tall everywhere (width auto-scaled proportionally).
 - **DMARC badge falsely showing "valid" on senders with no DMARC
   record.** Microsoft 365 emits `dmarc=bestguesspass` in the
   `Authentication-Results` header when the sender domain publishes no
-  DMARC record but SPF/DKIM pass — it is a heuristic guess, not a
-  real DMARC pass. The parser was mapping `bestguesspass` to `pass`,
-  causing inbound tickets from domains without published DMARC to
-  display a misleading green "valid" badge. We now map
-  `bestguesspass` to `none`.
-
-App image change only — pull `:latest` (or `:v1.10.14763`) on the
-`web` and `mail-service` services to receive the fixes.
+  DMARC record but SPF/DKIM pass — it is a heuristic guess, not a real
+  DMARC pass. The parser was mapping `bestguesspass` to `pass`, causing
+  inbound tickets from domains without published DMARC (e.g.
+  heinrich-bock.com) to display a misleading green "valid" badge. We
+  now map `bestguesspass` to `none`, so the badge correctly reads "non
+  configuré" until the customer publishes a real DMARC record.
 
 ## [1.10.14762] — 2026-05-11
 
 ### Changed
 
 - **AI rate limit per user raised from 60/h to 200/h.** The single
-  bucket is shared across every AI feature (triage, deep analysis,
-  email assistant, AI skills). 60/h was tripping during normal
-  multi-ticket work. Default raised to 200/h. Instances that need
-  a lower limit can still narrow it via Settings → Security UI
-  (no rebuild required).
-
-App image change only — pull `:latest` (or `:v1.10.14762`) on the
-`web` service to receive the change.
+  `RL_AI_USER` bucket is shared across every AI feature (triage,
+  deep analysis, email draft / rewrite / summarize, AI skills) so
+  60/h was tripping during normal work as soon as 4-5 tickets were
+  open in parallel. Fixed-window Redis bucket survives across
+  features and across restarts, so the trip lingered for the full
+  60-minute window. Default raised to 200/h. Instances that need
+  a lower limit can still override via Settings → Security UI
+  (cached 60s, no rebuild required).
+  File: `apps/web/src/lib/rate-limit.ts`.
 
 ## [1.10.14761] — 2026-05-10
 
 ### Security
 
-- **AGENT users are now properly scoped on the dashboard.** Before
-  this release, an AGENT could see KPI counters, recent tickets, the
-  7-day activity chart, the "Connected mailboxes" list, AND the new
-  KPI modal for ALL mailboxes — including ones they were not assigned
-  to. Now, every dashboard query is scoped to the user's `UserMailbox`
-  memberships when `role === "AGENT"`. ADMIN and SUPERVISOR roles see
-  everything (unchanged). Same scoping pattern already in use on the
-  `/tickets` page.
-
-App image change only — pull `:latest` (or `:v1.10.14761`) on the
-`web` service to receive the fix. No deployment-file changes.
+- **AGENT scoping sur tout le dashboard.** Avant : un agent voyait
+  les compteurs (Ouvert / Nouveaux / Non assignés / Résolus aujourd'hui),
+  les tickets récents, le chart d'activité 7 jours et la section
+  "Boîtes mail connectées" pour TOUTES les boîtes — y compris celles
+  dont il n'a pas accès. Désormais : un AGENT ne voit que les données
+  des `userMailbox` qui lui sont associées. ADMIN et SUPERVISOR sont
+  inchangés (ils voient tout). Le scoping s'applique aussi à la
+  modale `getKpiTickets` (clic sur une case KPI). Fichiers :
+  `apps/web/src/app/(dashboard)/dashboard/page.tsx`,
+  `apps/web/src/lib/actions/dashboard.actions.ts`. Implémente le même
+  pattern que `ticket.actions.ts:181-187`.
 
 ## [1.10.1476] — 2026-05-10
 
 ### Added
 
-- **Clickable Dashboard KPI cards.** Click any of the four KPI cards
-  (Open / New today / Unassigned / Resolved today) to open a modal
-  listing the matching tickets. Each row links to the ticket page.
-  Filter strictly mirrors the counter for consistency. Cap of 200
-  per modal with a banner that points to the full tickets list when
-  exceeded. 5 locales supported (FR / EN / ES / IT / DE).
+- **Cliquables : les 4 cases KPI du Dashboard** (Ouvert / Nouveaux
+  aujourd'hui / Non assignés / Résolus aujourd'hui). Un clic ouvre
+  une modale listant les tickets correspondants, filtre identique
+  au compteur. Chaque ligne navigue vers `/tickets/[id]`.
+  Fichiers : `apps/web/src/lib/actions/dashboard.actions.ts` (nouveau
+  Server Action `getKpiTickets`), `apps/web/src/app/(dashboard)/dashboard/kpi-tickets-dialog.tsx`
+  (nouveau composant Dialog + ScrollArea), `apps/web/src/app/(dashboard)/dashboard/dashboard-content.tsx`
+  (KpiCard devient `<button>` cliquable, état `openKpi` centralisé).
+  Cap de 200 tickets par modale avec bandeau "Affichage des 200 plus
+  récents — ouvrez la liste des tickets pour voir la suite". 7 nouvelles
+  clés i18n × 5 locales (FR / EN / ES / IT / DE).
 
-App image change only — pull `:latest` (or `:v1.10.1476`) on the
-`web` service to receive the feature. No deployment-file changes.
+### Fixed
 
-## [1.10.14751] — 2026-05-10
-
-### Security
-
-Hardening pass on the deployment kit (no app image changes, no GHCR
-re-tag — public repo files only). Driven by an external audit of the
-install/secrets/proxy surface.
-
-- **`install.sh` writes `.env` (and `.env.backup.*`) with
-  `umask 077` + explicit `chmod 600`.** Previously the file inherited
-  the operator's default umask; on a fresh VPS that is usually `0022`,
-  i.e. world-readable secrets. Other local users on the host could
-  read `DB_PASSWORD`, `NEXTAUTH_SECRET`, `ENCRYPTION_MASTER_KEY`, etc.
-- **`scripts/generate-secrets.sh` adopts the same posture** (`umask
-  077`, `chmod 600` before AND after the sed pass) and is now
-  protected by an `flock`-based single-writer lock. Two concurrent
-  runs racing on `sed -i` could otherwise corrupt secrets silently.
-- **SearXNG `secret_key` is now generated, not shipped.**
-  `scripts/generate-secrets.sh` produces a fresh `openssl rand -hex
-  32` value and replaces the placeholder
-  (`tb-rag-searxng-replace-on-deploy`) in
-  `searxng/settings.yml` on first run. Sessions and form signatures
-  in the internal SearXNG instance are no longer predictable across
-  installs.
-
-  *Existing installs:* re-run `bash scripts/generate-secrets.sh` and
-  `docker compose up -d --force-recreate searxng` to rotate the key.
-
-- **`scripts/keycloak-reset-admin.sh` no longer accepts the new
-  password as a command-line argument.** It is read from a masked
-  `read -rs` prompt (or from the `KC_NEW_ADMIN_PASSWORD` env var for
-  non-interactive use), validated for ≥ 12 chars, and is never echoed
-  back. Argv leaks via `ps`, shell history, and terminal logs are
-  closed.
-
-  *Migration:* drop the trailing positional `<NEW_PASSWORD>` from any
-  automation. CI callers should set `KC_NEW_ADMIN_PASSWORD` from a
-  secret store and unset it after the call.
-
-- **`README.md` Quick Start replaces `curl … get.docker.com | sh`
-  with the official Docker APT repository install** (signed by the
-  `download.docker.com` GPG key, package-manager checksum verified).
-  The previous one-liner ran an unsigned remote script as root.
-- **`docs/INSTALL.md` § Firewall split mode-aware.** Mode B (built-in
-  Caddy) and mode C (external reverse proxy) now show 80/443-only
-  rules; mode A (direct exposure) is documented as LAN/VPN-only with
-  source-IP-restricted UFW / firewalld snippets. The previous text
-  recommended opening 4000/8180 to the public internet, which contradicted
-  the Caddy hardening and exposed the Keycloak admin console
-  (`:8180/admin/`) over plain HTTP.
-
-No findings classified as **High** in the audit but deemed deliberate
-trade-offs were changed in this pass: image `:latest` tags
-(documented upgrade path), `KC_PORT` default bind, `TRUSTED_PROXY_MODE`
-default, root-uid containers + bind-mounted Claude credentials, and
-the Caddy admin API on `0.0.0.0:2019` (origin allowlist already in
-place; localhost would break in-network reload from `web:`). Those
-require larger design discussions and are tracked separately.
+- **Pas de re-fetch silencieux toutes les 30 s** dans la modale KPI :
+  `useEffect` utilise un `useRef` pour `onOpenChange` afin que le
+  polling `router.refresh()` du dashboard ne retrigger plus le chargement
+  de la liste pendant que la modale est ouverte.
 
 ## [1.10.1475] — 2026-05-10
 
 ### Changed
 
 - **Slack / Teams Connect and Telegram Bot switch from one-shot
-  to annual subscription.** Listed prices unchanged at 29 € each
-  — now per year. Existing one-shot purchases are grandfathered:
-  the licences already issued have no expiry, so the gating layer
-  keeps granting them indefinitely.
+  to annual subscription.** Same flip as v1.10.1473/1474 applied
+  to `slack_connect` and `telegram_bot` in
+  `apps/web/src/lib/license/features.ts`. Listed prices unchanged
+  (29 € / 29 €) — now per year. Existing one-shot purchases are
+  grandfathered (no `expires_at` on the issued envelopes, so
+  `hasFeature()` keeps them granted indefinitely). After this
+  release every premium plugin is on annual subscription except
+  Enterprise Pack — which remains one-shot by design.
 - **Enterprise Pack price raised from 89 € to 99 €** (still
-  one-shot). Applies to new checkouts only; customers who bought
-  at 89 € are unaffected.
+  one-shot). Updates `apps/web/src/lib/license/features.ts`.
+  No effect on customers who already purchased at 89 € — the
+  price is read at checkout time, not from the licence row.
 
-After this release every premium plugin except Enterprise Pack is
-on annual subscription.
+### Coordination required before next sale
+
+VigilanceKey `slug → stripePriceId` mapping must be aligned for:
+- `slack_connect` and `telegram_bot` → Stripe `Price` in
+  `recurring/year` mode at 29 € each.
+- `enterprise_pack` → Stripe `Price` in `one_time` mode at 99 €.
+
+Stripe configuration is still pending overall (cf. project
+memory `Stripe Pending`); this release does not break any live
+purchase path.
 
 ## [1.10.1474] — 2026-05-10
 
 ### Changed
 
 - **BackupMonitor switches from one-shot to annual subscription.**
-  Listed price unchanged at 49 € — now per year. Existing one-shot
-  purchases are grandfathered: licences already issued have no
-  expiry, so the gating layer keeps granting them indefinitely.
-  Same flip pattern as v1.10.1473.
+  Same flip as v1.10.1473 applied to `backup_monitor` in
+  `apps/web/src/lib/license/features.ts`: `priceModel`
+  `"one-shot"` → `"year"`, listed price unchanged at 49 € — now
+  per year. Existing one-shot purchases are grandfathered (no
+  `expires_at` on the issued envelopes, so `hasFeature()` keeps
+  them granted indefinitely). VigilanceKey `slug → stripePriceId`
+  for `backup_monitor` must point to a Stripe `Price` in
+  `recurring/year` mode before the next sale; same coordination
+  caveat as v1.10.1473.
 
 ## [1.10.1473] — 2026-05-10
 
 ### Changed
 
 - **Time Tracking Pro, Email Templates Pro and CSAT & Feedback
-  switch from one-shot to annual subscription.** Listed prices
-  unchanged: 39 € / 39 € / 29 € — now per year. Existing one-shot
-  purchases are grandfathered: licences already issued have no
-  expiry, so the gating layer keeps granting them indefinitely.
-  The plugin storefront UI updates the badge from "/once" to
-  "/perYear" automatically based on the new pricing model.
+  switch from one-shot to annual subscription.** Pricing model
+  (`priceModel`) flipped from `"one-shot"` to `"year"` on the
+  three plugin entries in `apps/web/src/lib/license/features.ts`.
+  Listed prices unchanged: 39 € / 39 € / 29 € — now per year.
+  Existing one-shot purchases are grandfathered: the licences
+  already issued carry no `expires_at`, so `hasFeature()` keeps
+  granting them indefinitely. The plugin storefront UI already
+  drives the badge label off `priceModel`, so the cards now
+  display "/perYear" automatically.
+
+### Coordination required before next sale
+
+The license server (VigilanceKey) `slug → stripePriceId` mapping
+for `csat_feedback`, `time_tracking_pro` and `email_templates`
+must point to Stripe `Price` objects in `recurring/year` mode
+before the first checkout for these plugins. Stripe configuration
+is still pending overall (cf. project memory `Stripe Pending`),
+so this release does not break any live purchase path.
 
 ## [1.10.1472] — 2026-05-10
 
@@ -2133,217 +2612,296 @@ on annual subscription.
 
 ### Changed
 
-- **`postcss` spec aligned to `^8.5.10`.** The installed module
-  was already 8.5.10 (covering GHSA-qx2v-qp2m-jg93,
-  XSS via unescaped `</style>`), but the spec still pointed at
-  `^8.5.8`, so `npm audit` flagged the package as a false
-  positive on every run. Spec bumped to silence it without any
-  code change.
+- **`postcss` spec aligned to `^8.5.10`** in `apps/web/package.json`.
+  The installed version was already 8.5.10 (covering the
+  GHSA-qx2v-qp2m-jg93 XSS-via-`</style>` advisory), but the spec
+  still pointed to `^8.5.8`, causing `npm audit` to flag the
+  package as a false positive on every run.
 
 ## [1.10.1471] — 2026-05-10
 
 ### Fixed
 
-- **Global branding logo + favicon now load for unauthenticated
-  recipients.** Two new public endpoints `/api/branding-logo` and
-  `/api/branding-favicon` serve the white-label assets without a
-  TicketBrainy session, so the CSAT survey page (external customer
-  clicking the rating link) and outbound email templates (recipient
-  in Gmail/Outlook) no longer show a broken image. Filename is
-  resolved server-side from the `Setting` table, never from the
-  URL — strict pattern + path-containment defenses identical to
-  the auth-gated `/api/uploads/<file>` route. Same pattern as the
-  per-mailbox logo fix in v1.10.1468/1469, now extended to the
-  global brand.
+- **Public branding logo + favicon now load for unauthenticated
+  recipients.** The CSAT survey page and outbound email templates
+  reference the global white-label logo via `/api/uploads/<file>`,
+  but that route requires a TicketBrainy session — so external
+  customers saw a broken image in their inbox and on the rating
+  page. Two new public endpoints `/api/branding-logo` and
+  `/api/branding-favicon` now serve those assets without auth.
+  Filename is resolved server-side from the `Setting` table (never
+  taken from the URL), with strict pattern + path-containment
+  defenses inherited from the `[filename]` route. Same pattern as
+  the per-mailbox logo fix in v1.10.1468/1469.
 - **Raw migration failures are now fatal.** `run-raw-migrations.mjs`
-  used to log SQL errors and continue, letting `prisma db push`
-  run on a half-applied schema. A failing `CREATE EXTENSION
+  previously logged SQL errors and continued, letting `prisma db
+  push` run on a half-applied schema. A failing `CREATE EXTENSION
   vector` or `AiKnowledgeChunk` migration would yield a green
   deploy with silently-broken RAG / Deep Analysis at runtime.
-  Errors now propagate, the migrate container exits non-zero,
-  and the rollout halts before the app comes up on a broken DB.
+  Errors now propagate, the migrate container exits non-zero, and
+  the rollout halts before the app comes up on a broken DB.
 
 ## [1.10.147] — 2026-05-09
 
 ### Added
 
-- **Dashboard auto-refresh.** Counters and Recent Tickets list
-  refresh in place every 30 s without a full page reload. Pauses
-  while the browser tab is hidden and resumes on focus.
-- **"Refresh mailboxes" button in the left sidebar** (next to the
-  Mailboxes header). Forces an immediate IMAP poll instead of
-  waiting for the next 30 s interval. Useful when an operator
-  knows a customer just sent an email and wants the ticket to
-  appear right away. Server-side debounce (5 s) prevents fan-out
-  on multiple concurrent clicks. Translated to FR / EN / DE / ES /
-  IT.
+- **Dashboard auto-refresh.** The dashboard counters (Open,
+  Unassigned, Resolved Today, My Open) and Recent Tickets list now
+  update in place every 30 s without a full page reload, via
+  `router.refresh()` against the server component. The poll pauses
+  when the browser tab is hidden and re-fires once on resume so
+  operators don't burn DB CPU on a backgrounded tab.
+- **"Refresh mailboxes" button in the left sidebar** next to the
+  "Boîtes mail" / "Mailboxes" header. Clicking it forces the
+  mail-service to run an IMAP poll right away instead of waiting
+  for the next `IMAP_POLL_INTERVAL` tick (default 30 s). Useful
+  when an operator knows a customer just sent an email and doesn't
+  want to wait. Plumbing:
+  - Web Server Action `pokeMailPoll()` publishes on Redis channel
+    `tb:mail-poll-now` (rate-limited 6/min/user).
+  - Mail-service subscribes to that channel and runs
+    `pollAllMailboxes()` with a 5 s server-side debounce — multiple
+    concurrent clicks coalesce into one poll.
+  - The button shows a spinning `RefreshCw` icon for ~4 s after
+    click while the IMAP fetch happens, then triggers a sidebar +
+    dashboard refresh so the new tickets appear.
+  - Translations in FR / EN / DE / ES / IT.
 
 ## [1.10.1469] — 2026-05-09
 
 ### Fixed
 
-- **Mailbox logos now display in outbound email headers.** Outlook
-  / Gmail / Mac Mail showed a "TicketBrainy" placeholder instead of
-  the operator's mailbox logo because the route serving the logos
-  required a TicketBrainy session — but the customer's mail client
-  has no session. The route + middleware now allow `/api/uploads/
-  mailboxes/<file>` publicly, with a strict filename pattern
-  bounding the asset surface to operator-uploaded branding logos.
+- **Middleware was returning 401 on /api/uploads/mailboxes/ before
+  the route handler ran.** v1.10.1468 dropped the auth check inside
+  the route handler itself, but the middleware (`middleware.ts`)
+  still short-circuited the request for any `/api/uploads/*` path
+  without a session token. The middleware now whitelists
+  `/api/uploads/mailboxes/` so the (already-public) handler is
+  reached for outbound-email logo loads. Validated end-to-end with
+  a wget from the mail-service container.
+
+## [1.10.1468] — 2026-05-09
+
+### Fixed
+
+- **Mailbox logos now display in outbound email headers.** Operator
+  reports: the email header showed a "TicketBrainy" placeholder
+  instead of the mailbox logo. Root cause: the route serving the
+  per-mailbox logos (`/api/uploads/mailboxes/[filename]`) required a
+  TicketBrainy session — but the customer's email client (Outlook,
+  Gmail) has no session, so the `<img>` tag in the email template
+  fetched 401 and rendered the alt-text fallback. The route now
+  serves these logos publicly (filenames are strict-pattern matched
+  to `mailbox-<id>[-<unix-ms>].(png|jpg|webp)`, so the asset surface
+  is exactly the operator-uploaded branding files — no path
+  traversal is possible). Cache-Control switched to
+  `public, max-age=86400, immutable` so Gmail's image proxy and
+  Outlook can cache the logo.
 
 ## [1.10.1467] — 2026-05-09
 
 ### Fixed
 
 - **Deep Analysis "Proposed Resolutions" steps were truncated.**
-  Expanding a resolution showed the first few lines of steps but
-  the rest was clipped with no visible scrollbar. Long resolutions
-  are now fully scrollable, and multi-line model output renders
-  correctly with preserved line breaks.
+  The expanded resolution wrapped its steps inside `<ScrollArea
+  max-h-36>` which was itself wrapped in a `motion.div` with
+  `overflow-hidden`. The combination clipped everything past the
+  144 px height with no visible scrollbar — long step lists were
+  unreachable. The wrapper no longer hides overflow and the steps
+  list uses a native scrollable div (`max-h-80 overflow-y-auto`)
+  with `whitespace-pre-wrap` so multi-line steps render correctly.
 
 ## [1.10.1466] — 2026-05-09
 
 ### Fixed
 
-- **Dashboard search now matches ticket number.** Typing a bare
-  number (e.g. "143") used to return "No tickets found" because
-  the search query never looked at the `number` column. Numeric
-  searches now match the ticket number and the exact match is
-  sorted to the top.
+- **Dashboard search by ticket number now works.** Typing a bare
+  number (e.g. "143") returned "No tickets found" because
+  `searchTickets()` ran a tsquery against `searchVector` + ILIKE
+  on subject/customer fields, but never looked at the `number`
+  column. Numeric queries now also match `Ticket.number` and the
+  exact match is sorted to the top of the results.
 
 ## [1.10.1465] — 2026-05-09
 
-### Fixed — RAG Knowledge Builder now actually surfaces external sources
+### Fixed
 
-The first end-to-end test on a real ticket (Sophos XGS Safe Failed
-Mode v22) showed the Deep Analysis ran but the "External sources
-used" card stayed empty even though the answer was 100% available
-on Sophos Community. Three layered failures fixed in this release:
+- **Crawler bypasses Incapsula / WAF anti-bot pages.** Vendor forums
+  (community.sophos.com, Cisco support, etc.) return a JavaScript
+  challenge page to any non-browser fetch — `@extractus/article-extractor`
+  saw 842-byte challenge pages and rightfully discarded them as
+  "no extractable content". The crawler now starts with the SearXNG
+  snippet (which the search engines already extracted for the query)
+  and only OVERRIDES it with the full article when extraction
+  succeeds and yields > 800 chars. Empty-fetch sites still
+  contribute their snippet — short but topical, and enough for the
+  Expert agent to know "there's a thread about this exact issue".
+  Result on ticket #143: the four community.sophos.com threads
+  about Sophos XGS Safe Failed Mode + the v22 release notes are
+  now indexed instead of skipped.
+- **User-Agent updated to a real Chrome string.** Stops the rejection
+  on sites that 403 anything that looks like a bot (Microsoft Learn,
+  Cisco support).
 
-1. **SearXNG timeout was 8 s.** Querying 4 categories in parallel
-   regularly takes >10 s. Now 25 s + a single retry on empty
-   responses.
-2. **Crawl query was repeating tokens.** "Sophos XGS … XGS v22 …
-   SOPHOS XGS …" wasted the search budget. The query builder now
-   tokenises, dedups case-insensitively, drops FR + EN stopwords,
-   and preserves version strings (v22, v22.0.0).
-3. **Vendor forums behind anti-bot WAFs were silently skipped.**
-   community.sophos.com is behind Incapsula — it returns a
-   challenge page to any non-browser fetch. The crawler now keeps
-   the SearXNG snippet as the chunk content by default and only
-   overrides it with the article when extraction succeeds. Empty
-   fetches still contribute their snippet.
-4. **Deep Analysis re-runs now trigger an on-demand crawl** when
-   the RAG turns up empty for the topic, with a 60 s deadline.
+## [1.10.1464] — 2026-05-09
 
-Manually validated on ticket #143: 8 Sophos-specific chunks indexed
-(Sophos Community threads + Sophos Support KBs incl. "Advisory:
-Sophos Firewall goes into failsafe mode when the firmware…").
+### Fixed — RAG quality on real tickets
+
+Diagnostic on ticket #143 (Sophos XGS Safe Failed Mode v22) showed
+the Deep Analysis ran but no external sources surfaced. Three root
+causes:
+
+1. **SearXNG timeout was 8 s**, too tight when querying 4 categories
+   in parallel. The crawler aborted before Google/Reddit/ServerFault
+   could respond. **Bumped to 25 s + one retry on empty/failed.**
+2. **The crawl query repeated tokens.** Triage emitted "Sophos XGS"
+   in vendor + product AND in errorKeywords AND in subject, producing
+   `"Sophos XGS Safe Failed Mode XGS v22.0.0 cluster appliance failure
+   SOPHOS XGS down firewall …"` — a 200-char string with low signal
+   density. `buildQuery()` now tokenizes, dedups case-insensitively,
+   strips FR + EN stopwords, and preserves version strings (v22,
+   v22.0.0) which are the most informative match for bug threads.
+3. **The on-demand re-run had no recourse.** When triage's
+   fire-and-forget crawl failed, the RAG stayed empty for that
+   topic, and re-running the Deep Analysis manually would still
+   inject zero chunks. Now: when retrieval finds 0 chunks but a
+   vendor/product/domains is known, we trigger a synchronous crawl
+   inline (60 s deadline) before calling the Expert agent, so the
+   agent always sees external context if SearXNG can find any.
+
+Manually verified: SearXNG returns the exact relevant Sophos
+Community thread for "Sophos XGS Safe Failed Mode v22" — the issue
+was always the timeout, not the source coverage.
 
 ## [1.10.1463] — 2026-05-09
 
 ### Changed
 
-- **RAG Knowledge Base now has its own sidebar entry** under
-  Settings → IA → Compétences IA. The RAG settings (toggles, quotas,
-  allowlist, sidecar health checks) and the chunk explorer are
-  grouped on the same dedicated page at `/settings/ai/rag`.
-  Translated to FR / EN / DE / ES / IT.
+- **RAG promu en entrée de menu dédiée.** "RAG Knowledge Base" apparaît
+  désormais sous "Compétences IA" dans la sidebar Settings → IA, avec
+  son propre URL `/settings/ai/rag`. La RagSettingsCard (toggles,
+  quotas, allowlist, health checks) est déplacée hors de la page
+  XpertTeamIA et regroupée avec l'explorer dans la même page dédiée.
+  Internationalisation FR/EN/DE/ES/IT.
 
 ## [1.10.1462] — 2026-05-09
 
 ### Fixed
 
-- **Triage error message is now diagnostic.** Generic "Triage request
+- **Triage card surfaces real HTTP error.** Generic "Triage request
   failed. Try again." was hiding 401 (stale browser bundle), 429
-  (rate limit), 502 (ai-service down). The card now shows the
-  precise reason — including a "Hard-refresh the page" hint when
-  the browser bundle is out of sync with the server build.
-- **`/api/ai/*` proxy now logs upstream errors.** Operators can grep
-  the web container logs to correlate any UI failure with its
-  precise HTTP status + body preview, without digging into
-  ai-service logs.
+  (rate limit), 502 (ai-service down) and other distinct conditions.
+  Now the message is either dedicated copy ("Hard-refresh the
+  page (Ctrl+Shift+R)" / "AI rate limit hit. Wait a minute") or the
+  raw status + body so operators can debug in one click.
+
+### Added
+
+- **`/api/ai/*` proxy logs upstream errors.** The Next.js proxy used
+  to swallow non-2xx responses and stream errors silently. Now any
+  upstream failure is logged via `console.warn` / `console.error`
+  with the path, status, body preview and userId, so operators can
+  correlate a "Triage request failed" report in the UI with the
+  exact server-side reason without grepping through ai-service logs.
 
 ## [1.10.1461] — 2026-05-09
 
 ### Added
 
-- **RAG Knowledge Explorer** at `Settings → XpertTeamIA → RAG → Explorer
-  la base`. Lists every chunk indexed by the topic-driven crawler with
-  filters (topic, source, full-text search), pagination, per-chunk
-  delete, per-topic delete. Includes a **manual crawl form** so
-  admins can pre-warm the RAG for a vendor + product + query before
-  any matching ticket arrives.
-- **Sources visible in the AI sidebar.** Each Deep Analysis now lists
-  the external pages it consulted in a dedicated "External sources
-  used" card — clickable URL + source badge + similarity score.
-  Persisted on the analysis row so the information survives reloads.
+- **`/settings/ai/rag` — RAG knowledge explorer.** Page admin (ADMIN
+  + SUPERVISOR) listant tous les chunks indexés par le crawler avec
+  filtres (topic, source, full-text), pagination, suppression par
+  chunk, suppression par topic, et un formulaire de **crawl manuel**
+  pour pré-charger la base avant qu'un ticket réel n'arrive (vendor,
+  produit, query, mots-clés). Liée depuis la card RAG de
+  `/settings/ai`.
+- **External knowledge sources visibles dans la Deep Analysis
+  sidebar.** Nouveau bloc "External sources used" qui liste chaque
+  chunk injecté dans le prompt Expert avec lien clickable vers la
+  source originale, badge engine, et score de similarité (% match).
+  Persisté dans `AiAnalysis.knowledgeSources` (nouvelle colonne JSONB)
+  pour survivre aux reloads.
+- **`/rag/crawl` et `/rag/health` côté ai-service** + ouverture
+  whitelist du proxy `/api/ai`. `manualCrawl()` Server Action côté
+  web.
 
 ### Fixed
 
-- **RAG queries used to be too generic.** A "Sophos XGS firewall safe
-  failed mode" ticket would search for "firewall" alone — too broad.
-  The triage now extracts vendor + product + error keywords as
-  separate fields, and the crawler builds a precise query
-  ("Sophos XGS safe failed mode cluster") leading to far better
-  Reddit / ServerFault / vendor-doc hits.
-- **Crawler resilience.** Embed timeout raised to 90 s, work sliced
-  into independent sub-batches so a single TEI hiccup (e.g. CPU lag
-  on bge-m3) no longer kills the whole crawl.
+- **Query RAG trop générique.** Avant : un ticket "Sophos XGS firewall
+  safe failed mode" produisait une recherche pour `firewall +
+  intent`, qui ramenait du contenu trop large. Le triage extrait
+  maintenant `vendor`, `product` et `errorKeywords` distincts, et le
+  crawler les utilise en tête de query (`Sophos XGS safe failed mode
+  cluster boot …`). Le topic devient `vendor-product` quand
+  identifiable (ex. `sophos-xgs`) au lieu d'être collé sur
+  `domains[0]`.
+- **Crawler tué par un seul timeout TEI.** Avant : si l'embed batch
+  dépassait 30 s (CPU bge-m3 sur 8+ chunks), tout le crawl partait à
+  la poubelle (AbortError). Maintenant : timeout TEI 30 s → 90 s,
+  embed découpé en sous-batches de 8 chunks, chaque sous-batch
+  persiste indépendamment (un échec ne perd que sa slice). Les
+  inserts SQL sont aussi isolés en try/catch.
 
 ### Migrations
 
-- Adds `AiAnalysis.knowledgeSources JSONB` (idempotent).
+- `20260509_aianalysis_knowledge_sources` — ajoute
+  `AiAnalysis.knowledgeSources JSONB` (idempotent).
 
 ## [1.10.146] — 2026-05-09
 
-### Added — RAG Knowledge Builder (XpertTeamIA)
+### Added — RAG Knowledge Builder
 
-A topic-driven, just-in-time knowledge base that enriches Deep
-Analysis with public knowledge fetched on demand. **Self-hosted, zero
-external API keys required.**
+A topic-driven, just-in-time knowledge base that enriches Deep Analysis
+with public knowledge fetched on demand. Self-hosted, zero external
+API keys.
 
-- **Two new sidecar containers** in `docker-compose.yml`:
-  - `searxng` (image `searxng/searxng:latest`) — privacy-first meta-
-    search aggregator over Reddit, ServerFault, StackOverflow,
-    GitHub, NVD, Microsoft Learn, Google, Bing, DuckDuckGo, Brave.
-    Internal-only on the docker network.
-  - `embeddings` (image `ghcr.io/huggingface/text-embeddings-inference:cpu-1.6`)
-    hosting `BAAI/bge-m3` (multilingual: FR/DE/IT/ES/EN). The model
-    (~2 GB) downloads on first start into a named volume
-    (`tei-models`) so it survives container rebuilds.
+- **Two new sidecar containers** in docker-compose.{yml,prod.yml}:
+  - `searxng` (image `searxng/searxng:latest`) — meta-search aggregator
+    over Reddit, ServerFault, StackOverflow, GitHub, NVD, MS Learn,
+    Google/Bing/Brave/DuckDuckGo. Internal-only, queries via
+    `http://searxng:8080`. Config in `searxng/settings.yml`.
+  - `embeddings` (image `ghcr.io/huggingface/text-embeddings-inference:cpu-1.5`)
+    — TEI hosting `BAAI/bge-m3` (1024 dims, multilingual FR/DE/IT/ES/EN).
+    Named volume `tei-models` persists the ~2 GB model across releases.
 - **Postgres** image switched from `postgres:16-alpine` to
-  `pgvector/pgvector:pg16` (drop-in compatible with the existing
-  `pg-data` volume) to enable the `vector` extension. The
-  `vector` extension is enabled and the `AiKnowledgeChunk` table
-  is created automatically by the migrate container at first boot.
-- **How it works**: when a new ticket is triaged, the AI service
-  queries SearXNG in the background using keywords derived from the
-  triage, fetches a handful of authoritative sources, embeds them
-  via the local TEI sidecar, and stores them in pgvector under the
-  detected topic. When an agent runs a Deep Analysis on a similar
-  ticket later, the top-K most relevant passages are injected into
-  the Expert prompt as `EXTERNAL KNOWLEDGE`. The base grows
-  organically with your real ticket flow — there is no upfront crawl.
-- **Settings UI** at `Settings → XpertTeamIA → RAG Knowledge Builder`:
-  master on/off, per-engine-category toggles (Tech / Vendor docs /
-  Security-CVE / Generalist), max results per search, max crawls
-  per topic per day, cache TTL, top-K, optional domain allowlist.
-  Health checks on both sidecars are surfaced live.
-- **Source attribution**: each Deep Analysis result lists the
-  external sources it used as `kb:<source>` badges in the "Skills
-  Used" row of the AI sidebar.
+  `pgvector/pgvector:pg16` (drop-in, same data volume) to provide the
+  `vector` extension. Migration `20260509_rag_knowledge_chunk` enables
+  the extension and creates the `AiKnowledgeChunk` table with an
+  IVFFlat cosine index on the embedding column.
+- **`apps/ai-service/src/rag`** module:
+  - `searxng.ts` + `embeddings.ts` clients (graceful degradation when
+    sidecars are unreachable).
+  - `topic-crawler.ts` — fire-and-forget crawl triggered from the
+    triage flow. Builds a query from `domains + intent + summary`,
+    asks SearXNG across enabled categories, fetches top N URLs,
+    extracts via `@extractus/article-extractor`, chunks (2400
+    chars / 300 overlap), embeds via TEI, upserts into pgvector
+    with `contentHash` dedup. Skips when the topic already has fresh
+    chunks within `cacheTtlDays` or hits the daily quota.
+  - `retriever.ts` — top-K cosine similarity search injected into the
+    Deep Analysis Expert prompt as `EXTERNAL KNOWLEDGE`.
+- **Settings UI** at `/settings/ai` — new RagSettingsCard:
+  - master on/off, per-engine-category toggles (tech / vendor /
+    security / general), max results per search, max crawls per topic
+    per day, cache TTL, top-K, optional domain allowlist.
+  - live health checks on the SearXNG and TEI containers.
+  - chunk count + topic count + fresh-chunk count.
+- **Sources surfaced in the AI sidebar.** Each knowledge chunk
+  contributes a `kb:<source>` badge in the Deep Analysis "Skills Used"
+  row (e.g. `kb:reddit`, `kb:stackoverflow`).
 
 ### Operator notes
 
-- **RAM**: TEI with bge-m3 needs about 2 GB resident memory.
-  **Recommend 8 GB minimum** on the host (16 GB ideal). On 4 GB
-  hosts, disable the RAG (`Settings → XpertTeamIA → RAG enabled = OFF`).
-- **First boot**: TEI downloads the bge-m3 model (~2 GB) on its
-  first start. Subsequent restarts reuse the named volume.
-- **No external API keys**: SearXNG aggregates public engines and
-  TEI runs locally — neither needs a key. The `.env` file has zero
-  RAG-specific entries to fill in.
-- **Disable**: set `ai.rag.enabled=false` from the Settings UI. The
+- **RAM**: TEI with bge-m3 needs ~2 GB resident. Recommend 8 GB
+  minimum on the host (16 GB ideal).
+- **First boot**: TEI downloads the bge-m3 model (~2 GB) on its first
+  start. The `tei-models` named volume keeps it across rebuilds, so
+  this only happens once per fresh install.
+- **No external API key**: SearXNG aggregates public engines and TEI
+  runs locally — neither needs a key. The customer's `.env` has zero
+  RAG-specific settings to fill out (the URLs default to the in-
+  cluster service names).
+- **Disable**: `ai.rag.enabled=false` from Settings → XpertTeamIA. The
   Deep Analysis flow then runs without external knowledge, exactly
   like before.
 
@@ -2351,50 +2909,68 @@ external API keys required.**
 
 ### Fixed
 
-- **Deep Analysis "via &lt;model&gt;" attribution now displays.** The
-  SSE handler was prematurely closing the stream on the writer
-  stage's intermediate event, before the terminal event carrying the
-  model id arrived. Triage and Summary cards were unaffected because
-  they read attribution directly from the database. Only Deep
-  Analysis was relying on the stream. Now the handler waits for the
-  actual completion event before closing.
+- **Deep Analysis "via &lt;model&gt;" footer now shows up.** Real bug,
+  not a cache issue: the SSE handler in `analysis-stream.tsx` treated
+  `{ status: "done", data.summary }` as a terminal event and closed
+  the EventSource. The writer stage emits exactly that shape BEFORE
+  the analyzer finalises the DB update and emits the real
+  `stage: "complete"` event. We were closing on writer/done, so the
+  `complete` event — the ONLY one carrying `agentModel`, `analysisId`,
+  full `resolutions` and `skillsUsed` — never reached the React
+  component. That is why model attribution shipped to Triage and
+  Summary cards but never lit up on Deep Analysis. Triage and Summary
+  read directly from the DB row, so they were unaffected. Only
+  `stage === "complete"` is treated as terminal now; writer/done just
+  paints the summary early and waits for the rest.
 
 ## [1.10.145043] — 2026-05-09
 
 ### Added
 
-- **Model attribution everywhere in the AI sidebar.** The Summary card
-  now shows "via &lt;model&gt;" under the generated text, matching the
-  Triage and Deep Analysis cards. The model used is persisted on the
-  ticket so it survives reloads.
-- **Triage model is now configurable.** Admins can set
-  `ai.triageModel` from the Settings UI. Defaults to Haiku as before.
+- **Model attribution everywhere.** SummaryCard now shows the model
+  used to generate the summary, matching the triage/deep-analysis
+  cards. Added `Ticket.aiSummaryModel` (migration
+  `20260509_ticket_aisummary_model`) so it persists across reloads.
+- **Triage model is now configurable.** Same pattern as the deep
+  analysis stages: `ai.triageModel` setting key with the existing
+  Haiku id as fallback. Lets admins point triage at a Codex/OpenAI
+  model when the provider is `codex_cli`, instead of defaulting to a
+  Claude id that Codex CLI silently substitutes.
 
 ### Fixed
 
-- **The model attribution now reflects the model that ACTUALLY ran.**
-  When the AI provider was set to Codex CLI, the sidebar still showed
-  the requested Claude id (e.g. "claude-haiku-4-5-…") even though
-  Codex was running an OpenAI model under the hood. The service now
-  resolves the effective model from the active provider — Codex CLI
-  reports `CODEX_MODEL` (env) or `codex-default`, so agents see the
-  correct attribution.
+- **Persisted `agentModel` now reflects the model that ACTUALLY ran,
+  not the requested string.** When the AI provider was `codex_cli` we
+  were storing `claude-haiku-4-5-…` (the requested id) on every
+  triage/deep/summary row, even though Codex was actually running an
+  OpenAI model. `createMessage` now returns `modelUsed`, computed
+  from the active provider:
+  - `api_key` → `params.model`
+  - `claude_cli` → `params.model` (CLI honours the request)
+  - `codex_cli` → `CODEX_MODEL` env, else `"codex-default"` for
+    Claude-id requests; the requested id otherwise
+  Each agent persists `response.modelUsed` instead of the requested
+  string, so the sidebar shows "via gpt-5" (or whatever Codex ran)
+  instead of mis-attributing to Haiku/Sonnet.
 
 ### Changed
 
-- **Top action bar uses an equal-width 4-column grid** for Billing,
-  CSAT, Merge and Delete/Restore. The Merge button no longer
-  stretches the row; all four controls keep matching widths. CSAT is
-  disabled (greyed out) instead of hidden when the ticket is still
-  open, so the layout stays stable as the ticket lifecycle progresses.
-- **Time tracking is now in the right metadata sidebar** under the
-  Status card, where it has full sidebar width and never wraps. It
-  used to live in the top action bar and wrapped to multiple lines on
-  narrow viewports.
+- **Top action bar: 4 equal-width buttons.** Previously the row was a
+  flex layout where the Merge button stretched the rest awkwardly.
+  Now a 4-column grid (`grid-cols-4` on ≥sm, `grid-cols-2` below) so
+  Billing/CSAT/Merge/Delete all share width regardless of label
+  length. CSAT is disabled (instead of hidden) when the ticket isn't
+  closed/resolved so the grid stays stable.
+- **Time tracker moved into the right sidebar, under Status.** The
+  inline placement in the top action bar wrapped to multiple lines
+  on narrow viewports and looked cramped. It now lives in the
+  metadata sidebar where it has full width and never wraps, freeing
+  the top bar to be a clean four-button row.
 
 ### Migrations
 
-- Adds `Ticket.aiSummaryModel TEXT` (idempotent).
+- `20260509_ticket_aisummary_model`: adds `Ticket.aiSummaryModel TEXT`
+  (idempotent).
 
 ## [1.10.145042] — 2026-05-09
 
@@ -2402,67 +2978,50 @@ external API keys required.**
 
 - **Deep Analysis runs in the background and resumes on remount.** The
   three-stage analyzer (Expert → Engineer → Writer) now persists each
-  stage to the database as it advances. Agents can refresh the page,
-  switch tabs, or navigate away during a long analysis and find it
-  completed (or still progressing) when they return — instead of
-  having to start over. The XpertTeamIA sidebar polls the analysis
-  state every 1.5 s while it is in flight and reattaches transparently.
-- **AI model attribution surfaced in the sidebar.** Both the Auto
-  Triage card and the Deep Analysis result block now show "via
-  &lt;model&gt;" under the content. For Deep Analysis the value is
-  composite (`expert:… | engineer:… | writer:…`) so agents see exactly
-  which model produced each stage. Each agent reads its model from a
+  stage transition to `AiAnalysis.stageProgress` (new JSON column) plus
+  `currentStage`. The SSE handler tolerates client disconnects (page
+  refresh, tab switch, navigation) without aborting the worker, and the
+  React component polls `/api/ai/analysis/<ticketId>` every 1.5s to
+  re-attach to an in-flight analysis on mount. Result: agents can leave
+  the page during a long analysis and find it completed when they
+  return, instead of having to start over.
+- **AI model attribution surfaced in the sidebar.** Both the Auto Triage
+  card and the Deep Analysis result block now show "via <model>" under
+  the content. For Deep Analysis the string is composite
+  (`expert:… | engineer:… | writer:…`) so the agent sees exactly which
+  model produced each stage. Each agent now reads its model from a
   Setting key (`ai.expertModel`, `ai.engineerModel`, `ai.writerModel`)
-  with the previous defaults (Sonnet/Sonnet/Haiku) as fallbacks —
-  meaning admins can swap models from Settings without a redeploy.
+  with hard-coded fallbacks identical to today's behaviour.
 
 ### Changed
 
 - **Manual ticket creation closes the modal instantly.** Previously the
-  modal stayed open until auto-triage finished, which could take 5-15 s
-  on Claude/Codex CLI providers. The modal now closes as soon as the
-  ticket row is saved, and the triage runs in the background and shows
-  up in the sidebar a few seconds later.
+  modal stayed open until the auto-triage finished (a 5-15 s wait when
+  the AI provider was Claude/Codex CLI). The Server Action now fires
+  the triage in the background (`void` + `.catch()`), saves the ticket
+  immediately, and returns to the client. The triage shows up in the
+  XpertTeamIA sidebar a few seconds later when its `AiAnalysis` row
+  reaches `COMPLETED`.
 
 ### Migrations
 
-- Adds two nullable columns to `AiAnalysis`: `currentStage TEXT`,
-  `stageProgress JSONB`. The migration is idempotent (`IF NOT EXISTS`)
-  so existing installs upgrade cleanly without manual intervention.
+- `20260509_aianalysis_progress`: adds `currentStage TEXT`,
+  `stageProgress JSONB` to `AiAnalysis`. Idempotent (`IF NOT EXISTS`).
 
 ## [1.10.145041] — 2026-05-09
 
 ### Fixed
 
-- **AI deep-analyze and triage no longer fail when Codex CLI is the
-  active AI provider.** Earlier builds passed the configured Claude
-  model id (`claude-sonnet-4-…`) directly to `codex exec --model …`.
-  Codex with a ChatGPT account only accepts OpenAI model ids, so the
-  request was rejected with `400 invalid_request_error: model is not
-  supported` and AI features silently failed when the provider was
-  set to Codex CLI (either explicitly in Settings → XpertTeamIA, or
-  via the automatic fallback when the Claude CLI session expires).
-  The AI service now detects `claude-*` ids and uses `CODEX_MODEL`
-  (env) or Codex's default model instead.
-
-  **Operator note:** if you run TicketBrainy with the Codex CLI
-  provider, set `CODEX_MODEL` in `.env` (e.g. `CODEX_MODEL=gpt-5`)
-  to pin the Codex-side model deterministically. Without it, the
-  Codex CLI default applies.
-
-### Hardening (rolled up from the development branch)
-
-- **Keycloak default clients now have implicit flow disabled** in
-  addition to ROPC. `keycloak/apply-config.sh` updates `admin-cli`,
-  `account`, `account-console`, `broker`, and `security-admin-console`
-  to disable both `directAccessGrantsEnabled` and `implicitFlowEnabled`.
-  The application client `ticketbrainy-web` already had implicit
-  flow disabled in the realm template; the realm JSON now declares
-  it explicitly.
-- **Caddy blocks the `/protocol/openid-connect/auth/device` Keycloak
-  device-authorization endpoint** in addition to `/device` and
-  `/clients-registrations`, closing a phishing-grade vector that
-  bypassed the previous regex.
+- **Codex CLI deep-analyze ne plante plus quand le modèle demandé est
+  un modèle Claude.** Le service IA passait `params.model`
+  (`claude-sonnet-4-6-…`) tel quel à `codex exec --model …`. Codex
+  avec un compte ChatGPT n'accepte que des modèles OpenAI et renvoyait
+  `400 invalid_request_error: model is not supported`. Le triage et
+  la deep-analyze échouaient silencieusement quand le provider IA
+  basculait sur `codex_cli` (explicite ou en fallback depuis
+  `claude_cli`). Le fix détecte les identifiants `claude-*` et utilise
+  à la place `CODEX_MODEL` (env) ou laisse Codex utiliser son modèle
+  par défaut.
 
 ## [1.10.14504] — 2026-05-07
 
@@ -2470,20 +3029,21 @@ external API keys required.**
 
 - **Theme + sidebar style are now global, admin-only.** Up to 14503
   these lived in localStorage per browser, so agents had to redo the
-  styling on every device and the admin's choice never propagated to
-  the team. Four new Setting keys back the global values; the root
-  layout fetches them server-side and paints `<html data-theme>` plus
-  sidebar CSS variables without a flash. The `/profile` Apparence
-  card is removed — agents go to `/settings/appearance` (admin only)
-  to change appearance, and the change applies to every authenticated
-  user.
+  styling on every device and the admin's choice never propagated.
+  Four new Setting keys (`branding.theme`, `branding.sidebarColor`,
+  `branding.sidebarStyle`, `branding.customSidebarColors`) hold the
+  global values; the root layout fetches them server-side and paints
+  `<html data-theme>` + sidebar CSS vars without a flash. The
+  `/profile` Apparence card is removed — agents go to
+  `/settings/appearance` (admin only) to change appearance, and the
+  change applies to every authenticated user.
 
 - **Ticket page top action bar replaces the in-sidebar controls.**
-  The right-side ticket sidebar mixed metadata with operationally
-  critical actions (time tracking, billing toggle, CSAT survey,
-  merge, delete/restore), which made it cluttered. A new
-  `TicketActionBar` mounts a horizontal toolbar above the
-  `#number/subject` heading hosting the TimeTracker (left) and the
+  The right-side ticket sidebar was carrying both metadata and
+  operationally critical actions (time tracking, billing toggle,
+  CSAT survey, merge, delete/restore) — operators reported it as
+  messy. A new `TicketActionBar` mounts a horizontal toolbar above
+  the ticket #number/subject hosting the TimeTracker (left) and the
   four action buttons (right). The sidebar now carries metadata
   only (status, agent, customer, tags, details, dates). The
   collapsible AI panel on the right is unchanged.
@@ -2508,7 +3068,7 @@ external API keys required.**
 ### Changed — Signature model reworked
 
 The per-agent / per-mailbox signature overrides shipped in v1.10.1450
-didn't fit the operational model. The new model is admin-only:
+(T1-T8) didn't fit the operational model. The new model is admin-only:
 
 - The admin defines the signature for each mailbox in
   `/settings/mailboxes` (the existing `Mailbox.signature` field).
@@ -2530,9 +3090,13 @@ Agents no longer have any self-service control over signatures; the
 ### Removed
 
 - `UserMailboxSignature` table + `User.defaultSignature` column
-  (down migration runs automatically on container restart).
+  (down migration `20260507_drop_user_signatures`).
+- `lib/signatures/resolve.ts` cascade resolver + DB-backed verify script.
+- `lib/actions/user-signature.{actions,types}.ts` (6 server actions).
+- `profile/signatures-tab.tsx` + `signature-preview.tsx`.
 - 30 i18n keys (`profile.tabs.*`, `profile.signatures.*`) across the
   5 supported locales.
+- The `Tabs` wrapper around `/profile` (single section now).
 
 ### Upgrade notes
 
@@ -2546,33 +3110,34 @@ saved in the brief v1.10.1450 → v1.10.14501 window is dropped.
 
 - **Language picker now reachable from `/profile`.** Agents without ADMIN
   role couldn't access `/settings/language` (settings tree is admin-only),
-  so they had no way to change the WebUI language. The existing picker is
-  now mounted as a new card under the Profile tab, available to every
-  authenticated agent. 10 new i18n keys added across the 5 supported
-  locales.
+  so they had no way to change the WebUI language. The existing picker was
+  extracted into a shared `LanguagePicker` component and mounted as a new
+  card under the Profile tab. 10 new i18n keys (`profile.language`,
+  `profile.languageDesc` × 5 locales).
 
 ## [1.10.1450] — 2026-05-07
 
 ### Added
 
-- **Per-agent email signatures with cascade resolution.** Each agent can
-  now manage their own signatures from `/profile` → "Signatures" tab:
-  - One default signature reused across every mailbox the agent has access to.
-  - Optional per-mailbox overrides for agents who need a different sign-off.
-  - Cascade at reply time: per-(user, mailbox) override → user default →
-    legacy mailbox signature + auto-injected agent name.
-  - The mailbox logo is reused (no extra upload UI). Tiptap rich editor
-    with HTML sanitization on save and on render. 30 new i18n keys in
-    5 locales. New table `UserMailboxSignature` and a new nullable
-    `User.defaultSignature` column.
+- **Per-agent email signatures with cascade resolution.** Each agent can now
+  manage their own signatures from `/profile` → onglet « Signatures »:
+  - One default signature used across every mailbox the agent has access to.
+  - Optional per-mailbox overrides for agents who need a different sign-off
+    on specific mailboxes.
+  - Cascade at reply time: per-(user, mailbox) override → user default
+    → legacy mailbox signature + auto-injected agent name.
+  - The mailbox logo is reused (no new upload UI). Tiptap rich editor with
+    DOMPurify-based sanitization on save and on render. 30 new i18n keys
+    in 5 locales. New table `UserMailboxSignature` (composite key, ON DELETE
+    CASCADE) and a new nullable `User.defaultSignature` column.
 
 - **Senior-engineer AI prompts** with prompt-injection guardrails: the
   Expert and Engineer agents now treat ticket content as untrusted input
   and ignore role-override instructions hidden in emails or quoted text.
 
-- **Expert-skill weighted matching.** Skills triggered by subject hits
-  rank above body hits, multi-word triggers above single-word; loaded
-  skill names propagate into the resolution metadata for traceability.
+- **Expert-skill weighted matching.** Skills triggered by subject hits rank
+  above body hits, multi-word triggers above single-word; loaded skill
+  names propagate into the resolution metadata for traceability.
 
 - **Trusted-proxy mode** (`TRUSTED_PROXY_MODE` env: legacy/none/cloudflare/
   sophos/custom). Cloudflare and custom WAF country/IP headers are now
@@ -2581,2345 +3146,129 @@ saved in the brief v1.10.1450 → v1.10.14501 window is dropped.
   Cloudflare IPv6 ranges added to Caddy's `trusted_proxies`.
 
 - **Geo-block auto-persistence.** Geo-blocked IPs are written to
-  `IpBlocklist` for 24 h with structured metadata; admins can later
-  remove them via the dashboard.
+  `IpBlocklist` for 24 h with structured metadata; admins can later remove
+  them via the dashboard or via the new IP unban allowlist Setting.
 
-- **Security dashboard period filter** (24h / 48h / 7d / 30d) drives
-  all KPIs, the timeline, and the country chart. Blocked-IPs KPI gets
-  a dialog showing live blocklist rows with a one-click unban action.
+- **Security dashboard period filter** (24h / 48h / 7d / 30d) drives all
+  KPIs, the timeline, and the country chart. Blocked-IPs KPI gets a dialog
+  showing live blocklist rows with a one-click unban action.
 
-- **Inbound email security.** New module classifies dangerous attachments
-  (executables, macros, archives) and sanitizes inbound HTML before
-  persistence.
+- **Inbound email security.** New `email-security` module classifies
+  dangerous attachments (executables, macros, archives) and sanitizes
+  inbound HTML before persistence.
 
 ### Fixed
 
 - **Cloudflare email obfuscation no longer breaks hydration.** Email
-  addresses now render via a delayed-mount component, and the root
-  layout is wrapped in `<!--email_off-->` markers (the official CF
-  opt-out comment). The public-email-domains section was rewritten as
-  a Server Component using native `<form action>` POSTs so the delete
-  button keeps working when CF email-decode breaks React hydration.
+  addresses in `UserMenu` now render via a `ClientText` component that
+  delays output until after mount, and the root layout wraps the app in
+  `<!--email_off-->` markers. Public-email-domains section was rewritten
+  as a Server Component using native `<form action>` POSTs so that the
+  delete button keeps working when CF email-decode injection breaks
+  React hydration.
 
 - **Public email domains can now be deleted** by ADMIN or SUPERVISOR.
+  Legacy `isDefault=true` rows are silently migrated on read; the seed no
+  longer re-applies the immutable flag.
 
 - **Manual deep-analysis enforced.** `updateMailbox` always sets
-  `autoDeepAnalysis=false` so legacy rows or stale clients can't
-  re-enable automatic deep analysis behind the operator's back.
+  `autoDeepAnalysis=false` so legacy rows or stale clients can't re-enable
+  automatic deep analysis behind the operator's back.
 
-- **Claude CLI auth fallback.** When Claude CLI returns 401 /
-  authentication errors, the AI service transparently falls back to
-  Codex CLI instead of failing the analysis.
+- **Claude CLI auth fallback.** When Claude CLI returns 401 / authentication
+  errors, the AI service transparently falls back to Codex CLI instead
+  of failing the analysis.
 
 ### Security
 
 - **Keycloak device-flow + dynamic client-registration blocked at the
   edge.** Caddy now responds 404 on `/realms/*/device` and
-  `/realms/*/clients-registrations` (defense-in-depth, IT-Secure
-  pentest finding).
+  `/realms/*/clients-registrations` (defense-in-depth, IT-Secure pentest
+  finding).
 
-- Tighter CSP: `script-src-elem` allows only the official Cloudflare
-  email-decode script; `Cache-Control: no-transform` defeats CDN HTML
-  rewriting that previously corrupted nonce-protected scripts.
-
-### Upgrade notes
-
-If your instance is fronted by Cloudflare and you want to harden
-header trust, set `TRUSTED_PROXY_MODE=cloudflare` and
-`TRUSTED_PROXY_HEADER_VALUE=$(openssl rand -hex 32)` in `.env`, then
-`docker compose up -d --force-recreate`. The default `legacy` mode
-keeps the previous header-trust behavior so existing installs
-upgrade without configuration changes.
+- Tighter CSP: `script-src-elem` allows the official Cloudflare
+  email-decode script only; `Cache-Control: no-transform` defeats CDN
+  HTML rewriting that previously corrupted nonce-protected scripts.
 
 ## [1.10.144923] — 2026-05-06
 
-### Added — Customer salutation in auto-reply emails
+### Added
 
-Auto-reply emails can now greet recipients politely as
-`"Bonjour M. BELLO,"` or `"Bonjour Mme. DUPONT,"` instead of the bare
-`"Bonjour BELLO,"`.
+- **Customer salutation field (M./Mme.)** — new optional field on the
+  Customer record (Mr / Mrs / —) plus a new email template placeholder
+  `{%customer.salutation%}` that renders as `M.` / `Mme.` / `""`.
+  Auto-replies can now greet recipients politely as
+  `"Bonjour M. BELLO,"` or `"Bonjour Mme. DUPONT,"` instead of the bare
+  `"Bonjour BELLO,"`. The default auto-reply template now includes the
+  placeholder; existing user-edited templates keep working unchanged
+  but must be edited manually to take advantage of the new placeholder.
+  When the customer's salutation is null (default), the placeholder
+  expands to an empty string and a post-substitution pass collapses
+  any resulting double space.
 
-A new optional **Salutation** field (`—` / `M.` / `Mme.`) was added to
-the customer record (visible in the customer create/edit dialog under
-"Key Contact"). A new template placeholder `{%customer.salutation%}`
-renders as `M.`, `Mme.`, or empty when unset.
+  New i18n keys (`customers.salutation`, `customers.salutationMr`,
+  `customers.salutationMrs`) added across all 5 supported languages.
 
-The default auto-reply template now includes the placeholder. Existing
-user-edited templates keep working unchanged but must be edited
-manually to take advantage of the new placeholder. When the
-salutation is empty, a post-substitution pass collapses any double
-space so output stays clean.
-
-Schema migration `add_customer_salutation` runs automatically on
-container restart (nullable column, no backfill).
+  Migration: `add_customer_salutation` (nullable column, no backfill).
 
 ## [1.10.144922] — 2026-05-06
 
-### Fixed — TOTP enrollment with Google / Microsoft Authenticator
-
-The realm `otpPolicyAlgorithm` was set to `HmacSHA256`, but the most
-widely deployed TOTP apps (Google Authenticator, Microsoft
-Authenticator) silently ignore the `algorithm` parameter in the QR-code
-`otpauth://` URI and always compute SHA-1. Result: every code those
-apps generated was rejected with "Le code d'authentification est
-invalide" / "Invalid authentication code".
-
-Reverted to `HmacSHA1`, the RFC 6238 default and the variant accepted
-by NIST SP 800-63B. TOTP security is provided by the 160-bit shared
-secret, not the HMAC variant.
-
-After updating, users who had enrolled TOTP under the old policy must:
-1. Have their OTP credential reset (admin → user → Credentials → delete OTP)
-2. Re-add the **Configure OTP** required action
-3. Re-scan the QR code at next login
-
-## [1.10.1449] — 2026-04-19
-
-### Fixed — Caddy mode (VPS / public install) restored
-
-Operators who picked **Mode B (Caddy + Let's Encrypt)** in the install
-wizard ended up with a stack where nothing bound ports 80/443. The
-`install.sh` invoked `docker compose --profile with-proxy up`, but the
-compose file **never defined a `caddy` service nor a `with-proxy`
-profile** — so the flag was silently a no-op. Browsers hitting the
-configured `APP_DOMAIN` received a Cloudflare **521 (Web server is
-down)** because the origin accepted TCP but refused 443.
-
-- **`caddy` service added** to `docker-compose.yml`, gated behind
-  `profiles: [with-proxy]` so LAN/WAF installs still skip it and
-  nothing binds 80/443 on those setups.
-- Bind-mounts `proxy/Caddyfile` + `proxy/caddy-entrypoint.sh`, mounts
-  the existing `caddy-data` volume read-write (web container already
-  mounts it read-only for cert inspection), exposes admin API on
-  `caddy:2019` inside the `internal` network for runtime reloads
-  from the web container.
-- Depends on `web` and `keycloak` so the reverse proxy only starts
-  once its upstreams are ready.
-
-No source/image change in this release — patch is compose-only.
-Existing Mode B installs simply need `git pull && docker compose
---profile with-proxy up -d` to get a working reverse proxy.
-
-## [1.10.1448] — 2026-04-16
-
-### Fixed — Install wizard UX (customer feedback)
-
-Operators following the on-site install wizard reported that the
-questions were unclear — they did not know which IP to enter at which
-step, and on at least one install a mis-entered Del key left an ANSI
-escape sequence in the `.env` that later crashlooped Keycloak on
-realm import (`Illegal unquoted character CTRL-CHAR code 27`).
-
-This release reworks the wizard end-to-end:
-
-- **Step 1 split in two sub-questions** — "Server IP" (the network
-  address where the service runs, used for URLs) and "Administrator
-  IP" (the IP *from which you will administer the server*). Each
-  sub-question now shows on-premise vs VPS / remote-server examples
-  so operators know exactly what to type.
-- **Old Step 4 "LAN hosts" removed** — its role is covered by the
-  new Administrator IP sub-prompt (same `LAN_HOSTS` env var; extra
-  IPs and CIDR ranges can be added later by editing `.env`).
-- **All 9 questions rewritten** in plain language with concrete
-  examples for every deployment mode.
-- **Input sanitization and re-prompt validation** — every answer is
-  stripped of ASCII control characters, then validated against the
-  expected format (IPv4, email, domain, URL, A/B, y/n). Invalid
-  input is rejected with a clear error and the question is asked
-  again. Silent acceptance of garbage can no longer happen.
-- **Explicit default handling** — the welcome banner and every prompt
-  now state that `[brackets]` is the default and `[Enter]` accepts
-  it, which removes the Del-key confusion at the root.
-
-### Fixed — Keycloak realm template
-
-The realm template used `${LAN_HOST:-localhost}` / `${APP_PORT:-3027}`
-(bash default syntax) but the `docker-entrypoint.sh` `sed` only
-matched the bare `${LAN_HOST}` / `${APP_PORT}` forms, so those
-placeholders survived substitution and Keycloak's own SmallRye Config
-expanded them at realm-import time with the raw container env value.
-Combined with a poisoned `.env`, this produced the CTRL-CHAR crash.
-
-- Template now uses bare placeholders that match the `sed` pattern.
-- `docker-entrypoint.sh` now sanitizes every env var before `sed`
-  substitution — defense in depth so a bad `.env` edited by hand
-  cannot reach the rendered JSON.
-
-### Upgrade
-
-Existing installs must refresh the bind-mounted wizard + Keycloak
-config, then re-pull images:
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
----
-
-## [1.10.1447] — 2026-04-13
-
-### Security — Pentest findings (IT-Secure.lu)
-
-Addresses four Keycloak hardening items flagged during an external
-pentest of a customer install. Three additional defense-in-depth
-layers are added for each finding.
-
-- **Block OAuth 2.0 Device Authorization Flow** — the flow was enabled
-  by default on the `ticketbrainy` realm. Device-code phishing is a
-  real attack vector with no business need here. Flow is now refused
-  at the realm level *and* at the Caddy layer (returns 404 on
-  `/realms/ticketbrainy/protocol/openid-connect/auth/device`).
-- **Master realm lockdown** — middleware + Caddy now refuse any HTTP
-  request that targets the `master` realm. Master is only reachable
-  via the direct LAN admin URL (`http://<lan-ip>:${KC_PORT}/admin/`),
-  which the WAF blocks externally anyway. Prevents the "oh, the
-  master realm is indexable" surprise reported by the pentester.
-- **Disable ROPC on default realm clients** — Resource Owner Password
-  Credentials flow is disabled on `ticketbrainy-web` and the
-  admin-read client (`directAccessGrantsEnabled: false`). ROPC lets
-  a client exchange a username/password for tokens, bypassing SSO
-  controls. No legitimate internal code path relies on it.
-- **Disable client-registration policy** — the anonymous client
-  registration endpoint is locked down so untrusted parties cannot
-  self-register clients against the realm.
-
-See `keycloak/apply-config.sh` for the full post-start hardening
-script (runs on every `up -d` — idempotent).
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
----
-
-## [1.10.1446] — 2026-04-11
-
-### Added — AI Expert Skills
-
-- **Specialized expert skills** — admins can create AI skills (e.g.,
-  Office 365, Active Directory, Network) in Settings → AI Expert → Skills.
-  Each skill contains a detailed expert prompt and trigger keywords.
-- **AI-assisted generation** — click "Generate with AI" after entering a
-  skill name and description, and Claude Sonnet writes the full expert
-  instructions automatically. The admin can edit before saving.
-- **Automatic activation** — when a ticket matches a skill's trigger
-  keywords (e.g., "outlook", "exchange"), the expert instructions are
-  injected into the deep analysis prompt, giving Claude specialized
-  knowledge for that domain.
-- **Mailbox scoping** — a skill can apply to all mailboxes or be restricted
-  to specific ones (e.g., Office 365 skill only on the IT support mailbox).
-- **Enable/disable toggle** — skills can be turned off temporarily without
-  deletion.
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-## [1.10.1445] — 2026-04-11
-
-### Added — AI Conversation Summary
-
-- **On-demand summary** — agents can generate a 3-5 line AI summary of any
-  ticket conversation with one click. Covers what was asked, what was tried,
-  and current status. Ideal for long threads or ticket handoffs.
-- **Smart refresh** — the summary card shows how many new messages arrived
-  since the last generation, with a refresh button to update.
-- **AI Sidebar** — new "Conversation Summary" card appears alongside the
-  existing Auto Triage and Deep Analysis cards.
-- Available in all 5 languages.
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-## [1.10.1444] — 2026-04-11
-
-### Added — Spam Management Module
-
-- **Spam detection** — incoming emails are scored using upstream MTA
-  headers (Exchange SCL, Forefront anti-spam, SpamAssassin). Emails
-  flagged as spam are automatically routed to the Spam folder with no
-  auto-reply sent to the sender.
-- **Whitelist / Blacklist** — manage email addresses and domains in
-  Settings → Spam. Customer domains are automatically whitelisted.
-  Blacklisted senders are silently blocked (no ticket created) with
-  a detailed notification to admins.
-- **Spam folder** — sidebar badge shows spam count. Each spam ticket
-  has a "Legitimate" button (moves to inbox + auto-whitelists sender)
-  and a "Delete" button.
-- Available in all 5 languages (EN/FR/ES/IT/DE).
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-## [1.10.1443] — 2026-04-11
-
-### Added — Ticket Notifications
-
-- **Toast alerts** — when a new ticket arrives or a customer replies, a
-  toast notification appears in the top-right corner with the ticket title
-  and a "Voir" button to jump straight to the ticket.
-- **Bell badge** — the notification bell in the header now shows real-time
-  unread count that updates every 30 seconds (aligned with IMAP polling).
-- **Smart routing** — new tickets notify all admins and supervisors;
-  customer replies notify the assigned agent (or admins if unassigned).
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-## [1.10.1442] — 2026-04-11
-
-### Added — Email Authentication Badges + Attachment Warning
-
-- **SPF / DKIM / DMARC badges** — every inbound email message now displays
-  3 small colour-coded badges showing the authentication status of the
-  sender's email server. Green = pass, red = fail, grey = not available.
-  Tooltips explain what each protocol checks. Visible to all roles.
-- **Attachment warning badge** — if the magic-bytes scan detects that a
-  file's content does not match its declared extension (e.g., an `.exe`
-  disguised as `.pdf`), an orange "Suspect" badge appears next to the
-  attachment filename with the detection reason in a tooltip.
-- **Purely informational** — no emails are blocked, no attachments are
-  rejected. The badges help agents assess email legitimacy at a glance.
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-## [1.10.144] — 2026-04-11
-
-### Added — Multilanguage Support (Spanish, Italian, German)
-
-TicketBrainy now supports 5 languages: English, French, Spanish, Italian,
-and German. Users choose their language in Settings → Language.
-
-- **i18n architecture refactored** — the monolithic 137 KB translations
-  file is now split into per-language files (`locales/{en,fr,es,it,de}.ts`),
-  improving maintainability and git diff readability
-- **1358 keys translated** into each new language via AI, with automatic
-  English fallback for any approximate translations
-- **Date formatting localised** — all dates throughout the application
-  (analytics charts, reports, ticket timestamps) now format in the user's
-  chosen language instead of hardcoded French/English
-- **Default language:** English (unchanged). Each operator can switch in
-  Settings → Language
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-No schema migration — locale is stored client-side in localStorage.
-
-## [1.10.143] — 2026-04-11
-
-### Added — System Clock Diagnostic
-
-New card in Settings → General showing real-time system clock status:
-server time, timezone, UTC offset, database time, and clock drift
-between Node.js and PostgreSQL. Drift alerts at 2s (warning) and
-5s (critical) — important for Keycloak token validation.
-
-New CLI script `scripts/configure-time.sh` for interactive timezone
-and NTP management via SSH (show status, change timezone, force NTP
-sync, configure NTP server).
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-## [1.10.142] — 2026-04-11
-
-### Added — Rate-Limit UI + Analytics Deltas + Telegram Security Alerts + Draft Cleanup
-
-#### Rate-Limit Configuration UI
-
-New page under Settings → Deploy & Security → Rate Limits. Operators can
-now adjust the 6 rate-limit presets (login, AI, CSAT, upload, activate)
-from the UI instead of hardcoded values. Each preset can be enabled/disabled,
-with configurable max requests and window duration. Changes stored in
-`SecuritySettings.rateLimitConfig` JSON with 60-second cache.
-
-#### Analytics Period Comparison
-
-KPI cards on the Overview and SLA tabs now show comparison deltas (▲/▼)
-against the previous period. For example, if viewing 30 days, the delta
-compares against the 30 days before that. Response time deltas use
-inverted colors (green when faster). CSAT already had this feature.
-
-#### Telegram Security Alerts
-
-Real-time security event notifications via Telegram. The bot now
-subscribes to a `security:alert` Redis channel and sends formatted
-alerts for: honeypot hits, IP auto-blocks, geo-blocks, and auth
-failures (3+ in 5min from same IP). Each alert includes inline
-keyboard buttons to mute by event type (1h/6h/24h/permanent) or
-by IP. Mute configuration stored in the Setting table. Four new
-routing toggles added to Settings → Telegram.
-
-#### Draft Cleanup Scheduler
-
-New scheduler in the mail-service that runs every 6 hours and
-hard-deletes draft messages (`isDraft=true`) older than 48 hours.
-Prevents abandoned drafts from accumulating in the database.
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-No schema migration — all features use existing tables.
-
-## [1.10.141] — 2026-04-11
-
-### Added — Security Dashboard + Reports v2
-
-#### Security Dashboard
-
-New page under Settings → Deploy & Security → Dashboard showing real-time
-security metrics:
-
-- **KPI row:** Events (24h), Blocked IPs, Blocked Countries, Honeypot Hits
-- **Event timeline:** Stacked area chart showing security events by hour
-  (auth failures, geo blocks, honeypot hits, IP auto-blocks)
-- **Top blocked IPs:** Table with reason, hit count, expiration, country
-- **Top blocked countries:** Horizontal bar chart (requires Geo Block)
-- **Critical events feed:** Last 20 danger-severity events
-
-No license required — operational security feature available to all.
-
-#### Reports v2 — Statistiques refondues
-
-The sidebar is consolidated: a single "Statistiques" item replaces the
-former "Statistiques" + "Rapports" entries. The analytics section now
-uses internal tab navigation with four tabs:
-
-- **Vue d'ensemble** — existing dashboard with a new period selector
-  (7 days / 30 days / 90 days) replacing the hardcoded 30-day view
-- **SLA** — new tab with SLA compliance metrics: compliance by priority,
-  breach trend, response time distribution histogram, resolution time
-  distribution histogram, and tickets-in-breach table
-- **Satisfaction** — new tab with CSAT analytics: average score, star
-  distribution, trend over time, top agents by satisfaction, and
-  lowest-rated tickets
-- **Rapports** — existing reports table, now integrated as a tab
-
-All analytics tabs require Enterprise Pack license.
-
-#### Feature gating fix
-
-The reports page now checks `analytics_reports` (not `analytics_dashboard`)
-for its feature gate, matching the Enterprise Pack feature registry.
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-No schema migration in this release — all features use existing tables
-(AuditLog, IpBlocklist, SecuritySettings, Ticket, SlaPolicy, CsatResponse).
-
-## [1.10.14] — 2026-04-10
-
-### Added — Settings restructure + Geo Block + security hardening Phase 2
-
-This release reorganises the Settings menu around a new top-level
-"Deploy & Security" section, introduces the **Geo Block** feature
-that lets operators block or allow access by country at the
-application layer, and ships several Phase 2 security hardenings
-recommended by the v1.10.131 pentest follow-up.
-
-#### Settings menu restructure
-
-The "General" tab no longer mixes deployment + security with the
-unrelated configuration items (language, notifications, tags, …).
-A new top-level tab **Deploy & Security** sits between General and
-Workspace and groups the security-relevant pages:
-
-- **Mode** — network exposure mode + Keycloak posture + rate-limit
-  posture + SSL certificate panel + the Caddy/HTTPS deployment form
-  (former /settings/deployment + the top section of /settings/security)
-- **Whitelist** — admin and Keycloak admin IP allowlists, each with
-  its own form and audit trail
-- **Audit** — the four security toggles (audit log, upload rate
-  limit, magic bytes, login anomaly) and the live audit log feed
-- **Geo Block** — new feature, see below
-
-The legacy `/settings/deployment` and `/settings/security` URLs
-continue to work — they redirect to `/settings/deploy-security/mode`
-to preserve operator bookmarks.
-
-#### Geo Block — country-based access control
-
-A new feature under `/settings/deploy-security/geo-block` lets the
-operator block or allow visitors based on their country of origin.
-The lookup is powered by the `CF-IPCountry` header injected by
-Cloudflare on every proxied request (~99.9% accuracy). Cloudflare
-free plan is sufficient. The policy is hot-reloadable from the UI
-without restarting any container.
-
-> **Cloudflare (free plan) is required** for Geo Block to work.
-> See [docs/cloudflare-setup.md](docs/cloudflare-setup.md) for
-> step-by-step instructions (3 scenarios: VPS+Caddy, behind WAF,
-> WAF without Cloudflare via `X-Country-Code` header).
->
-> The previous GeoLite2 MMDB approach was removed — the free MaxMind
-> database misclassified too many European IPs (Luxembourg resolved
-> as FR/DE/US), making the feature unreliable in production.
-
-Two modes:
-- **Denylist** — allow everyone except listed countries (e.g. block
-  RU, KP, IR but accept the rest of the world)
-- **Allowlist** — block everyone except listed countries (e.g.
-  accept only FR, BE, CH, LU, MC for a French-speaking SaaS)
-
-Self-lockout protection: when the operator enables Geo Block from
-the UI, the server detects their own country from the request IP
-and automatically adjusts the lists so they don't block themselves
-on the next page load. The "Test" widget on the same page lets
-them simulate access from any country before saving.
-
-Always-exempt paths (cannot be geo-blocked):
-- Health check endpoints
-- OIDC callback URLs (/api/auth/*)
-- Stripe webhooks (/api/stripe/webhook — Stripe IPs are global)
-- Public CSAT surveys (/api/csat/public/* — customer feedback
-  must remain reachable from anywhere)
-
-Every blocked request emits an `AuditLog` event of type `GEO_BLOCK`,
-with the country, IP, and path stored in the metadata for forensic
-review. The Geo Block page surfaces a 24-hour stats widget with the
-top blocked countries.
-
-Tech notes for operators upgrading:
-- Geo Block requires Cloudflare proxy (orange cloud) enabled on your
-  DNS records. Without the `CF-IPCountry` header, the feature is
-  disabled and the UI shows a red "Cloudflare requis" banner.
-- Operators behind a WAF without Cloudflare can configure their WAF
-  to inject `X-Country-Code` as an alternative (see cloudflare-setup.md).
-- Schema migration adds `geoBlockEnabled`, `geoBlockMode`,
-  `geoBlockCountries`, `geoBlockSetAt`, `geoBlockSetBy` to
-  `SecuritySettings`. Default `geoBlockEnabled=false`, so the
-  feature is opt-in and existing installs see no behaviour change
-  until they activate it from the UI.
-
-#### Honeypot routes + auto-blocklist (Phase 2 hardening)
-
-Real TicketBrainy users never access `/wp-admin`, `/wp-login.php`,
-`/.env`, `/.git/HEAD`, `/phpmyadmin`, `/administrator`, `/admin.php`,
-or other common scanner paths — those are exclusively probed by
-automated attack tools.
-
-Each hit on one of these paths now:
-1. Returns a generic 404 (so the attacker doesn't know they
-   tripped a trap)
-2. Records an `AuditLog` event of type `HONEYPOT_HIT` with the
-   probed path, source IP, and User-Agent
-3. Adds the source IP to a new `IpBlocklist` table with reason
-   `honeypot`, expiring after `honeypotBlockDurationHours`
-   (default 24h, configurable in `SecuritySettings`)
-
-Subsequent requests from the same IP are then rejected by
-`enforceAccess()` — the dashboard layout check that runs before
-any other authorization. This means a single hit on `/wp-admin`
-shuts the attacker out of the entire instance for 24 hours.
-
-Schema migration adds the `IpBlocklist` table and the
-`honeypotEnabled` + `honeypotBlockDurationHours` columns to
-`SecuritySettings`. Honeypots are enabled by default — there's
-no downside.
-
-#### CSP nonce strict (Phase 2 hardening)
-
-The previous Content-Security-Policy header included
-`'unsafe-inline'` on `script-src`, which the v1.10.131 pentest
-correctly flagged as a regression vector for any XSS that might
-land in a future code change. v1.10.14 replaces it with a strict
-nonce-based policy.
-
-The middleware now:
-1. Generates a fresh 16-byte random nonce for every HTML request
-2. Sets it on a request header (`x-nonce`) so Server Components
-   can read it via `headers().get('x-nonce')`
-3. Emits a Content-Security-Policy header with
-   `'nonce-XXXX' 'strict-dynamic'` on `script-src`
-
-`'unsafe-inline'` is kept as a legacy fallback for browsers that
-don't support `'strict-dynamic'` (Chrome ≤59, Firefox ≤58, Safari
-≤15.4 — every modern browser ignores it when a valid nonce is
-present, per the W3C CSP3 spec).
-
-`style-src` keeps `'unsafe-inline'` because Tailwind and shadcn
-inject style attributes at runtime that can't be nonced.
-
-#### `/.well-known/security.txt` (RFC 9116)
-
-A standard `security.txt` file is now served at
-`https://your-instance.example/.well-known/security.txt` with the
-TicketBrainy security contact email and disclosure policy URL.
-This is a small but well-documented signal to security researchers
-that you have a coordinated disclosure process — and it's expected
-by most bug bounty platforms and audit checklists.
-
-#### Plugins page — license fingerprint for support
-
-The license display on the Plugins page now shows the first and
-last 4 characters of both the license key and the hardware ID
-(middle masked with `…`). Allows support to identify the active
-license without leaking enough material to clone it. The full key
-never leaves the server.
-
-### Schema migration
-
-```sql
--- New columns on SecuritySettings
-ALTER TABLE "SecuritySettings"
-  ADD COLUMN "geoBlockEnabled"            BOOLEAN  DEFAULT false NOT NULL,
-  ADD COLUMN "geoBlockMode"               TEXT     DEFAULT 'denylist' NOT NULL,
-  ADD COLUMN "geoBlockCountries"          TEXT[]   DEFAULT ARRAY[]::TEXT[],
-  ADD COLUMN "geoBlockSetAt"              TIMESTAMP(3),
-  ADD COLUMN "geoBlockSetBy"              TEXT,
-  ADD COLUMN "honeypotEnabled"            BOOLEAN  DEFAULT true NOT NULL,
-  ADD COLUMN "honeypotBlockDurationHours" INTEGER  DEFAULT 24 NOT NULL,
-  ADD COLUMN "rateLimitConfig"            JSONB;
-
--- New table
-CREATE TABLE "IpBlocklist" (
-  id        TEXT PRIMARY KEY,
-  ip        TEXT NOT NULL UNIQUE,
-  reason    TEXT NOT NULL,
-  source    TEXT,
-  "expiresAt" TIMESTAMP(3),
-  "createdAt" TIMESTAMP(3) DEFAULT NOW() NOT NULL,
-  metadata  JSONB
-);
-CREATE INDEX "IpBlocklist_expiresAt_idx" ON "IpBlocklist"("expiresAt");
-CREATE INDEX "IpBlocklist_reason_createdAt_idx" ON "IpBlocklist"("reason", "createdAt");
-```
-
-The `migrate` container runs this automatically on first boot of
-the new image — no manual migration needed.
-
-### Upgrade
-
-```bash
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-The `--force-recreate` flag is mandatory — without it, the `caddy`
-and `keycloak-init` containers (whose images haven't changed in
-this release) won't pick up the bind-mounted file updates from the
-git pull. See `docs/deployment-modes.md` for the rationale.
-
-After restart, visit Settings → Deploy & Security → Geo Block to
-configure the new feature, and Settings → Deploy & Security →
-Audit to verify all four security toggles are still active.
-
-### Reported in v1.10.141 (next release)
-
-- Security Dashboard widgets (24h events graph, top blocked IPs,
-  top blocked countries, alert center)
-- Configurable rate-limit thresholds via UI (the limits are
-  hardcoded today; the `rateLimitConfig` JSON column on
-  `SecuritySettings` is the storage backbone for the upcoming UI)
-
-## [1.10.1312] — 2026-04-10
-
-### Docs — upgrade gotcha + Keycloak admin posture guidance
-
-Doc-only patch. Surfaces two learnings from the v1.10.131 rollout
-on a production VPS that would have silently broken the hardening
-otherwise.
-
-#### Upgrade must use `--force-recreate`
-
-The v1.10.131 fixes live in two bind-mounted files:
-`proxy/Caddyfile` (Caddy reverse proxy config) and
-`keycloak/apply-config.sh` (Keycloak realm hardener). When you
-run `git pull && docker compose pull && docker compose up -d`,
-Compose **only recreates services whose image changed**. The
-`caddy:2` and `curlimages/curl` images used by `caddy` and
-`keycloak-init` are stable, so **those two containers keep
-running with their previous in-memory config**, silently
-ignoring the updated bind-mounted files.
-
-**Symptom:** your pentest shows the hardening isn't active
-(admin console still reachable, CORS still wildcard, BFP still
-off on the master realm), even though the files on disk are
-up to date and the web container is running the new version.
-
-**Fix:** always upgrade with:
-
-```bash
-docker compose up -d --force-recreate
-```
-
-Or restart the two bind-mount consumers explicitly:
-
-```bash
-docker compose restart caddy keycloak-init
-```
-
-`docs/deployment-modes.md` now opens with a prominent
-"Upgrading from a previous version — READ FIRST" section that
-calls this out explicitly.
-
-#### Keycloak admin posture — by order of preference
-
-The v1.10.131 hardening left the Keycloak admin console
-reachable for allowlisted IPs so that self-hosted operators
-without a VPN or bastion can still access `/admin/master/console/`
-from their office network. This is a deliberate trade-off and
-`docs/deployment-modes.md §Keycloak admin IP allowlist` now
-documents the preferred order:
-
-1. **VPN / bastion / LAN** — best. The admin console should
-   ideally never be reachable from the public Internet.
-2. **Allowlist IP** — pragmatic fallback. `/admin/*` and
-   `/realms/master/*` return 404 for non-allowlisted IPs
-   (masks the existence of the console from scanners).
-3. **Neither** — acceptable only if paired with strong
-   `KC_ADMIN_PASSWORD` + Brute Force Protection (which v1.10.131
-   applies automatically on the master realm).
-
-No code changes — pure documentation patch. Images rebuilt
-through `release-lockstep.sh` for lockstep discipline.
-
-## [1.10.131] — 2026-04-10
-
-### Security — blackbox pentest hardening (6 fixes)
-
-A black-box external pentest conducted on a v1.10.13 VPS install
-surfaced 1 critical + 4 high-severity findings in the infrastructure
-configuration (the application code itself — Next.js Server Actions,
-NextAuth middleware, SQL access paths — was found clean: no SQLi,
-XSS, SSRF, IDOR, SSTI, or path traversal). This release closes all
-critical/high findings and two of the medium findings.
-
-#### C-01 (CRITICAL) — Next.js port exposed in cleartext HTTP
-
-The `web` service in `docker-compose.yml` published `${APP_PORT}:3000`
-on all interfaces (`0.0.0.0`), making the Next.js HTTP port directly
-reachable from the internet without TLS. Cookies (CSRF, callback,
-session) were emitted over cleartext on this port, bypassing Caddy
-entirely and exposing them to MitM interception.
-
-**Fix**: the port mapping now defaults to `127.0.0.1:${APP_PORT}:3000`
-(loopback only). Caddy reaches the container through the internal
-Docker network (`web:3000`), which is unaffected. Operators who
-genuinely run without a reverse proxy can opt back in by setting
-`WEB_BIND=0.0.0.0` in their `.env`.
-
-- Reproducer before fix: `curl http://vps.example:4000/api/auth/session` → 200 OK
-- Reproducer after fix: `curl http://vps.example:4000/api/auth/session` → Connection refused
-
-#### H-01 (HIGH) — NextAuth cookies missing `Secure` flag
-
-`useSecureCookies` was hard-coded to `false` in `auth/index.ts`, so
-all NextAuth cookies (`next-auth.session-token`,
-`next-auth.callback-url`, `next-auth.csrf-token`) were emitted
-without `Secure`, allowing them to travel over plain HTTP. The
-rationale in the previous comment (`SSL is terminated at the reverse
-proxy, so the app always receives HTTP`) was correct for the
-internal socket but had the wrong conclusion: the cookies are
-emitted into the browser, which speaks HTTPS to the reverse proxy,
-so `Secure` is the correct flag.
-
-**Fix**: `useSecureCookies` is now derived from `NEXTAUTH_URL`
-(`true` if it starts with `https://`). In HTTPS mode, cookies are
-renamed with the `__Secure-` prefix (session, callback) and `__Host-`
-prefix (csrf) so browsers refuse them if ever served over HTTP. Dev
-mode (local HTTP) is unaffected.
-
-#### H-02 (HIGH) — Keycloak master admin console publicly exposed
-
-The Keycloak admin console at `/admin/master/console/` was
-reachable without any restriction, and the master realm
-authentication endpoints had no rate-limit. A combination that
-enabled credential stuffing and made the entire IAM one working
-exploit away from a pre-auth Keycloak CVE.
-
-**Fix**: the proxy `Caddyfile` now blocks `/admin/*`, `/admin`, and
-`/realms/master/*` with a hard `404` in the default (no-allowlist)
-case, masking the very existence of the admin console from
-scanners. If the operator configures an admin IP allowlist via
-Settings → Security, the web container re-renders the Caddyfile and
-switches that block to `403` for non-allowlisted IPs (historical
-behavior preserved for admin access use cases). The Keycloak user
-login flow (`/realms/ticketbrainy/*`, `/resources/*`, `/js/*`)
-remains fully open.
-
-#### H-03 (HIGH) — Keycloak reflects arbitrary CORS `Origin` with credentials
-
-All Keycloak OIDC endpoints (`/token`, `/userinfo`, `/logout`,
-`/certs`, `.well-known/openid-configuration`) reflected any
-`Origin` header back in `Access-Control-Allow-Origin` with
-`Access-Control-Allow-Credentials: true`. Tested origins:
-`https://evil.example`, `null`, `http://attacker.internal` — all
-accepted. Root cause: a client with `Web Origins: *` or `+`
-upstream.
-
-**Fix**: two levels of defense. Level 1: the `ticketbrainy` realm
-JSON is already clean (explicit `webOrigins` per client). Level 2
-(defense-in-depth): Caddy now strips all `Access-Control-Allow-*`
-headers emitted by Keycloak and re-emits them conditionally only
-when the request `Origin` matches exactly `https://${KEYCLOAK_DOMAIN}`.
-Any other origin — including `null` and future regressions in the
-realm JSON — is silently blocked at the proxy layer.
-
-#### M-01 (MEDIUM) — no rate-limit on master realm login
-
-8 consecutive failed `grant_type=password` attempts against
-`/realms/master/.../token` returned 8 × 401 with no 429, no
-`Retry-After`, no slow-down. The master realm is the administrative
-realm of Keycloak and had Brute Force Protection disabled by
-default.
-
-**Fix**: `apply-config.sh` now applies Brute Force Protection to the
-`master` realm in addition to `ticketbrainy`: `failureFactor=5`,
-`maxFailureWaitSeconds=900` (15-minute lockout),
-`minimumQuickLoginWaitSeconds=60`, password policy upgraded to
-`length(14)` (vs 12 on the user realm) because master is
-admin-only.
-
-#### M-02 (MEDIUM) — Direct Access Grants (ROPC) on `admin-cli`
-
-The `admin-cli` public client in the master realm accepted
-`grant_type=password`, and `team.actions.ts` (the Keycloak user
-sync action) was the last applicative consumer of this
-flow — using the global admin credentials kept in Node process
-memory. Both facts made the flow vulnerable to credential stuffing
-(mitigated by M-01 above) and violated the OAuth 2.1 / OAuth
-Security BCP recommendation against ROPC.
-
-**Fix**: `apply-config.sh` now provisions a dedicated confidential
-client `ticketbrainy-admin-write` in the `ticketbrainy` realm
-with `serviceAccountsEnabled: true`,
-`directAccessGrantsEnabled: false`, and the minimal realm-management
-roles `manage-users` + `view-users` + `query-users` (no
-`manage-realm`, no `manage-clients`, no `view-events` — principle
-of least privilege). The client secret is published through the
-same `kc-secrets` volume pattern as `admin-read`, and
-`team.actions.ts` now authenticates with `grant_type=client_credentials`
-via a new helper at
-`apps/web/src/lib/security/keycloak-admin-write.ts`. The global
-admin credentials are no longer needed by the web process.
-
-`admin-cli` remains enabled for the bootstrap-only consumers that
-still need it: `apply-config.sh` itself (which runs before the new
-client exists) and `scripts/keycloak-reset-admin.sh` (break-glass).
-Both run in contexts where credential-stuffing is not a realistic
-vector, and are now mitigated by the master realm's Brute Force
-Protection.
-
-### Hardening details — headers and TLS
-
-- Strict-Transport-Security now includes `preload` on both vhosts
-- New headers on the app vhost: `X-Frame-Options: DENY`,
-  `Cross-Origin-Opener-Policy: same-origin`,
-  `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
-- Referrer-Policy now explicit on the Keycloak vhost
-  (`strict-origin-when-cross-origin`)
-
-### Upgrade instructions
-
-Bind-mounted installs (most self-hosted users) **must** force
-recreate the web container so the new `Caddyfile` takes effect:
-
-```
-cd /opt/ticketbrainyApp
-git pull
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-After restart, check:
-
-```
-# C-01 verification — port 4000 should refuse connections
-curl --connect-timeout 5 http://your-vps.example:4000/api/auth/session
-# Expected: Connection refused
-
-# H-02 verification — Keycloak admin should 404
-curl -I https://vpskey.example/admin/master/console/
-# Expected: HTTP/2 404
-
-# H-03 verification — CORS from evil origin should not emit ACAO
-curl -I -H "Origin: https://evil.example" \
-  https://vpskey.example/realms/ticketbrainy/.well-known/openid-configuration \
-  | grep -i access-control
-# Expected: (empty output)
-
-# M-01/M-02 verification — check keycloak-init logs
-docker logs aidesk-keycloak-init-1 2>&1 | grep -E "(admin-write|master realm)"
-# Expected: "ticketbrainy-admin-write" creation + "master realm hardened"
-```
-
-## [1.10.13] — 2026-04-10
-
-### Fixed — KC_ADMIN_READ_CLIENT_SECRET auto-wired on fresh install
-
-Reported on a clean v1.10.11 VPS install. Settings → Security →
-Authentication panel showed:
-
-> Unable to reach Keycloak — check ticketbrainy-admin-read
-> client credentials. KC_ADMIN_READ_CLIENT_SECRET is not set
-
-Before v1.10.13, the fresh-install flow for this panel required
-a **3-step manual dance** no operator actually does:
-
-1. `keycloak-init` creates the `ticketbrainy-admin-read` client
-   on first boot and prints the client secret in its logs.
-2. Operator reads the logs, finds the secret, copies it into
-   `.env` as `KC_ADMIN_READ_CLIENT_SECRET=...`.
-3. Operator restarts the web container to pick up the new env.
-
-Step 2 never happened on real installs — the Security page just
-stayed broken indefinitely.
-
-#### Fix — shared volume bridge
-
-`keycloak-init` now writes the secret atomically to a new docker
-named volume (`kc-secrets`) that the web container mounts
-read-only at `/data/keycloak-secrets`. `keycloak-admin.ts`
-lazy-reads the secret from the file when the env var is empty,
-so fresh installs work out of the box.
-
-Touched files:
-
-- **`keycloak/apply-config.sh`** — after fetching the secret
-  from Keycloak, atomically writes it to
-  `/opt/keycloak-init/secrets/admin-read-secret` (tmp file +
-  rename, 644 perms so `uid 1001 (nextjs)` can read).
-- **`docker-compose.yml`** — new `kc-secrets` volume.
-  `keycloak-init` now runs as `user: "0:0"` (root) and mounts
-  it `:rw`; `web` mounts it `:ro`.
-- **`apps/web/src/lib/security/keycloak-admin.ts`** *(private
-  repo)* — new `loadClientSecret()` helper that prefers the env
-  var and falls back to the file, caches on first success.
-
-#### Backward compatible
-
-Operators who already set `KC_ADMIN_READ_CLIENT_SECRET` in their
-`.env` keep their workflow — the env var takes precedence over
-the file. The fallback only fires when the env var is
-unset/empty.
-
-### Upgrade from v1.10.12
-
-```bash
-cd ticketbrainyApp
-git pull
-docker compose --profile with-proxy pull
-docker compose --profile with-proxy up -d --force-recreate keycloak-init web
-```
-
-`--force-recreate keycloak-init` is required so it picks up the
-new `apply-config.sh` logic, the root user override, and the
-`kc-secrets` mount. `web` recreate picks up the new volume
-mount and the updated `keycloak-admin.ts`.
-
-### Release mechanics
-
-- All 5 service images re-tagged + pushed at `v1.10.13` AND
-  `:latest` (lockstep release)
-- 6 version source files bumped 1.10.12 → 1.10.13
-- Public repo changes: `docker-compose.yml` +
-  `keycloak/apply-config.sh`
-
----
-
-## [1.10.12] — 2026-04-09
-
-### Improved — Deployment banner UX (per-field drift + revert)
-
-Follow-up polish to the v1.10.11 drift-detection fix. The banner
-now tells the operator **which** fields diverge and offers a
-one-click escape hatch.
-
-#### Per-field drift diff
-
-When the saved DB config differs from the running env vars, the
-banner now lists each changed field with:
-
-- the human-readable label (e.g. "LAN hosts", "App domain")
-- the value saved in the DB (what *would* apply)
-- the value currently running on the instance (what *is* live)
-
-Before, the operator had to reverse-engineer the divergence by
-comparing their `.env` against the form field-by-field.
-
-#### "Revert to running config" button
-
-A new one-click undo button inside the drift banner. Clicking it:
-
-1. Resets the form to the values currently running in the
-   container (env vars at page-load time).
-2. Saves — the DB goes back in sync with live, `hasDrift` becomes
-   `false`, and the banner disappears **without a docker restart**.
-
-Useful when the operator tested a field change, saved it, then
-wanted out of the half-committed state.
-
-### Upgrade from v1.10.11
-
-Web-only update — Caddy config and bootstrap Caddyfile unchanged:
-
-```bash
-cd ticketbrainyApp
-git pull
-docker compose --profile with-proxy pull
-docker compose --profile with-proxy up -d --force-recreate web
-```
-
-### Release mechanics
-
-- All 5 service images re-tagged + pushed at `v1.10.12` AND
-  `:latest` (lockstep release)
-- 6 version source files bumped 1.10.11 → 1.10.12
-- No changes to `docker-compose.yml`, `proxy/Caddyfile`, or
-  `proxy/caddy-entrypoint.sh`
-
----
-
-## [1.10.11] — 2026-04-09
-
-### Fixed — 4 fresh-install polish issues from VPS walkthrough
-
-Four independent bugs reported on a clean v1.10.10 VPS install.
-All shipped in a single lockstep release.
-
-#### 1. Initial Setup checklist — "Add your first customer" was always complete
-
-`db.customer.count()` in the checklist also counted the seeded
-system customer (the catch-all for public-domain emails), so the
-step was auto-completed before the operator had added anyone.
-The query now excludes `isSystem: true` rows.
-
-#### 2. Renamed the catch-all from "AutresClients" to "Other"
-
-The catch-all for orphan tickets from public email domains
-(gmail/hotmail/outlook/…) was named "AutresClients", a
-French-only label that confused non-French operators. It's now
-called "Other" — universally readable across the languages we
-support.
-
-The seed upsert force-renames existing rows on every `up -d`
-(`update: { isSystem: true, name: "Other" }`), so upgrading
-installs rename automatically. No manual SQL needed.
-
-The ticket table previously decided the red system-badge avatar
-via a brittle string comparison `customer.name === "AutresClients"`
-— now switched to `customer.isSystem` which is rename-safe.
-
-#### 3. Deployment pending banner stuck after save
-
-Settings → Deployment → *Save* used to hard-code the client-side
-drift to `true` after every save, so:
-
-- Clicking Save with no actual changes raised a false
-  "Modifications en attente d'application" banner.
-- Even after the operator ran the suggested
-  `docker compose down && up -d`, the banner never cleared
-  without a page refresh.
-
-`saveDeploymentConfig` now re-computes the real drift against
-live env vars post-save and returns it. The form uses that value
-directly — no-op saves no longer raise a false banner, and saves
-that bring the DB back in sync with live env clear an existing
-banner instantly.
-
-#### 4. SSL certificates panel — "No Caddy certificates detected" despite a live cert
-
-Settings → Security → SSL certificates displayed "No Caddy
-certificates detected" even when Caddy was actively serving a
-Let's Encrypt certificate. Root cause:
-
-- Caddy writes every file it creates in 600 mode
-  (`-rw-------` root:root).
-- The web container mounts `caddy-data:/data/caddy:ro` and
-  runs Node.js as `uid 1001 (nextjs)`.
-- `listCaddyCerts()` hit `Permission denied` on every
-  `readdir` under `/data/caddy/caddy/certificates/...` even
-  though the files were right there.
-
-Fix: wrap the caddy container with a small entrypoint shim
-(`proxy/caddy-entrypoint.sh`) that runs a background loop every
-60 seconds and widens perms on PUBLIC cert files only:
-
-```sh
-find /data/caddy/certificates -type d -exec chmod o+rx {} +
-find /data/caddy/certificates -type f -name '*.crt' -exec chmod o+r {} +
-```
-
-Private keys (`*.key`) and ACME metadata (`*.json`) stay 600
-and are never exposed outside the caddy container. The 60s loop
-catches cert renewals too — Caddy re-writes renewed certs in
-600, and the next sweep re-widens them.
-
-### Upgrade from v1.10.10
-
-```bash
-cd ticketbrainyApp
-git pull
-docker compose --profile with-proxy pull
-docker compose --profile with-proxy up -d --force-recreate caddy web
-```
-
-`--force-recreate caddy` is required because `caddy-entrypoint.sh`
-is a new bind mount (the running caddy container must restart to
-pick it up). The seed re-runs automatically via the `migrate`
-service and force-renames "AutresClients" → "Other".
-
-### Release mechanics
-
-- All 5 service images re-tagged + pushed at `v1.10.11` AND
-  `:latest` (lockstep release)
-- 6 version source files bumped 1.10.10 → 1.10.11
-- Public repo additions: `proxy/caddy-entrypoint.sh`,
-  `docker-compose.yml` caddy service now mounts the entrypoint
-
----
-
-## [1.10.10] — 2026-04-09
-
-### Fixed — Keycloak allowlist hot-reload regression loop
-
-The v1.10.09 fix for the Caddy admin API origin validation covered
-two of the three code paths that need the `origins` allowlist, but
-missed the third: the `renderCaddyfile()` function in the web
-container that re-generates a Caddyfile from DB state on every
-"Save & reload Caddy" click.
-
-**Symptom on the VPS after v1.10.09**: after the very first
-successful save the UI started showing
-
-```
-Saved to database, but Caddy reload failed:
-{"error":"client is not allowed to access from origin 'http://caddy:2019'"}
-```
-
-on every subsequent save. The hot-reload silently died even though
-the bootstrap `proxy/Caddyfile` and the web container both had the
-v1.10.09 fixes.
-
-**Cause**: `renderCaddyfile()` emitted `admin 0.0.0.0:2019`
-*without* an `origins` block. The first successful save — which
-passed the origin check against the bootstrap config still in
-memory — replaced the running Caddy config with the rendered one,
-wiping the origins allowlist in-process. Every later POST /load
-was then rejected. Verified live on VPS 212.47.64.102:
-
-```
-$ docker exec caddy wget -qO- http://localhost:2019/config/admin
-{"listen":"0.0.0.0:2019"}   ← no "origins" field
-```
-
-**Fix**: `apps/web/src/lib/security/caddy-reload.ts` —
-`renderCaddyfile()` now emits the same admin block as the bootstrap
-`proxy/Caddyfile`:
-
-```
-admin 0.0.0.0:2019 {
-    origins caddy:2019 localhost:2019 127.0.0.1:2019
-}
-```
-
-A comment on the block explicitly warns that this must stay in
-lockstep with `proxy/Caddyfile` in this repo.
-
-### Upgrade from v1.10.09
-
-Standard rolling upgrade. `proxy/Caddyfile` is unchanged, so no
-`--force-recreate caddy` is required this time — only the web
-image needs to be refreshed:
-
-```bash
-cd ticketbrainyApp
-git pull
-docker compose --profile with-proxy pull
-docker compose --profile with-proxy up -d --force-recreate web
-```
-
-If the operator already hit the bug on v1.10.09 and the running
-Caddy config lost its origins, one additional restart of Caddy
-will reload the bootstrap Caddyfile from disk and re-seed the
-origins:
-
-```bash
-docker compose --profile with-proxy up -d --force-recreate caddy
-```
-
-### Release mechanics
-
-- All 5 service images re-tagged + pushed at `v1.10.10` AND
-  `:latest` (lockstep release per the release-lockstep.sh script)
-- 6 version source files bumped 1.10.09 → 1.10.10
-- `proxy/Caddyfile` unchanged (already correct since v1.10.09)
-
----
-
-## [1.10.09] — 2026-04-09
-
-### Fixed — Caddy admin API origin validation
-
-The v1.10.08 Keycloak admin IP allowlist hot-reload was rejected
-by Caddy with `client is not allowed to access from origin ''` on
-every save. Two missing pieces:
-
-**Cause**: when Caddy's admin API listens on a non-loopback
-address (`admin 0.0.0.0:2019`), the default origin validation
-refuses every request unless an explicit `origins` directive is
-specified. The v1.10.08 Caddyfile had none, so the allowed list
-was empty and every POST /load from the web container was
-dropped. On top of that, server-to-server Node fetch sends an
-empty `Origin` header by default, which also confuses Caddy's
-origin parsing.
-
-**Fix**:
-
-- `proxy/Caddyfile` — the admin block now declares the allowed
-  origins explicitly:
-
-  ```
-  admin 0.0.0.0:2019 {
-      origins caddy:2019 localhost:2019 127.0.0.1:2019
-  }
-  ```
-
-  `caddy:2019` matches the docker DNS hostname the web container
-  uses to reach Caddy. The loopback variants are kept for local
-  debugging via SSH port-forward.
-
-- `apps/web/src/lib/security/caddy-reload.ts` — the fetch call
-  now sets an explicit `Origin: http://caddy:2019` header. Caddy
-  parses this as a URL, extracts the Host part, and matches it
-  against the origins list.
-
-### Upgrade from v1.10.08
-
-Standard rolling upgrade, with `git pull` to refresh the
-bind-mounted Caddyfile:
-
-```bash
-cd ticketbrainyApp
-git pull
-docker compose --profile with-proxy pull
-docker compose --profile with-proxy up -d --force-recreate caddy web
-```
-
-The `--force-recreate caddy` is required because the Caddyfile
-is a bind mount — the running container keeps the old config
-until the process restarts.
-
-### Release mechanics
-
-- `web` image rebuilt (new digest sha256:44f605c56cae…)
-- 4 other images re-tagged from the matching v1.10.08 builds
-  for lockstep parity
-- 6 version source files bumped 1.10.08 → 1.10.09
-
-## [1.10.08] — 2026-04-09
-
-### Added — Keycloak admin IP allowlist, managed from the UI
-
-The `Settings → Security` page gets a new **"Keycloak admin IP
-allowlist"** panel next to the existing TicketBrainy admin
-allowlist. It restricts `/admin/*`, `/admin`, and
-`/realms/master/*` on the Keycloak domain to specific CIDRs,
-enforced by the Caddy reverse proxy **before** the request
-reaches Keycloak.
-
-This is a separate list from the TicketBrainy admin allowlist
-because they protect different things:
-
-| Allowlist | Enforced by | What it protects |
-|---|---|---|
-| TicketBrainy admin | Next.js server actions | Security mutation routes |
-| Keycloak admin | Caddy reverse proxy | Keycloak admin console + master realm |
-
-The two are complementary — the first protects app-level admin
-actions, the second protects the identity provider admin console.
-Both default to "no restriction" on fresh installs.
-
-**Zero-downtime hot reload**: saving the list from the UI
-triggers a server action that:
-
-1. Validates CIDRs and self-lockout (your current IP must be in
-   the list before it's saved)
-2. Persists to `SecuritySettings.keycloakAdminIpAllowlist`
-3. Re-renders the entire Caddyfile from a TypeScript template
-4. POSTs the rendered config to `http://caddy:2019/load` (Caddy's
-   admin API, exposed only on the internal docker network)
-5. Caddy validates the new config, switches in-flight requests
-   over, and drops the old config — no container restart, no
-   dropped connections
-
-**Survives container restarts**: because Caddy boots with a bare
-Caddyfile (no matcher), a full `docker compose down/up` would
-silently drop the restriction. The web container's Next.js
-instrumentation hook re-pushes the current DB value to Caddy
-two seconds after boot, so the restriction is re-applied
-automatically. This also makes the restriction survive image
-upgrades.
-
-**What stays open** — the public SSO flow for regular ticket
-users (`/realms/ticketbrainy/*`) and the shared Keycloak
-`/resources/*` (CSS/JS for login pages) are not blocked. Only
-the admin surface is restricted.
-
-**Break-glass**: if you lock yourself out (e.g. ISP rotated your
-IP), SSH to the server and clear the DB list, then restart
-Caddy — see `docs/DEPLOYMENT-MODES.md` for the exact commands.
-
-### Schema changes
-
-New Prisma column on `SecuritySettings`:
-
-    keycloakAdminIpAllowlist String[] @default([])
-
-Applied automatically by the migrate container on the next boot
-via `prisma db push`. No data migration needed; existing rows
-get the default empty array, matching pre-v1.10.08 behaviour
-(no restriction).
-
-### Release mechanics
-
-- `web` + `migrate` images rebuilt (schema change triggers
-  the migrate rebuild)
-- 3 other images re-tagged from the matching v1.10.07 builds
-  for lockstep parity
-- All 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.08` +
-  `:latest`, digest parity verified
-- 6 version source files bumped 1.10.07 → 1.10.08
-
-## [1.10.07] — 2026-04-09
-
-### Fixed — Bootstrap banner readable in light theme
-
-The bootstrap-mode banner on the `/login` page used `text-amber-200`
-with no `dark:` variant, which made the text almost invisible on
-a light-theme background (pale yellow on near-white). Dark theme
-was fine.
-
-Now uses a proper light/dark colour pair:
-
-- `bg-amber-100/70 text-amber-900` in light mode
-- `dark:bg-amber-500/5 dark:text-amber-100` in dark mode
-
-And the inline `<code>` elements get a matching split
-(`bg-amber-500/20` / `dark:bg-amber-500/10`).
-
-### Release mechanics
-
-- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.07` + `:latest`
-- Only `web` has source changes; the other 4 are re-tagged from
-  the matching v1.10.06 builds for lockstep parity
-- 6 version source files bumped 1.10.06 → 1.10.07
-
-## [1.10.06] — 2026-04-09
-
-### Fixed — Initial Setup checklist polish
-
-Two small fixes to the dashboard checklist introduced in v1.10.04,
-caught during the first operator walkthrough.
-
-**Keycloak users step lands on admin login, not a deep link**
-— the step opened
-`https://KEYCLOAK_DOMAIN/admin/ticketbrainy/console/#/ticketbrainy/users`
-directly. That URL bypasses the master realm's admin login flow and
-lands on a blank/broken state because Keycloak can't reconcile the
-requested page with the missing admin session. Changed to just the
-root `https://KEYCLOAK_DOMAIN/` so operators go through the normal
-admin login flow, then navigate to the `ticketbrainy` realm from the
-dropdown (which matches the walkthrough in the step description).
-
-**Mailbox step copy explains multi-mailbox + default SMTP** — the
-step description conflated "ticket reception" and "system
-notifications" without explaining how multiple mailboxes are handled.
-Rewrote to explicitly say:
-
-- You can add several mailboxes
-- The **first mailbox you add** becomes the default SMTP used by the
-  ticketing system for outbound notifications (user invites, password
-  resets, new-ticket alerts)
-
-Both EN and FR copy updated.
-
-### Release mechanics
-
-- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.06` + `:latest`
-- Only `web` has source changes; the other 4 are re-tagged from the
-  matching v1.10.05 builds for lockstep parity
-- 6 version source files bumped 1.10.05 → 1.10.06
-
-## [1.10.05] — 2026-04-09
-
-### Added
-
-**DNS prerequisites spelled out + pre-check** — `install.sh` now
-explicitly lists the two DNS A records required for Caddy mode
-(one for the app, one for Keycloak) in the mode B description,
-and runs a non-blocking DNS resolution check after both domains
-are captured. If either domain doesn't resolve or points somewhere
-else, you get a clear warning and a confirmation prompt — you can
-continue the install and fix DNS afterwards (Caddy keeps trying
-the ACME challenge in the background). `docs/DEPLOYMENT-MODES.md`
-has a new prerequisites table explaining why two records are
-needed (Keycloak's OIDC redirect URIs require its own origin).
-
-**Activation wizard pre-fills from install.sh** — the license
-email you typed at the terminal is now persisted to `.env`,
-passed to the web container via docker-compose, and read by the
-server component of `/activate` so step 1 renders with the email
-pre-populated. You still confirm before clicking "Activate" —
-we don't auto-submit, you stay in control — but there's no more
-retyping the same address in the browser. Prevents the typo-driven
-"two fresh-deploy devices" issue on VigilanceKey.
-
-**Admin IP allowlist panel — inline help + current-IP quick-insert**
-The Settings → Security → Admin IP allowlist panel has three new
-UX improvements:
-
-1. An inline help block at the top explaining the format (one
-   IP/CIDR per line), concrete examples (`/32` for a single
-   workstation, `/24` for an office subnet), and that an empty
-   list is a valid first-run setting (auth still protects the
-   pages).
-
-2. The server component now reads `x-forwarded-for` from the
-   current request and passes your current IP to the form. A
-   blue banner displays the detected IP and a one-click "Add /32"
-   button inserts it into the textarea. Prevents self-lockout.
-
-3. A break-glass procedure block documents
-   `SECURITY_ALLOWLIST_BYPASS=true` as the documented emergency
-   recovery path, with the exact 2-command sequence to run on
-   the server.
-
-`docs/DEPLOYMENT-MODES.md` has a new "Admin IP allowlist — what
-to put there" section with guidance for residential ISPs with
-dynamic IPs (don't enable it; use WAF-level restrictions at your
-upstream firewall instead).
-
-### Upgrade notes
-
-Standard rolling upgrade:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-If you're upgrading from v1.10.02 or earlier and want to take
-advantage of the wizard pre-fill on an already-activated instance,
-there's nothing to do — the feature only kicks in on fresh
-installs, your existing `.env` is untouched.
-
-### Release mechanics
-
-- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.05` + `:latest`
-- Only `web` has source changes; the other 4 are re-tagged from
-  the matching v1.10.04 builds for lockstep parity
-- 6 version source files bumped 1.10.04 → 1.10.05
-
-## [1.10.04] — 2026-04-09
-
-### Added — Initial Setup checklist on the dashboard
-
-Fresh installs now get a dashboard widget that walks operators
-through the 5 must-do steps before the instance is production-ready:
-
-1. **Add your first mailbox** — IMAP + SMTP, used for both ticket
-   reception AND system notifications (password reset, invites)
-2. **Create your first Keycloak users** — opens the Keycloak admin
-   console (URL auto-resolved from KEYCLOAK_DOMAIN in Caddy mode,
-   or IP:8180 in LAN mode)
-3. **Choose your interface language** → Settings → Language
-4. **Add your first customers** → Settings → Customers
-5. **Customise your personal theme** → Settings → Appearance
-
-Each step shows a green check when done (auto-detected from real DB
-state OR manually dismissed via click), a progress bar counts the
-completed items, and the whole widget auto-hides when everything is
-done or when the operator clicks the dismiss `X`. Preference-only
-steps (language, theme) can be manually toggled; real-infra steps
-(mailbox, Keycloak users, customers) are detected from Prisma counts
-and cannot be faked.
-
-Auto-detection queries run in parallel with the existing dashboard
-queries — no added latency beyond ~5-10ms.
-
-### Fixed — Analytics / Reports "Analytics Pro" lock screen
-
-Both `/analytics` and `/analytics/reports` still referenced the
-decommissioned `analytics_pro` plugin in their `<FeatureGate>`
-lock screen. The feature flag check (`hasFeature("analytics_dashboard")`)
-already resolved correctly against the current `enterprise_pack`
-plugin, but the "Requires …" CTA text pointed users to a plugin
-that no longer exists in the marketplace. Updated both pages to
-`pluginName="Enterprise Pack"` with the correct slug, so clicking
-the lock now takes operators to the right plugin detail page.
-
-### Release mechanics
-
-- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.04` + `:latest`
-- Only `web` has source changes; the other 4 are re-tagged from
-  v1.10.03 builds for lockstep parity
-- 6 version source files bumped 1.10.03 → 1.10.04
-- Rolling upgrade: `docker compose pull && docker compose up -d`
-
-## [1.10.03] — 2026-04-09
-
-### Fixed — Settings/Deployment sees Caddy + wizard auto-detects mode
-
-Three related fixes that surfaced on the fresh VPS deploy path once
-v1.10.02 unblocked the SSO bootstrap. The operator could successfully
-log in but `Settings → Deployment` reported "Caddy disabled, no
-domains, no Let's Encrypt certs" even while Caddy was running and
-serving real certs from the front.
-
-**Web container never received deployment env vars**
-
-`docker-compose.yml` referenced `APP_DOMAIN`, `APP_URL`, `APP_PORT`,
-`KEYCLOAK_DOMAIN`, `LETSENCRYPT_EMAIL` for Caddy variable substitution
-and for deriving `NEXTAUTH_URL`, but NEVER passed them into the web
-container's environment. `getLiveConfig()` in `deployment.actions.ts`
-reads directly from `process.env`, so on the web side every one of
-those values came back empty. The Settings → Deployment panel
-correctly rendered the resulting config as "Caddy disabled".
-
-Added all five vars to the web service environment block so the live
-config reflects what's actually running.
-
-**Caddy cert detection defeated by Caddy's 700 perms**
-
-`deployment-detector.ts` used `fs.readdirSync("/data/caddy/caddy/
-certificates")` which throws EACCES inside the web container. Caddy
-creates `acme/`, `certificates/` and `locks/` as `root:root mode 700`,
-while the web container runs as a non-root `nextjs` user. The
-sticky-bit `1777` on the parent `/data/caddy/caddy/` dir lets us
-STAT children but not READ them.
-
-The detection code swallowed the EACCES in try/catch and returned
-false → every Caddy deploy was reported as "Caddy inactive, no
-certs" on the Security page, greying out the entire HTTPS/Caddy/
-Let's Encrypt section.
-
-New heuristic: check for `/data/caddy/caddy/last_clean.json` via
-`existsSync`. Caddy writes this file on every cert maintenance cycle
-(the first one runs at container startup). `existsSync` calls
-`stat()` internally, which only needs execute on the parent dir
-(`1777` grants that) and NOT read on the file contents (which we
-don't need).
-
-**Activation wizard step 2 always defaulted to LAN-only**
-
-The `/activate` step 2 React component initialised state with
-`useState<NetworkExposure>("none")`. On a VPS deploy where install.sh
-just configured Caddy, the wizard showed "LAN-only" pre-selected and
-operators who clicked through quickly ended up persisting
-`networkExposure="none"` into `SecuritySettings`. From that point on
-the Security page said "LAN-only, Caddy disabled" — matching the DB
-but not reality.
-
-The server component now auto-detects the mode from install.sh's
-env vars and passes it as `initialMode` to the form:
-
-- `APP_DOMAIN` set → **vps-caddy** (install.sh only writes `APP_DOMAIN`
-  in Caddy mode)
-- `APP_URL` starts with `https://` and no `APP_DOMAIN` → **behind-waf**
-- otherwise → **none** (LAN)
-
-Step 2 opens with the best-guess option selected and a green banner:
-
-> Detected from your install.sh configuration: VPS with managed
-> Caddy. Click any other option above to override.
-
-The operator can still override before submitting.
-
-### Upgrade notes from v1.10.0 – v1.10.02
-
-Standard rolling upgrade:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-If your SecuritySettings row already has `networkExposure=none`
-from an earlier broken activation, fix it in-place from the UI:
-**Settings → Security → Deployment mode panel** → click the
-correct mode. No reinstall needed.
-
-### Release mechanics
-
-- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.03` + `:latest`
-- Only `web` has source changes; the other 4 are re-tagged from the
-  matching v1.10.02 builds for lockstep parity
-- 6 version source files bumped 1.10.02 → 1.10.03
-
-## [1.10.02] — 2026-04-09
-
-### Fixed — Bootstrap login flow + Keycloak public exposure
-
-Two fixes that complete the fresh-install story started in 1.10.01.
-That release fixed the SSO first-user auto-promotion server-side, but
-on a real Caddy VPS deploy the operator could never actually REACH
-the point where that code runs because of two chicken-and-egg issues.
-
-**Bootstrap mode on the login page (critical)**
-
-Until now, the `/login` page showed the local email+password form
-only to client IPs that matched `LAN_HOSTS`. On a VPS deploy, every
-operator is "public" from the server's perspective — no LAN exists —
-so the local seed account `admin@ticketbrainy.local` was effectively
-invisible from the outside, and the SSO button was the only option.
-But SSO has no admin users yet on a fresh install, so there's no way
-to log in at all.
-
-New behaviour: the login page now checks the database for any
-active Keycloak ADMIN user. If none exists, it enters "bootstrap
-mode": the local form is shown regardless of client IP, with a small
-amber banner explaining why. As soon as someone logs in via SSO and
-gets auto-promoted (the "first SSO admin" rule from v1.10.01), the
-bootstrap flag flips off and the local form is hidden from public
-IPs again.
-
-This cleanly solves the chicken-and-egg: bootstrap with the local
-account, create the Keycloak user, SSO in, the bootstrap door closes
-automatically.
-
-**Keycloak host port bound to localhost in Caddy mode**
-
-The `keycloak` service used `"${KC_PORT:-8180}:8080"` which binds
-to 0.0.0.0 — exposing the admin console on `http://<public-ip>:8180`.
-Keycloak 26 then rejects every non-localhost HTTP hit with
-"HTTPS required", which is a dead end but still looks like the right
-URL, confusing operators. Worse, Keycloak's admin console client has
-relative `redirectUris` which get resolved against the request URL,
-so a single HTTP hit on :8180 would sometimes poison the session
-with an HTTP redirect_uri that then fails against the HTTPS endpoint.
-
-Change:
-
-```yaml
-ports:
-  - "${KC_BIND:-0.0.0.0}:${KC_PORT:-8180}:8080"
-```
-
-`install.sh` in Caddy mode now writes `KC_BIND=127.0.0.1` to `.env`,
-so the port is only reachable from localhost on the server itself.
-Caddy still reaches Keycloak via the internal docker network
-(`keycloak:8080`), so `https://<kc-domain>/admin` remains the
-working entry point. LAN deployments (non-Caddy mode) are untouched
-— `KC_BIND` defaults to `0.0.0.0` so admins on the LAN can still
-hit `http://<server-ip>:8180` as before.
-
-**install.sh — final summary + bootstrap sequence**
-
-Updated the "Access URLs" and "Next steps" sections to:
-
-- Display the correct Keycloak admin URL per mode (Caddy: HTTPS
-  domain, Direct: IP:8180)
-- In Caddy mode, explicitly warn that `http://<ip>:8180` is bound to
-  localhost only, with a tip to configure DNS if not ready
-- Walk through the 5-step bootstrap sequence: activate license →
-  log in with `admin@ticketbrainy.local` (bootstrap mode) → create
-  user in Keycloak admin console → set password manually in the
-  Credentials tab → log out and SSO in (auto-promoted to ADMIN) →
-  change the seed admin password
-
-### Upgrade notes from v1.10.0 or v1.10.01
-
-The cleanest fix is to wipe and reinstall:
-
-```bash
-docker compose down -v
-cd ..
-rm -rf ticketbrainyApp
-git clone https://github.com/kr1s57/ticketbrainyApp.git
-cd ticketbrainyApp
-bash install.sh
-```
-
-If you cannot drop the database but are on v1.10.0/v1.10.01 and
-stuck, add this to your `.env` in Caddy mode and recreate Keycloak:
-
-```
-KC_BIND=127.0.0.1
-```
-
-Then `docker compose up -d --force-recreate keycloak`.
-
-### Release mechanics
-
-- 5 images at `ghcr.io/kr1s57/ticketbrainy-*:v1.10.02` + `:latest`,
-  digest parity verified (only `web` has source changes; the other
-  four are re-tagged from the matching v1.10.01 builds)
-- 6 version source files bumped 1.10.01 → 1.10.02
-
-## [1.10.01] — 2026-04-09
-
-### Fixed — Fresh install / SSO first-login UX
-
-Four fixes that unblock the first-time deploy experience on a fresh
-VPS. A real end-to-end test install on v1.10.0 hit every single one
-of these in sequence — the hardest one left the app entirely unusable
-after a successful Keycloak SSO login.
-
-**SSO first-admin auto-promotion (critical)**
-
-The jwt callback in `apps/web/src/lib/auth/index.ts` used
-`userCount === 0 ? "ADMIN" : "AGENT"` to decide whether a fresh
-Keycloak user should be auto-promoted. On every real install
-`prisma/seed.ts` has already created the seed local account
-`admin@ticketbrainy.local` *before* anyone logs in via SSO, so
-userCount is always ≥ 1 and every SSO user landed as AGENT with
-`isActive=false`.
-
-Worse: the next branch (`if (!dbUser.isActive)`) returned the token
-without setting `token.userId` or `token.role`. Every downstream
-`db.user.findUnique({ where: { id: session.userId } })` then threw
-`User not found` with a cryptic 500, and every admin endpoint
-returned 403 because `session.user.role` was undefined. The user
-was left with an apparently-working login that crashed on every
-page.
-
-New logic: the first user with `keycloakId IS NOT NULL AND
-role='ADMIN' AND isActive=true` is the "first SSO admin" — the
-seed local account does not block this check because it has no
-keycloakId. Additionally, `token.userId` and `token.role` are
-always set, even for inactive users, so downstream code can render
-a proper "account pending approval" screen instead of crashing.
-`token.error='inactive'` is now an *additional* marker, not a
-replacement.
-
-Security model: whoever holds access to the Keycloak realm is
-trusted to be the first TicketBrainy admin. This is already the
-trust boundary in practice — Keycloak realm access is what gates
-who can reach the app at all.
-
-**Telegram bot crash loop**
-
-`process.exit(1)` on missing `TELEGRAM_BOT_TOKEN` combined with
-Docker's `restart: unless-stopped` caused a crash-loop that flooded
-logs on every fresh install that did not use Telegram notifications.
-Replaced with a silent poll-wait loop that re-checks env + DB every
-60s. When the operator eventually configures a token in Settings
-→ Telegram, the bot picks it up on the next poll and starts
-normally. No more log noise, no more manual `docker compose stop
-telegram-bot` workaround.
-
-**install.sh — Caddy-mode final summary**
-
-In Caddy mode, `APP_URL` (and `NEXTAUTH_URL` inside the container)
-is set to `https://<domain>`. The CSRF check in `/api/activate` and
-every server action requires the browser's `Origin` header to match
-that exact URL. Hitting `http://<server-ip>:4000` in Caddy mode
-gets rejected with **403 Forbidden** because origins don't match.
-
-The installer now:
-- Displays ONLY the HTTPS domain URL in Caddy mode (never the LAN IP)
-- Shows a prominent warning box explaining why `http://<ip>:4000`
-  must NOT be used in Caddy mode
-- Includes quick troubleshooting pointers (DNS resolution, Caddy
-  logs, firewall ports 80/443)
-- Updates the Next steps block to point at the right URL per mode
-- Adds a "Keycloak SSO as admin" section documenting the auto-promotion
-  rule from the fix above
-
-**docs/DEPLOYMENT-MODES.md — Keycloak email + first SSO admin**
-
-Added two new sections:
-
-- **Keycloak email** — explains that "No sender address configured
-  in the realm settings for emails" comes from a missing realm-level
-  SMTP config in Keycloak. Documents both paths to unblock user
-  provisioning (configure realm SMTP OR use `Credentials → Set
-  password` instead of the email-based reset flow).
-- **First SSO admin login** — documents the auto-promotion rule from
-  v1.10.01 and the interaction with the seed local account.
-
-### Upgrade notes from v1.10.0
-
-**If you already installed v1.10.0 and your SSO user is stuck:**
-
-The cleanest fix is to wipe and re-install — same outcome, zero
-manual surgery:
-
-```bash
-docker compose down -v
-cd ..
-rm -rf ticketbrainyApp
-git clone https://github.com/kr1s57/ticketbrainyApp.git
-cd ticketbrainyApp
-bash install.sh
-```
-
-For operators who cannot drop the database, the SQL fix is:
-
-```sql
-UPDATE "User"
-SET "isActive" = true, "role" = 'ADMIN'
-WHERE email = '<your-email>' AND "keycloakId" IS NOT NULL;
-```
-
-Followed by `docker compose pull && docker compose up -d --force-recreate web`.
-
-### Release mechanics
-
-- 5 images rebuilt and pushed to `ghcr.io/kr1s57/ticketbrainy-*`
-  at BOTH `v1.10.01` AND `:latest`, digest parity verified
-- 6 version source files bumped 1.10.0 → 1.10.01
-
-## [1.10.0] — 2026-04-09
-
-### New — Security Settings page
-
-A new **Settings → Security** section gives operators a single place to
-inspect and configure the platform's security posture. It covers nine
-modules, grouped into read-only posture panels at the top and
-togglable enforcement modules below.
-
-**Read-only posture panels**
-
-1. **Deployment mode** — current mode (LAN / behind-WAF / VPS+Caddy /
-   VPS direct) plus live runtime signals that flag mismatches between
-   the declared mode and the detected topology (Caddy presence,
-   upstream proxy type via `CF-Ray` / `X-Forwarded-For`, etc.)
-2. **Authentication (Keycloak)** — realm name, brute-force config,
-   MFA policy, password policy, session timeouts, user count, and
-   24-hour login-failure count. Data comes from the Keycloak Admin
-   API via a dedicated read-only client `ticketbrainy-admin-read`
-   created idempotently on every boot by `keycloak-init`.
-3. **Rate limiting** — 6 known rules (`login:ip`, `login:user`,
-   `activate:ip`, `csat:ip`, `ai:user`, `upload:user`) with live
-   active-bucket counts read directly from Redis
-4. **SSL certificates** — lists Let's Encrypt certificates persisted
-   by Caddy with per-domain expiry (empty when Caddy is not used)
-
-**Togglable enforcement modules**
-
-5. **Audit logging** — records 17 security-sensitive event types
-   (login success/failure, user created/deleted, role changed,
-   mailbox OAuth, plugin enable/disable, license activation, upload
-   rejected, rate-limit hit, etc.) to a new `AuditLog` table. Runtime
-   toggle + configurable retention window (default 90 days) + daily
-   background purge job. Comes with a paginated feed, event-type
-   filter, and CSV export on the same Security page.
-6. **Upload rate-limit** — throttles `/api/attachments/upload` to 20
-   uploads per 5 minutes per user when enabled. Rejections are
-   logged as `RATE_LIMIT_HIT` audit events.
-7. **Magic-bytes validation** — rejects uploads whose content does
-   not match the claimed extension (e.g. a `.exe` renamed to
-   `.pdf`). Runs on the web upload path AND on incoming email
-   attachments (advisory-only on the mail side — attachments are
-   stored but flagged with a reason).
-8. **Login anomaly detection** — when enabled, tracks a per-user
-   failure counter in Redis with a 10-minute sliding window and
-   emits `AUTH_LOGIN_SUSPICIOUS` audit events after 5 failures.
-9. **Admin IP allowlist** — restricts `/settings/**` and
-   `/api/admin/**` to specific CIDR blocks (IPv4 or IPv6). Includes
-   triple self-lockout protection (client-side CIDR validation,
-   server-side current-IP-in-list check, and a
-   `SECURITY_ALLOWLIST_BYPASS=true` break-glass env var — see
-   `docs/DEPLOYMENT-MODES.md §break-glass` for the recovery
-   procedure).
-
-### New — Activation wizard, step 2
-
-`/activate` now has a second step where the operator chooses their
-deployment mode from the four options above. The choice is persisted
-in the database and drives the default toggle values for the Security
-page (e.g. VPS modes enable rate-limit and anomaly detection by
-default; LAN mode leaves them off). You can always change the mode
-later at **Settings → Security**.
-
-### New — `docs/DEPLOYMENT-MODES.md`
-
-Full reference guide for the four modes, with pre-requisites,
-recommended toggles per mode, the break-glass recovery procedure, and
-how to retrieve the Keycloak `ticketbrainy-admin-read` client secret
-from the init container logs.
-
-### Database — schema changes
-
-Two new tables and two new columns are added automatically by
-`migrate` on the next `docker compose up -d`:
-
-- `SecuritySettings` — singleton row holding every toggle state and
-  the admin IP allowlist. Seeded with safe defaults so upgrades from
-  v1.3.x–v1.9.x land in a known state.
-- `AuditLog` — indexed on `eventType+createdAt`, `userId+createdAt`,
-  `ip+createdAt`, and `createdAt` for fast filtering and pagination.
-- `Attachment.flagged` (boolean) and `Attachment.flagReason` (text)
-  — set by the magic-bytes validator on the upload path and by
-  `mail-service` on incoming email attachments. Used to surface a
-  flag badge in the UI (future release).
-
-### Config — new environment variables
-
-Add the following to your `.env` (see `.env.example` for the exact
-format and the new section "Security Settings v1.10.0"):
-
-```
-KC_ADMIN_READ_CLIENT_ID=ticketbrainy-admin-read
-KC_ADMIN_READ_CLIENT_SECRET=
-SECURITY_ALLOWLIST_BYPASS=
-```
-
-After the first `docker compose up -d` retrieve the Keycloak secret
-from the init container logs:
-
-```bash
-docker compose logs keycloak-init | grep KC_ADMIN_READ_CLIENT_SECRET
-```
-
-Paste it into `.env` as `KC_ADMIN_READ_CLIENT_SECRET=...` and then:
-
-```bash
-docker compose up -d --force-recreate web
-```
-
-The Security page will now show the full Keycloak posture panel
-instead of an amber error card.
-
-### Upgrade notes from v1.3.x
-
-**Upgrading from a v1.3.x install is a straightforward
-`docker compose pull && docker compose up -d`** — the `migrate`
-service applies the new schema, and the `keycloak-init` service
-creates the new admin-read client on first boot. After that, follow
-the new-env-vars procedure above to wire the Keycloak secret into
-`.env`.
-
-Everything between v1.3.202 and v1.10.0 was an internal rolling
-update — the `:latest` tag always reflected the current state. If
-you want to pin to a specific version, use `:v1.10.0` in
-`docker-compose.yml` instead of `:latest`.
-
-### Deferred to future releases
-
-- Antivirus scanning for attachments (ClamAV) — out of scope for
-  v1.10.0 to keep the shipping surface small
-- SPF / DKIM / DMARC validation on incoming email
-- Spam scoring on incoming email
-- Middleware-layer IP allowlist enforcement — currently implemented
-  at the server-action layer because Next.js 16 node middleware is
-  still experimental. The UI and enforcement are fully functional;
-  this is an internal architectural note only.
-
----
-
-## [1.3.202] — 2026-04-06
-
-### Security — Image hardening
-
-This patch strips build-time artifacts from the `web` Docker image so
-the customer-facing container no longer carries raw TypeScript source,
-build configuration, or source maps. Also scrubs a few leftover code
-comments and one user-facing error message that named internal
-infrastructure.
-
-**What the image no longer ships**
-
-- Raw `.ts` / `.tsx` source tree under `/app/apps/web/src/` — Next.js 16
-  + Turbopack was over-inclusive in its standalone file tracing and was
-  shipping the full application source into every image. This release
-  deletes the source tree from the standalone output at build time.
-- Server route source maps (`.next/server/**/*.map`)
-- Build-time config files (Dockerfile, tsconfig.json, components.json,
-  tailwind.config.ts, postcss.config.js, next.config.ts, prisma.config.ts)
-- Internal dev scripts (`scripts/check-feature-gates.mjs`)
-- Turbopack cache/log from the host build context
-
-**Other scrubs**
-
-- `allowedDevOrigins` is no longer in `next.config.ts` (it used to bake a
-  LAN-only workstation IP into the production bundle).
-- The activation screen hint and the fresh-deploy error message no
-  longer name the internal license server hostname — they now reference
-  the configured `VIGILANCE_KEY_URL` env var instead.
-
-No functional change for end users. Upgrade is a plain image pull.
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Image size is unchanged (334 MB). The stripped files were < 1 % of the
-total — the fix addresses the content of the image, not its weight.
-
----
-
-## [1.3.201] — 2026-04-06
-
-### Added — Mailbox inbound filter rules
-
-Every mailbox now has a configurable set of **exclusion rules** that are
-checked before any incoming IMAP message becomes a ticket. Use them to
-silently drop noisy automated notifications (deploy summaries, cron
-reports, monitoring heartbeats) or to block entire sender domains.
-
-Each rule has three fields:
-
-- **Field**: `Objet`, `Corps du message`, `Email expéditeur`, or
-  `Domaine expéditeur`
-- **Operator**: `contient`, `est égal à`, `commence par`, or
-  `correspond à (regex)`
-- **Value**: the text/pattern to match against
-
-A message that matches **any active rule** is marked as read on IMAP but
-**never creates a ticket and never touches the database** — the filter
-runs before deduplication so noisy senders cost essentially zero.
-
-Regex patterns are validated server-side at save time — invalid patterns
-are rejected with a clear error message instead of crashing the poll
-cycle later.
-
-**Where to configure**: Settings → Mailboxes → Edit a mailbox → scroll to
-the "Règles d'exclusion (filtre inbound)" section (only visible on
-already-saved mailboxes).
-
-### Added — Multi-select delete on ticket lists
-
-The ticket list selection toolbar (previously showing only the "Merge"
-button when 2+ tickets are selected) now also surfaces a destructive
-**"Supprimer la sélection"** button as soon as at least one ticket is
-checked. Confirmation prompt tells you how many tickets will be affected,
-then they are moved to the "Supprimés" folder where they can be restored.
-
-Under the hood it's a single transaction that soft-deletes every target
-and writes one activity entry per ticket — fast and idempotent even for
-large selections (capped at 500 per call).
-
-### Database migration
-
-This release adds a `MailboxExclusion` table with a foreign key cascade
-from `Mailbox`. No manual action required — the schema is applied
-automatically by the `migrate` init container on the first `up -d` after
-pulling.
-
-### Upgrade
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-The new features are available immediately after the containers restart.
-
----
-
-## [1.3.200] — 2026-04-06
-
-### Dashboard & Statistics — full redesign with Recharts
-
-Both the main **Dashboard** and the **Statistics** page have been rebuilt on
-top of Recharts (wrapped by the shadcn `ChartContainer`). Hand-rolled div
-bars and list-with-dots are gone; replaced by proper accessible charts that
-follow the active theme automatically.
-
-**What's new on the Statistics page**
-
-- **Volumes & Résolutions** section with a grouped bar chart (opened vs
-  resolved per day) and a radial resolution-rate gauge with target line.
-- **Performances Équipe** section with a ranked agent leaderboard
-  (progress-bar visualization) and a priority distribution with colored
-  semantic bars.
-- **Analyse de Tendance** section with a weekly 3-series line chart
-  (opened / in progress / resolved) and a status distribution donut with
-  legend.
-- Modernized KPI row with accent-tinted icons and background accents.
-
-**What's new on the Dashboard**
-
-- Full 7-day activity bar chart (opened vs resolved) — right next to
-  "My workload" — driven by a new data query.
-- Modernized KPI cards with accent icons.
-- Refined mailbox grid with hover-lift animation, connection dot, and
-  agent badge overflow.
-- Recent tickets list with French relative timestamps.
-
-**Technical notes**
-
-- All charts use semantic CSS tokens (`--chart-tb-*`) that cascade through
-  the 4 existing themes (light default, light pro, dark default, dark pro),
-  so no JS theme switch is needed.
-- Dates are pre-formatted server-side in `fr-FR`, avoiding any hydration
-  mismatch between SSR and client.
-- Chart components live at `apps/web/src/components/charts/` in the source
-  and are tree-shaken into the right pages at build time.
-
-No migration is required — the new UI is bundled into the updated
-`ghcr.io/kr1s57/ticketbrainy-web:v1.3.200` image and ships automatically
-when you pull and restart.
-
-### Security — Keycloak hardening sync + admin recovery toolkit
-
-This release also ships an idempotent post-start configuration sync for
-Keycloak and a self-contained admin recovery toolkit. After every
-`docker compose up -d` the security defaults are re-enforced automatically,
-so accidental UI changes or future Keycloak image upgrades cannot quietly
-weaken the realm.
-
-### Added
-
-- **`keycloak-init` one-shot service** in `docker-compose.yml`. Runs after
-  Keycloak is up, applies our hardened defaults via the admin REST API, then
-  exits. Idempotent and safe to re-run.
-- **`keycloak/apply-config.sh`** — single source of truth for the realm
-  defaults. Edit it to change them.
-- **`scripts/keycloak-reset-admin.sh`** — admin recovery toolkit with three
-  modes:
-  - `--mode unlock` — clear brute-force lockout for the admin user
-  - `--mode api <NEW>` — rotate password while current credentials still work
-  - `--mode recovery <NEW>` — full bootstrap recovery when the password is lost
-  Auto-detects the keycloak container and Docker network — no configuration.
-- **`docs/KEYCLOAK-ADMIN-RECOVERY.md`** — complete operational runbook
-  covering hardening sync, login-theme reapplication after upgrade, all three
-  recovery modes, end-user lockouts, brute-force settings, and the
-  post-upgrade checklist.
-
-### Changed
-
-- **Realm template** (`keycloak/ticketbrainy-realm.json`) — strengthened for
-  fresh installs:
-  - `passwordPolicy`: `length(8) and notUsername`
-    → `length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername and passwordHistory(5)`
-  - `otpPolicyAlgorithm`: `HmacSHA1` → `HmacSHA256`
-  - `ssoSessionMaxLifespan`: 36 000 s (10 h) → 28 800 s (8 h)
-- These same hardened settings are also re-applied on every `up -d` to existing
-  installs by the `keycloak-init` service — no manual migration needed.
-
-### Brute-force protection — what's enforced
-
-| Setting                  | Value | Meaning                          |
-|--------------------------|-------|----------------------------------|
-| `bruteForceProtected`    | true  | Master switch                    |
-| `failureFactor`          | 5     | Failed attempts before lockout   |
-| `maxFailureWaitSeconds`  | 900   | 15-minute lockout                |
-| `permanentLockout`       | false | Auto-unlock after wait           |
-| `passwordHistory`        | 5     | Block last 5 passwords on reuse  |
-
-### What this means for you
-
-After pulling the new images and `docker compose up -d`:
-
-1. The new `keycloak-init` container runs once, applies the hardened settings
-   to your existing realm, and exits with `OK — Keycloak realm 'ticketbrainy'
-   is hardened`. Check with `docker compose logs keycloak-init`.
-2. The custom branded login theme is **automatically re-applied after every
-   Keycloak upgrade** — no more manual API patching.
-3. If you ever lose the admin password, run
-   `./scripts/keycloak-reset-admin.sh --mode recovery 'NewStrongPassword!'`
-   from your install directory.
-
-See [docs/KEYCLOAK-ADMIN-RECOVERY.md](docs/KEYCLOAK-ADMIN-RECOVERY.md) for
-the full operational runbook.
-
----
-
-## [1.3.002] — 2026-04-06
-
-### Security — Critical license server hardening
-
-Every response from the TicketBrainy license server is now cryptographically
-signed with **Ed25519** and verified by the client on every permission check.
-This closes an attack path where a modified `VIGILANCE_KEY_URL` could be
-redirected to a local mock server to activate premium plugins without a
-valid license.
-
-### What changed under the hood
-- The license server signs every `sync` / `fresh-deploy` response with an
-  Ed25519 key. The public key is compiled into the TicketBrainy web image.
-- The web app refuses any unsigned response or any response whose
-  signature does not verify against the embedded public key.
-- The `PluginLicense` table has four new nullable columns
-  (`signedPayload`, `signature`, `signingKeyId`, `issuedAt`). The database
-  migration runs automatically at startup.
-- `hasFeature()` re-verifies the stored envelope on every call — a row
-  hand-inserted into the database with no envelope no longer grants access.
-
-### What this means for you
-**Nothing to configure.** Pull the new images, restart, and click
-**Sync** once in *Settings → Plugins* to re-fetch your licenses with
-signed envelopes. During the ~10 seconds between the restart and your
-first Sync click, premium plugin pages will temporarily show as locked.
-
-See the [update instructions](#update-instructions) below.
-
----
-
-## [1.3.001] — 2026-04-06
-
-### Added
-- **Interactive installer** (`install.sh`) — guided wizard for first-time deployment
-- **Built-in Caddy reverse proxy** with automatic Let's Encrypt HTTPS (Mode B)
-- **Settings > Deployment** UI — manage domain, HTTPS, and LAN access from the web UI
-- **Enterprise Pack** plugin — unlimited users and unlimited mailboxes
-- **CIDR support** in `LAN_HOSTS` — allow whole subnets (e.g., `192.168.1.0/24`)
-- **Step-by-step Keycloak guide** for users new to SSO ([docs/KEYCLOAK-GUIDE.md](docs/KEYCLOAK-GUIDE.md))
-- **Delete deployment** button on the license server admin (cleanup test installations)
-
-### Changed
-- **Default port changed from 3000 to 4000** to avoid conflicts with other apps
-- **Activation flow simplified** — license check now happens server-side, no more cookie issues
-- **Core plan limits enforced** — 3 active users max, 1 mailbox max (upgrade to Enterprise Pack for unlimited)
-- **Login page** — local form visibility now based on real client IP (not just URL)
-- **Settings menu** — Enterprise Pack moved to "Core" section, CSAT moved to "Productivity"
-- All Docker images upgraded to **Node 22** (required for Prisma 7.6)
+### Fixed
+
+- **Keycloak TOTP enrollment now works with Google / Microsoft Authenticator**
+  — the realm `otpPolicyAlgorithm` was set to `HmacSHA256` in an earlier
+  hardening pass, but Google Authenticator and Microsoft Authenticator
+  ignore the `algorithm` parameter in the QR-code `otpauth://` URI and
+  always compute SHA-1. Result: every code generated by these apps was
+  rejected with "Le code d'authentification est invalide" / "Invalid
+  authentication code", regardless of the app used. Reverted to
+  `HmacSHA1` (the RFC 6238 default, accepted by NIST 800-63B and used by
+  Google, GitHub, AWS, etc.). Security is preserved by the 160-bit
+  shared secret, not the HMAC variant. Affected: `keycloak/apply-config.sh`
+  and `keycloak/ticketbrainy-realm.json`. Existing users who had enrolled
+  TOTP under the old policy must reset their OTP credential and re-scan.
+
+## [1.10.144921] — 2026-05-01
 
 ### Fixed
-- Activation infinite loop on fresh installs
-- `LAN_HOSTS` not detecting workstation IPs correctly
-- Install script ANSI color codes not rendering on some terminals
-- Webhook URL validation now blocks internal Docker hostnames
-- Keycloak users created via auto-sync are now inactive by default (require admin approval)
-- Email notifications now properly escape HTML in customer names and subjects
-- File uploads use the validated MIME type to determine the file extension (no client trust)
 
-### Security
-- Comprehensive security audit applied
-- Stricter role-based access control on admin actions
-- Multiple privilege escalation paths fixed
-- Content Security Policy (CSP) and Strict Transport Security (HSTS) headers added
-- AI service refuses to start if its internal token is missing (fail-closed)
+- **CSAT email now threads with the ticket conversation** — the satisfaction
+  survey no longer creates a separate Gmail/Outlook conversation that
+  appeared at the top of the inbox before the reply. Subject is now
+  `Re: [#N] <ticket subject> — Votre avis` and `In-Reply-To` points at the
+  last ticket message, so REPLY → CLOSURE → CSAT all live in the same
+  thread, in chronological order. Pipeline ordering was already correct
+  (queue is FIFO, sender is awaited); only the visible threading was off.
 
-### Removed
-- Old `Analytics Pro` plugin renamed to **Enterprise Pack** (now includes unlimited users + mailboxes)
-- Legacy cookie-based activation gate
+## [1.10.14492] — 2026-04-29
 
----
+### Fixed
 
-## [1.2.001] — 2026-04-05
+- **AI auth survives credential rotations** — bind-mount the host Claude
+  directory (read-only) instead of a single file, so OAuth credential
+  rotations on the host (atomic rename) become visible to the ai-service
+  container immediately. `docker-claude-init.sh` re-syncs the volume copy
+  every 5 minutes in a background loop, so AI features keep working
+  without any container restart after the Claude CLI rotates its tokens.
+  Resolves silent 401 "Invalid authentication credentials" failures on
+  long-running deployments. Adds `HOST_CLAUDE_DIR` env var.
 
-- Keycloak theme customization
-- Mailbox table redesign with status badges
-- User invitation flow improvements
-- CSAT single-use survey tokens
-- Stripe plugin marketplace integration
-- Email CC/BCC support
+### Changed
 
-## [1.1.030] — 2026-04-04
+- **Discrete AI thinking indicator** across the ticket sidebar (Auto Triage,
+  Conversation Summary) and the in-composer AI Assistant draft panel:
+  pulsing brain icon, cycling stage label (reading → consulting expert
+  skills → reasoning → drafting), shimmer + 3-dot bounce, with i18n keys
+  in 5 languages. Replaces silent skeleton placeholders that gave the
+  impression nothing was happening during long AI calls.
 
-- Auto-close inactive tickets workflow
-- Email branding and signature customization
-- 9 new premium plugins (MVP)
-- Plugin feature gating system
-- Customer logo upload
+### Added
 
-## [1.1.020] — 2026-04-04
+- **Backup & disaster recovery system** — on-demand encrypted full backups via
+  `npm run backup`, with rotation of the last 7 archives stored in the **private**
+  repo only. Restore on a fresh server via `./scripts/restore.sh BACKUP/<archive>.tgz.gpg`.
+  Targets < 30 min full disaster recovery on a brand-new Linux+Docker host.
+  See `BACKUP/README.md` and `docs/RUNBOOK-DISASTER-RECOVERY.md`.
+  Defense-in-depth ensures `BACKUP/` never reaches the public repo.
 
-- Full French i18n
-- CSAT manual and automatic surveys
-- Service monitor dashboard
-
----
-
-## Update instructions
-
-To update an existing TicketBrainy installation:
-
-```bash
-cd ticketbrainyApp
-git pull
-docker compose pull
-docker compose --profile with-proxy up -d   # If using Caddy
-# or
-docker compose up -d                        # If behind your own proxy
-```
-
-Database migrations run automatically on startup.
-
-### After updating to 1.3.200
-
-The new `keycloak-init` service runs automatically after `up -d`. Verify it
-succeeded:
-
-```bash
-docker compose logs keycloak-init
-# Expected last line:
-# [apply-config] OK — Keycloak realm 'ticketbrainy' is hardened
-```
-
-If you ever need to re-apply the hardening (e.g. after editing the script):
-
-```bash
-docker compose up -d --no-deps keycloak-init
-```
-
-### After updating to 1.3.002
-
-Open `Settings → Plugins` in the admin UI and click **Sync** once.
-This re-fetches all your licenses with cryptographic signatures so
-premium features stay enabled. If you skip this step, premium pages
-will show as locked until the next automatic sync.
-
-### Verifying the update
-
-```bash
-# Check the installed version
-docker compose exec web cat apps/web/package.json | grep '"version"'
-# should show: "version": "1.3.200"
-
-# Check that the keycloak hardening sync ran
-docker compose logs keycloak-init | tail -5
-```
+For prior version history, see `git log` and the project memory entries.
