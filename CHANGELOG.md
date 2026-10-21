@@ -8,6 +8,31 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.528] — 2026-10-21
+
+Correctif sécurité/ergonomie : la « Liste blanche IP admin » exempte désormais
+du honeypot et de la liste de blocage. Aucun changement de schéma.
+
+### Corrigé
+- **Auto-bannissement de l'administrateur** : une IP présente dans la Liste
+  blanche IP admin (Paramètres → Déploiement & Sécurité → Whitelist) pouvait
+  être bannie 24 h par le honeypot (`/wp-login.php`, `/phpmyadmin`, …) et se
+  retrouver devant « Access Denied » sur le login et tout le tableau de bord,
+  sans plus pouvoir atteindre l'écran de déblocage. Désormais :
+  - `enforceAccess()` laisse passer toute IP de la liste blanche admin avant
+    le test IpBlocklist et Geo Block ;
+  - `trapHoneypot()` trace toujours l'événement `HONEYPOT_HIT` et l'alerte,
+    mais n'écrit plus de ban pour une IP de la liste blanche.
+  - Garde-fou : liste blanche **vide = aucune exemption**, le honeypot reste
+    pleinement actif sur les installations sans liste blanche.
+- Déblocage manuel si déjà banni :
+  `docker compose exec db psql -U ticketbrainy -d ticketbrainy -c "delete from \"IpBlocklist\" where ip='<votre IP>';"`
+
+### Mise à jour
+```bash
+cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d
+```
+
 ## [1.11.527] — 2026-10-21
 
 Sécurité : correctif Node.js du 21 octobre 2026 (bulletin
