@@ -8,6 +8,25 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.529] — 2026-11-11
+
+Tri de la vue « Fermés » par date de clôture et mise à jour de sécurité
+Next.js. Aucun changement de schéma.
+
+### Corrigé
+- **Tickets fermés classés par date d'ouverture** : dans la vue « Fermés »,
+  un ancien ticket clôturé aujourd'hui restait enfoui à sa date de création.
+  La vue est désormais triée par **date de clôture** (la plus récente en
+  tête) et la colonne de date y affiche « Fermé » avec la date de clôture.
+  Les autres vues gardent le tri par date de création.
+
+### Sécurité
+- **Next.js 16.3.5 → 16.4.5** : corrige GHSA-673q-mjm6-r5xr /
+  GHSA-xqc2-xf4c-x3h3 (exécution de code à distance dans React Server
+  Components, CVSS 9.5). TicketBrainy n'utilise pas la fonctionnalité visée
+  (`use cache` / Cache Components) et n'était donc pas exploitable, mais la
+  version embarquée était dans la plage affectée.
+
 ## [1.11.528] — 2026-10-21
 
 Correctif sécurité/ergonomie : la « Liste blanche IP admin » exempte désormais
