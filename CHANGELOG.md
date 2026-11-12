@@ -8,6 +8,40 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.5295] — 2026-11-13
+
+Durcissement du traitement des e-mails entrants. Aucun changement de schéma.
+
+### Sécurité
+- **Réception des e-mails : analyse HTML à temps linéaire.** Le nettoyage du
+  HTML entrant reposait sur des expressions régulières dont le temps de
+  calcul explosait sur un contenu fabriqué exprès : un e-mail de quelques
+  dizaines de Ko pouvait bloquer la relève de toutes les boîtes pendant
+  plusieurs secondes, un e-mail de 1 Mo pendant plusieurs minutes. Le HTML
+  est désormais analysé une seule fois par un véritable analyseur
+  (htmlparser2), avec une profondeur d'imbrication et une taille maximales.
+- **Plus de message perdu sur un HTML anormal.** Un HTML très imbriqué
+  faisait échouer la conversion en texte : le message était marqué lu sans
+  créer de ticket. Il arrive désormais sous forme de texte.
+- **Affichage des messages : profil de filtrage strict.** Formulaires,
+  boutons, champs de saisie, balises `<style>` et CSS de positionnement sont
+  retirés des messages affichés dans le fil du ticket ; ils permettaient de
+  superposer un bouton invisible à la page.
+- **Images d'un e-mail** : seules les sources distantes, intégrées (`cid:`,
+  `data:image`) et les pièces jointes sont conservées ; les chemins relatifs
+  vers l'application sont retirés.
+- **nodemailer 10.0.10 → 10.1.4 et mailparser 3.9.28 → 3.9.32** : corrige des
+  erreurs d'interprétation des adresses dans les en-têtes des e-mails reçus.
+- Le journal de démarrage de mail-service n'affiche plus le mot de passe
+  Redis.
+
+### Modifié
+- Le texte d'un e-mail reçu uniquement en HTML est calculé à partir du HTML
+  nettoyé ; sa mise en forme peut différer légèrement.
+
+### Mise à jour
+- Installs existants : `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+
 ## [1.11.5294] — 2026-11-12
 
 Correctifs de sécurité sur les pièces jointes et le honeypot. Aucun
