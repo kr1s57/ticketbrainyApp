@@ -8,6 +8,26 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.5293] — 2026-11-12
+
+Correctif de sécurité sur le proxy Keycloak intégré. Aucun changement
+fonctionnel ni de schéma.
+
+### Sécurité
+- **Proxy Keycloak (`/realms`, `/resources`, `/js`) : validation stricte des
+  chemins.** Un chemin contenant des séparateurs encodés (`%2F`) pouvait
+  contourner la liste de blocage du proxy et atteindre, sans session, des
+  pages Keycloak qui ne doivent pas être exposées par l'application (realm
+  `master`, console d'administration). L'authentification Keycloak restait
+  requise ; il ne s'agissait pas d'un contournement de connexion. Le proxy
+  refuse désormais tout segment ambigu, ré-encode chaque segment, normalise
+  le chemin et n'accepte que le realm `ticketbrainy` et les ressources
+  statiques (liste d'autorisation au lieu d'une liste de blocage).
+- Mise à jour recommandée pour toutes les installations.
+
+### Mise à jour
+- Installs existants : `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+
 ## [1.11.5292] — 2026-11-12
 
 Durcissement de la chaîne de construction des images. Aucun changement
