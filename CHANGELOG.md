@@ -8,6 +8,29 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.5291] — 2026-11-12
+
+Sécurité : correctif Node.js du 11 novembre 2026 (bulletin
+« November 2026 Security Releases »). Aucun changement fonctionnel ni de
+schéma.
+
+### Sécurité
+- **Node.js 22.23.4 → 22.23.5** dans les 5 images (web, ai-service,
+  mail-service, telegram-bot, migrate) : base `node:22.23.5-alpine`
+  épinglée dans les Dockerfiles. Le bulletin corrige 17 CVE, dont plusieurs
+  de gravité High sur les serveurs HTTP/2 et TLS de Node
+  (CVE-2026-123863 / 123865 / 123866 / 123874 / 123875, CVE-2026-123864
+  fuite mémoire HTTPS, CVE-2026-123872 renégociation TLS). TicketBrainy
+  n'était pas exploitable : aucun serveur HTTP/2 ni TLS n'est servi par
+  Node (le TLS est terminé en amont par le reverse proxy), pas de mTLS, pas
+  de proxy sortant, pas de Permission Model. La mise à jour est appliquée
+  par précaution, notamment pour le parseur HTTP embarqué **llhttp 9.4.4**
+  utilisé par tous les services, et sqlite 3.54.1.
+
+### Mise à jour
+- Installs existants : `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+  puis vérifier `docker compose exec web node --version` → `v22.23.5`.
+
 ## [1.11.529] — 2026-11-11
 
 Tri de la vue « Fermés » par date de clôture et mise à jour de sécurité
