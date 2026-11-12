@@ -8,6 +8,23 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.5292] — 2026-11-12
+
+Durcissement de la chaîne de construction des images. Aucun changement
+fonctionnel ni de schéma.
+
+### Sécurité
+- **Image `migrate` allégée** : elle est désormais construite depuis un
+  Dockerfile dédié qui ne copie que le schéma Prisma, les migrations et
+  leurs dépendances (1,13 Go au lieu de 1,54 Go). Elle n'embarque plus le
+  reste du contexte de construction. La commande de migration est inchangée.
+- **Contexte de construction restreint** : le `.dockerignore` exclut
+  désormais les répertoires locaux de travail et de sauvegarde, pour toutes
+  les images.
+
+### Mise à jour
+- Installs existants : `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+
 ## [1.11.5291] — 2026-11-12
 
 Sécurité : correctif Node.js du 11 novembre 2026 (bulletin
