@@ -8,6 +8,33 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+## [1.11.5294] — 2026-11-12
+
+Correctifs de sécurité sur les pièces jointes et le honeypot. Aucun
+changement de schéma.
+
+### Sécurité
+- **Pièces jointes : le type annoncé par l'expéditeur n'est plus repris tel
+  quel.** Seuls les formats PNG, JPEG, GIF, WebP, BMP, AVIF et PDF
+  s'affichent dans le navigateur ; tout le reste (dont SVG et HTML) est
+  proposé en téléchargement, avec une politique de contenu restrictive. Une
+  pièce jointe SVG reçue par e-mail pouvait auparavant exécuter du script
+  dans la session de l'agent qui l'ouvrait.
+- **Pièces jointes de brouillon** : les chemins contenant des séparateurs
+  encodés sont refusés.
+- **Honeypot : plus de bannissement provoqué par une page.** Une image ou un
+  lien pointant vers un chemin piège (par exemple dans un e-mail entrant)
+  faisait bannir pendant 24 h l'adresse IP de l'agent qui ouvrait le ticket.
+  Ces appels déclenchés par une page sont toujours journalisés mais ne
+  bannissent plus ; les scanners et les accès directs restent bannis.
+
+### Modifié
+- Les pièces jointes d'un autre type d'image (SVG, TIFF, HEIC…) se
+  téléchargent au lieu de s'afficher dans le navigateur.
+
+### Mise à jour
+- Installs existants : `cd /opt/ticketbrainy && git pull && docker compose pull && docker compose up -d`
+
 ## [1.11.5293] — 2026-11-12
 
 Correctif de sécurité sur le proxy Keycloak intégré. Aucun changement
