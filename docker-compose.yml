@@ -56,7 +56,16 @@ services:
     # Le tag est désormais EXACT (auparavant `26.2`, tag flottant) pour qu'une
     # mise à jour ne puisse jamais retomber sur une version vulnérable.
     # Mise à jour : docker compose up -d --force-recreate keycloak
-    image: quay.io/keycloak/keycloak:26.7.4
+    #
+    # SÉCURITÉ (2026-11-19) — 26.7.4 → 26.8.2-3. Keycloak 26.8.2 corrige
+    # 33 CVE (prise de contrôle de compte CVE-2026-103112, vol de session au
+    # logout CVE-2026-107124, XSS stocké sur la page de login
+    # CVE-2026-107889, DoS non authentifiés, Brotli CVE-2026-111497…).
+    # Le suffixe `-3` est VOULU : seule reconstruction de 26.8.2 embarquant
+    # OpenJDK 21.0.13.1, correctif de « Java4Shell » (CVE-2026-114938,
+    # exécution de code avant authentification). `26.8.2-1`/`-2` et toutes
+    # les 26.7.x restent vulnérables.
+    image: quay.io/keycloak/keycloak:26.8.2-3
     restart: unless-stopped
     entrypoint: ["/opt/keycloak/custom-entry/docker-entrypoint.sh"]
     # v1.10.02: KC_BIND makes the host port bind configurable. Default
@@ -105,6 +114,10 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
+      # Java4Shell (CVE-2026-114938) — mitigation officielle Keycloak/Red Hat,
+      # gardée en défense en profondeur même si l'image embarque le JDK
+      # corrigé : désactive les intrinsèques Base64 (chemin AVX-512 VBMI).
+      JAVA_OPTS_APPEND: "-XX:-UseBASE64Intrinsics"
       KC_SPI_THEME_CACHE_THEMES: "false"
       KC_SPI_THEME_STATIC_MAX_AGE: "-1"
       KC_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}

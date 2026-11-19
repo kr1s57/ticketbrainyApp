@@ -8,6 +8,35 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+### Sécurité — Keycloak 26.7.4 → 26.8.2-3 (2026-11-19)
+
+Correctif de configuration seul : aucune image TicketBrainy reconstruite,
+numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
+`--force-recreate` (image Keycloak et scripts montés).
+
+- **Keycloak 26.8.2** corrige 33 vulnérabilités, après celles de 26.8.0 et
+  26.8.1. Celles qui touchent une installation TicketBrainy : prise de
+  contrôle de compte par course d'authentification (CVE-2026-103112), vol de
+  session à la déconnexion (CVE-2026-107124), XSS stocké sur la page de
+  connexion (CVE-2026-107889), dénis de service sans authentification
+  (points d'entrée SAML, cache des thèmes), décodeur Brotli
+  (CVE-2026-111497), contrôle d'audience manquant sur l'API d'administration
+  (CVE-2026-19688).
+- **« Java4Shell » (CVE-2026-114938)** : faille du JDK permettant une
+  exécution de code avant authentification, démontrée contre Keycloak sur les
+  processeurs x86-64 dotés d'AVX-512 VBMI. L'image est épinglée sur
+  `26.8.2-3`, seule reconstruction qui embarque OpenJDK 21.0.13.1 corrigé
+  (`26.8.2-1` et `-2` ne le sont pas). La mitigation officielle
+  `-XX:-UseBASE64Intrinsics` est ajoutée en défense en profondeur
+  (`JAVA_OPTS_APPEND`).
+- **Comptes de service de l'API d'administration.** Depuis 26.8.2, l'API
+  refuse (401) tout jeton sans le scope `kc-admin-api`. `apply-config.sh`
+  l'attribue désormais à `ticketbrainy-admin-read` et
+  `ticketbrainy-admin-write` ; sans cela la page Sécurité et la
+  synchronisation des utilisateurs échouaient après la montée de version.
+- La base Keycloak est migrée au premier démarrage (retour en 26.7.x
+  impossible sans restauration) : faire une sauvegarde avant la mise à jour.
+
 ## [1.11.5295] — 2026-11-13
 
 Durcissement du traitement des e-mails entrants. Aucun changement de schéma.

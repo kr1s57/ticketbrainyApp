@@ -66,6 +66,45 @@ kc_first_id() {
 }
 
 # ---------------------------------------------------------------------------
+# kc_grant_admin_api_scope <client-uuid> <label>
+# ---------------------------------------------------------------------------
+# Keycloak 26.8.2 (CVE-2026-19688, « Admin API missing audience check ») :
+# l'API d'administration refuse désormais (401) tout jeton qui ne porte pas
+# l'audience de l'API admin, ajoutée par le scope intégré `kc-admin-api`.
+# La migration ne l'attribue qu'à `admin-cli` et `security-admin-console` ;
+# nos comptes de service (ticketbrainy-admin-read / -write) doivent le
+# recevoir comme scope PAR DÉFAUT, sinon la page Sécurité et la synchro des
+# utilisateurs tombent en 401 après la montée de version.
+# Idempotent (PUT). Sans effet sur un Keycloak < 26.8.2 (scope absent).
+# NB : pas de jq dans l'image → extraction sed, l'ordre `id` puis `name`
+# est celui de la sérialisation Keycloak.
+KC_ADMIN_API_SCOPE_ID=""
+KC_ADMIN_API_SCOPE_LOOKED_UP=0
+kc_grant_admin_api_scope() {
+  _client_uuid="$1"
+  _label="$2"
+  [ -n "$_client_uuid" ] || return 0
+  if [ "$KC_ADMIN_API_SCOPE_LOOKED_UP" = "0" ]; then
+    KC_ADMIN_API_SCOPE_LOOKED_UP=1
+    KC_ADMIN_API_SCOPE_ID=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+      "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/client-scopes" \
+      | sed -n 's/.*{"id":"\([^"]*\)","name":"kc-admin-api".*/\1/p' || true)
+  fi
+  if [ -z "$KC_ADMIN_API_SCOPE_ID" ]; then
+    echo "[apply-config]   ${_label}: scope kc-admin-api absent (Keycloak < 26.8.2) — rien à faire"
+    return 0
+  fi
+  _scope_status=$(curl -s -o /dev/null -w '%{http_code}' \
+    -X PUT "${KC_INTERNAL_URL}/admin/realms/${KC_REALM}/clients/${_client_uuid}/default-client-scopes/${KC_ADMIN_API_SCOPE_ID}" \
+    -H "Authorization: Bearer ${TOKEN}")
+  if [ "$_scope_status" = "204" ]; then
+    echo "[apply-config]   ${_label}: scope kc-admin-api attribué (audience API admin)"
+  else
+    echo "[apply-config]   WARN ${_label}: attribution du scope kc-admin-api → HTTP ${_scope_status} (l'API admin répondra 401 à ce client)" >&2
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Step 1 — wait for Keycloak master realm to respond
 # ---------------------------------------------------------------------------
 elapsed=0
@@ -348,6 +387,7 @@ for ROLE in view-realm view-users view-events view-identity-providers; do
     -d "[${ROLE_JSON}]" || true
 done
 echo "[apply-config] ticketbrainy-admin-read roles assigned (view-realm/view-users/view-events/view-identity-providers)"
+kc_grant_admin_api_scope "$EXISTING_CLIENT_UUID" "ticketbrainy-admin-read"
 
 # Fetch the client secret and publish it to the shared volume so the
 # web container can pick it up automatically. Before v1.10.13 this
@@ -462,6 +502,7 @@ if [ -n "$EXISTING_WRITE_UUID" ]; then
       -d "[${ROLE_JSON}]" || true
   done
   echo "[apply-config] ticketbrainy-admin-write roles assigned (manage-users/view-users/query-users)"
+  kc_grant_admin_api_scope "$EXISTING_WRITE_UUID" "ticketbrainy-admin-write"
 
   # Publish the secret via the same kc-secrets volume pattern used
   # for admin-read. `team.actions.ts` reads it from
