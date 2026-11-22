@@ -37,6 +37,18 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.533] — 2026-11-22
+
+Mentions dans les notes internes. Aucun changement de schéma.
+
+### Ajouté
+- **Mentions `@Nom`.** Dans une note interne, taper `@` puis le début d'un
+  nom ouvre la liste des collègues ; la personne choisie est notifiée (cloche
+  de l'application, et e-mail sauf si elle l'a désactivé) avec un lien vers
+  le ticket. Les mentions sont surlignées dans le fil.
+- Seules les personnes ayant accès au ticket peuvent être mentionnées :
+  administrateurs, superviseurs et agents rattachés à la boîte du ticket.
+
 ## [1.11.532] — 2026-11-22
 
 Recherche dans le contenu des messages. La mise à jour crée deux index en
