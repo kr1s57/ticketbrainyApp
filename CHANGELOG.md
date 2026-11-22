@@ -37,6 +37,27 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.531] — 2026-11-22
+
+Liste de tickets : à jour, triable, avec un retour visuel au chargement.
+Aucun changement de schéma.
+
+### Ajouté
+- **Rafraîchissement automatique.** La liste se met à jour toutes les
+  30 secondes, comme les compteurs du menu, et dès le retour sur l'onglet.
+  La sélection en cours est conservée.
+- **Tri par colonne.** Un clic sur « # », « Statut », « Priorité » ou la date
+  trie la liste ; un second clic inverse l'ordre.
+- **États de chargement.** Un squelette s'affiche pendant l'ouverture de la
+  liste ou d'un ticket ; la liste se grise pendant un changement de page ou
+  de tri.
+
+### Corrigé
+- **Filtre par catégorie invisible.** Un clic sur un badge de catégorie
+  filtrait la liste sans que rien ne l'indique. Le filtre apparaît désormais
+  dans la barre de filtres, avec une croix pour le retirer, et le bouton
+  « Effacer » s'affiche.
+
 ## [1.11.530] — 2026-11-22
 
 Page ticket : un seul fil, lisible sur les longs échanges. Aucun changement
