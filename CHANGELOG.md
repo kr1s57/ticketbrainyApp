@@ -37,6 +37,30 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.532] — 2026-11-22
+
+Recherche dans le contenu des messages. La mise à jour crée deux index en
+base (messages et notes) ; aucune donnée n'est modifiée.
+
+### Ajouté
+- **Recherche dans le contenu.** La recherche globale (Ctrl+K) et le champ
+  de recherche de la liste trouvent aussi le texte des messages ; Ctrl+K
+  cherche en plus dans les notes internes. Trois caractères minimum pour
+  chercher dans le contenu.
+- **Extrait affiché.** Dans Ctrl+K, une seconde ligne montre le passage du
+  message où le terme apparaît.
+
+### Corrigé
+- **Index de recherche supprimés à chaque mise à jour.** Les index créés par
+  les scripts SQL (recherche plein texte et trigrammes sur les tickets et les
+  clients) étaient effacés par la synchronisation du schéma qui suit, car ils
+  n'y étaient pas déclarés : la recherche parcourait toutes les lignes. Ils
+  sont désormais déclarés dans le schéma et restent en place.
+- **Résultats de Ctrl+K** : le spam et les tickets supprimés n'y figurent
+  plus.
+- **Caractères `%` et `_`** dans Ctrl+K : cherchés tels quels au lieu d'agir
+  comme des jokers.
+
 ## [1.11.531] — 2026-11-22
 
 Liste de tickets : à jour, triable, avec un retour visuel au chargement.
