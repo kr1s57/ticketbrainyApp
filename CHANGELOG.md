@@ -37,6 +37,35 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.530] — 2026-11-22
+
+Page ticket : un seul fil, lisible sur les longs échanges. Aucun changement
+de schéma.
+
+### Ajouté
+- **Fil unifié.** Les messages, les notes internes et l'activité
+  (assignation, changement de statut, fusion…) sont réunis dans une seule
+  chronologie, le plus récent en haut. Les onglets « Messages / Notes /
+  Activité » sont remplacés par un filtre « Tout / Messages / Notes /
+  Activité ».
+- **Anciens éléments repliés.** Seuls les deux messages ou notes les plus
+  récents sont dépliés ; les autres tiennent sur une ligne (expéditeur, début
+  du texte, heure). Un clic déplie un élément ; « Tout déplier » et « Tout
+  replier » agissent sur l'ensemble.
+- **Séparateurs de jour** avec l'année, et heure sur chaque ligne.
+- **Types de message distincts** : client, agent, note interne, réponse
+  automatique et transfert se reconnaissent à leur couleur.
+- **Bouton « Note interne »** en tête du fil.
+
+### Corrigé
+- **Expéditeur réel des messages entrants.** Tout message entrant était
+  affiché sous le nom du client du ticket, même envoyé par une personne en
+  copie. Le fil affiche désormais l'adresse réelle, avec un badge « Autre
+  expéditeur », ainsi que les destinataires (À, En copie).
+- **Activité traduite.** Statuts et priorités s'affichent dans la langue de
+  l'interface ; facturation, changement de client, tri et fermeture
+  automatique ont un libellé au lieu d'un identifiant technique.
+
 ## [1.11.5295] — 2026-11-13
 
 Durcissement du traitement des e-mails entrants. Aucun changement de schéma.
