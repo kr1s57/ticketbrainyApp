@@ -37,6 +37,24 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.534] — 2026-11-24
+
+Images dans les articles de la base de connaissances. Aucun changement de
+schéma.
+
+### Ajouté
+- **Images dans un article.** Dans l'éditeur d'article, une capture d'écran
+  se colle directement (Ctrl+V). Une image peut aussi être glissée depuis
+  le bureau ou choisie avec le nouveau bouton « image » de la barre
+  d'outils. Formats acceptés : PNG, JPEG, WebP, 8 Mo maximum par image.
+- Les images sont réservées aux utilisateurs connectés, comme la base de
+  connaissances elle-même.
+
+### Modifié
+- « Améliorer avec IA » conserve les images de l'article.
+- « Insérer un article » dans une réponse n'y recopie pas les images de
+  l'article : elles sont internes et le client ne pourrait pas les voir.
+
 ## [1.11.533] — 2026-11-22
 
 Mentions dans les notes internes. Aucun changement de schéma.
