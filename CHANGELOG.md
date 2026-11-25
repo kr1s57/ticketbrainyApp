@@ -37,6 +37,62 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.535] — 2026-11-25
+
+Mise à jour depuis l'interface. Aucun changement de schéma.
+
+**Instances existantes : une commande de plus, une seule fois.** Cette
+version s'installe encore à la main ; les suivantes s'installeront depuis
+Réglages → Général.
+
+```
+cd /opt/ticketbrainy
+git pull
+sudo ./scripts/install-updater.sh
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+Si `docker-compose.yml` a été modifié à la main sur le serveur, `git pull`
+le refusera : enregistrer ces lignes (`git diff docker-compose.yml`), les
+reporter dans un fichier `docker-compose.override.yml` (lu automatiquement
+par Docker Compose, ignoré par git), puis `git checkout -- docker-compose.yml`
+avant de relancer `git pull`.
+
+### Ajouté
+- **Section « Version » dans Réglages → Général** (administrateurs) :
+  version installée, dernière version publiée, date de la dernière
+  vérification, bouton « Vérifier les mises à jour » et bouton « Mettre à
+  jour ». La page suit l'avancement, supporte le redémarrage de
+  l'application et se recharge une fois la nouvelle version en place. En cas
+  d'échec, la raison et le journal sont affichés.
+- **Service de mise à jour sur le serveur** (`scripts/install-updater.sh`,
+  systemd requis). L'application ne fait que déposer une demande ; le
+  service exécute une séquence fixe (`git pull --ff-only`, `docker compose
+  pull`, `docker compose up -d`, recréation des services dont les fichiers
+  montés ont changé, contrôle de santé). Aucun conteneur ne reçoit d'accès à
+  Docker. Les modifications locales du dossier d'installation ne sont jamais
+  écrasées : la mise à jour s'arrête et les liste.
+- Les correctifs publiés sans changement de numéro (configuration, scripts)
+  sont proposés aussi, sous le libellé « Correctif de configuration
+  disponible ».
+- Chaque demande de mise à jour est tracée dans le journal d'audit.
+
+### Modifié
+- **Clé SearXNG dans `.env`.** La clé passe par la variable
+  `SEARXNG_SECRET` ; `searxng/settings.yml` n'est plus modifié sur le
+  serveur. `install-updater.sh` reprend la clé existante et remet le fichier
+  dans son état d'origine. Tant qu'il n'a pas été lancé, l'instance garde sa
+  clé actuelle.
+
+### À savoir
+- Après une mise à jour faite à la main en ligne de commande, lancer
+  `sudo bash scripts/tb-updater.sh --init` pour que la page affiche le bon
+  état ; après une réparation manuelle suivant un échec, supprimer aussi
+  `updater/.pending-from`.
+- Sans systemd, le service n'est pas installé : la page l'indique et la
+  mise à jour reste manuelle.
+
 ## [1.11.534] — 2026-11-24
 
 Images dans les articles de la base de connaissances. Aucun changement de

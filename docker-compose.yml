@@ -36,7 +36,7 @@ services:
       - internal
 
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.534
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.535
     # v1.10.146: raw-SQL migrations first (CREATE EXTENSION vector +
     # AiKnowledgeChunk table), THEN prisma db push for the rest.
     command: sh -c "cd apps/web && node prisma/run-raw-migrations.mjs && npx prisma db push"
@@ -176,7 +176,7 @@ services:
       - internal
 
   web:
-    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.534
+    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.535
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials (owned by root:root on the host) and drop to
@@ -220,6 +220,9 @@ services:
       KC_REALM: ${KEYCLOAK_REALM:-ticketbrainy}
       KC_BASE_URL: http://keycloak:8080
       CADDY_DATA_DIR: /data/caddy
+      # Dossier d'échange avec le service de mise à jour de l'hôte
+      # (scripts/install-updater.sh) : état en lecture seule, demandes en écriture.
+      UPDATER_DIR: /data/updater
       SECURITY_ALLOWLIST_BYPASS: ${SECURITY_ALLOWLIST_BYPASS:-}
       TRUSTED_PROXY_MODE: ${TRUSTED_PROXY_MODE:-legacy}
       TRUSTED_PROXY_HEADER_NAME: ${TRUSTED_PROXY_HEADER_NAME:-x-ticketbrainy-trusted-proxy}
@@ -247,6 +250,11 @@ services:
       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}
     volumes:
       - app-data:/data
+      # Mise à jour depuis l'interface : l'application ne peut que déposer une
+      # demande dans requests/ ; elle lit l'état écrit par l'hôte sans pouvoir
+      # le modifier. Aucun accès à Docker ni au dossier d'installation.
+      - ./updater:/data/updater:ro
+      - ./updater/requests:/data/updater/requests
       - claude-config:/home/nextjs/.claude
       # Bind-mount the host Claude DIRECTORY (read-only), not a single file.
       # A single-file bind mount pins the inode at container start, so when the
@@ -278,7 +286,7 @@ services:
       - internal
 
   ai-service:
-    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.534
+    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.535
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials and drop to appuser (uid 1001) via su-exec.
@@ -319,7 +327,7 @@ services:
       - internal
 
   mail-service:
-    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.534
+    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.535
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -344,7 +352,7 @@ services:
       - internal
 
   telegram-bot:
-    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.534
+    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.535
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -379,6 +387,13 @@ services:
     environment:
       SEARXNG_BASE_URL: http://searxng:8080/
       SEARXNG_VALKEY_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
+      # Transmise seulement si .env la définit (écrite par install-updater.sh
+      # ou generate-secrets.sh) ; elle prime alors sur server.secret_key de
+      # settings.yml, qui garde sa valeur d'exemple pour que `git pull` ne
+      # soit jamais bloqué. Absente de .env, la variable n'est pas transmise
+      # et searxng garde la clé de settings.yml : une instance pas encore
+      # migrée conserve sa propre clé (jamais la valeur d'exemple publique).
+      SEARXNG_SECRET:
     volumes:
       - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
     depends_on:

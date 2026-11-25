@@ -554,6 +554,12 @@ print_step "Starting services"
 docker compose "${COMPOSE_PROFILE_ARGS[@]}" up -d
 print_success "Services started"
 
+# Host service behind the "Update" button of Settings → General. Not
+# blocking: without it, updates keep working from the command line.
+print_step "Installing the in-app update service"
+bash scripts/install-updater.sh \
+  || print_warning "In-app update service not installed — run later: sudo ./scripts/install-updater.sh"
+
 print_step "Waiting for web service to become ready (up to 180s)"
 READY=false
 for i in $(seq 1 90); do

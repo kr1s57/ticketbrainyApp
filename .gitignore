@@ -17,3 +17,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Instance-specific: in-app update exchange folder, local compose overrides
+updater/
+docker-compose.override.yml

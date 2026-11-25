@@ -142,18 +142,13 @@ verify "KEYCLOAK_CLIENT_SECRET"
 verify "KC_ADMIN_PASSWORD"
 
 # ---------------------------------------------------------------------------
-# 4b. Replace the SearXNG secret_key placeholder with the freshly generated
-#     value. settings.yml is bind-mounted RO into the searxng container, so
-#     SearXNG's own entrypoint substitution (`SEARXNG_SECRET` env →
-#     `ultrasecretkey`) cannot run. We patch the file on the host instead.
-#     Idempotent: only replaces the literal placeholder.
+# 4b. SearXNG secret. SearXNG reads SEARXNG_SECRET (passed by
+#     docker-compose.yml when .env defines it) in priority over the
+#     secret_key of searxng/settings.yml, which keeps its example value:
+#     editing that tracked file would block `git pull` on every update.
 # ---------------------------------------------------------------------------
-if [ -f "$SEARXNG_SETTINGS" ]; then
-  if grep -q 'tb-rag-searxng-replace-on-deploy' "$SEARXNG_SETTINGS"; then
-    sed -i "s@tb-rag-searxng-replace-on-deploy@${SEARXNG_SECRET_KEY}@" "$SEARXNG_SETTINGS"
-    echo "  ${SEARXNG_SETTINGS}: secret_key rotated (placeholder replaced)"
-  fi
-fi
+set_secret "SEARXNG_SECRET" "$SEARXNG_SECRET_KEY"
+verify "SEARXNG_SECRET"
 
 # ---------------------------------------------------------------------------
 # 5. Display summary by reading values back FROM THE FILE (not from shell
