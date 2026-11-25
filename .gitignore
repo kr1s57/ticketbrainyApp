@@ -20,4 +20,5 @@ Thumbs.db
 
 # Instance-specific: in-app update exchange folder, local compose overrides
 updater/
+updater-backups/
 docker-compose.override.yml

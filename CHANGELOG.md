@@ -37,6 +37,41 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.5351] — 2026-11-25
+
+Sauvegarde de la base avant chaque mise à jour lancée depuis l'interface.
+Aucun changement de schéma.
+
+**Instances encore en 1.11.534 ou antérieure** : suivre le bloc
+d'installation de la 1.11.535 ci-dessous (il installe directement cette
+version). **Instances où le service de mise à jour est déjà installé** :
+bouton « Mettre à jour » dans Réglages → Général.
+
+### Ajouté
+- **Export de la base avant la mise à jour.** Le service de mise à jour
+  exporte la base PostgreSQL (`pg_dump`, compressé) après le téléchargement
+  des images et juste avant le redémarrage des services, donc avant toute
+  migration de schéma. Si l'export échoue ou est incomplet, la mise à jour
+  s'arrête là : les services ne sont pas redémarrés et l'application reste
+  dans sa version actuelle.
+- Les exports sont écrits dans `updater-backups/` à la racine du dossier
+  d'installation (`pre-update-<version>-<date>.sql.gz`), lisibles par root
+  uniquement et hors de portée des conteneurs. Les trois plus récents sont
+  conservés.
+- La page indique l'étape « Sauvegarde de la base » et le message de
+  confirmation mentionne la sauvegarde.
+
+### À savoir
+- Seule la base est exportée : les pièces jointes (volume `app-data`) ne le
+  sont pas. Cet export ne remplace pas une sauvegarde régulière du serveur.
+- Les exports ne sont pas chiffrés ; ils contiennent toutes les données de
+  l'instance.
+- Restauration, application arrêtée :
+  `gunzip -c updater-backups/<fichier> | docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'`
+  sur une base vide.
+- Si la base est arrêtée, l'export échoue et la mise à jour par le bouton
+  est refusée : mettre à jour en ligne de commande.
+
 ## [1.11.535] — 2026-11-25
 
 Mise à jour depuis l'interface. Aucun changement de schéma.

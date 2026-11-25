@@ -15,7 +15,10 @@
 #      owned by the web container's uid 1001, 0700) and the systemd units
 #      that run scripts/tb-updater.sh when the web app drops
 #      updater/requests/request; a leftover request is removed first, so
-#      that installing never triggers an update.
+#      that installing never triggers an update;
+#   4. creates updater-backups/ (root:root 0700), where tb-updater.sh writes
+#      a database export before every update; it is NOT under updater/, so
+#      no container ever sees the exports.
 #
 # No container gets the Docker socket or write access to this folder: the
 # web container can only create a file in updater/requests/, whose content
@@ -49,7 +52,7 @@ fi
 
 # Host tools used here and by scripts/tb-updater.sh.
 missing=()
-for tool in git flock timeout curl docker; do
+for tool in git flock timeout curl docker gzip; do
   command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
@@ -76,6 +79,10 @@ grep -q 'ghcr\.io/kr1s57/ticketbrainy-web:' "$TB_DIR/docker-compose.yml" 2>/dev/
 SETTINGS=searxng/settings.yml
 ENV_FILE="$TB_DIR/.env"
 [ -L "$ENV_FILE" ] && die ".env is a symbolic link; refusing to edit it"
+BACKUPS="${TB_DIR:?}/updater-backups"
+if [ -L "$BACKUPS" ] || { [ -e "$BACKUPS" ] && [ ! -d "$BACKUPS" ]; }; then
+  die "$BACKUPS is not a directory (symbolic link?); refusing to continue"
+fi
 
 # ── 2. Read-only checks first: nothing is changed if one of them fails ────
 # Prints the diff of a tracked file vs HEAD with secret_key values masked.
@@ -208,6 +215,10 @@ else
   rm -f -- "${REQ:?}"
 fi
 { [ -e "$REQ" ] || [ -L "$REQ" ]; } && die "cannot remove $REQ"
+# Database exports made before each update (checked above: not a link).
+(umask 077 && mkdir -p -- "$BACKUPS") || die "cannot create $BACKUPS"
+[ -L "$BACKUPS" ] && die "$BACKUPS is a symbolic link; refusing to continue"
+chown root:root -- "$BACKUPS" && chmod 0700 -- "$BACKUPS" || die "cannot set ownership of $BACKUPS"
 
 # ── 5. systemd units ──────────────────────────────────────────────────────
 write_unit() {
@@ -279,4 +290,5 @@ bash "$TB_DIR/scripts/tb-updater.sh" --init || die "tb-updater.sh --init failed"
 # ── 6. Done ───────────────────────────────────────────────────────────────
 info ""
 info "In-app update service installed ($UNIT.path)."
+info "Database exports made before each update: $BACKUPS (3 most recent kept)."
 info "Now run once: docker compose up -d   (mounts the exchange folder in the web container)"

@@ -19,7 +19,7 @@
 # start time), or updates from older installs will break mid-way.
 #
 # Environment (all optional, for tests): TB_DIR, TB_DOCKER, TB_HEALTH_CMD,
-# TB_HEALTH_TIMEOUT, TB_STEP_TIMEOUT_GIT/PULL/UP (seconds).
+# TB_HEALTH_TIMEOUT, TB_STEP_TIMEOUT_GIT/PULL/BACKUP/UP (seconds), TB_BACKUP_DIR.
 # Never sources .env; local modifications are never overwritten.
 set -uo pipefail
 umask 022
@@ -34,6 +34,7 @@ TB_HEALTH_TIMEOUT="$(num_or "${TB_HEALTH_TIMEOUT:-}" 240)"
 T_GIT="$(num_or "${TB_STEP_TIMEOUT_GIT:-}" 300)"
 T_PULL="$(num_or "${TB_STEP_TIMEOUT_PULL:-}" 1800)"
 T_UP="$(num_or "${TB_STEP_TIMEOUT_UP:-}" 900)"
+T_BACKUP="$(num_or "${TB_STEP_TIMEOUT_BACKUP:-}" 1800)"
 
 UPD_DIR="${TB_DIR:?}/updater"
 STATUS="$UPD_DIR/status.json"
@@ -45,6 +46,11 @@ REQUEST="$UPD_DIR/requests/request"
 # from it, not from the already-pulled HEAD, or the bind-mount services
 # would not be force-recreated. Removed on success only.
 PENDING="$UPD_DIR/.pending-from"
+# Database exports made before `compose up`: OUTSIDE updater/ (mounted in the
+# web container), root-only 0700, files 0600, never logged.
+BACKUP_DIR="${TB_BACKUP_DIR:-$TB_DIR/updater-backups}"
+BACKUP_KEEP=3
+BACKUP_TMP=""
 
 STATE="idle" STEP="" STARTED="" FINISHED="" FROM_V="" TO_V="" ERR="" DETAIL=""
 PROFILE=()
@@ -118,6 +124,7 @@ log() { printf '[%s] %s\n' "$(now)" "$*" >> "$LOG"; }
 step() { STEP="$1"; write_status; log "== $1"; }
 
 fail() {
+  if [ -n "$BACKUP_TMP" ]; then rm -f -- "${BACKUP_TMP:?}"; BACKUP_TMP=""; fi
   STATE="failed" ERR="$1" DETAIL="$2" FINISHED="$(now)"
   log "ECHEC [$1] $2"
   write_status
@@ -132,6 +139,7 @@ on_signal() {
   if [ "$STATE" = running ]; then
     case "$STEP" in
       pull) code=compose_pull ;;
+      backup) code=backup ;;
       up) code=compose_up ;;
       health) code=health ;;
       *) code=git_pull ;;
@@ -170,6 +178,92 @@ run_timed() {
 }
 
 compose() { "$TB_DOCKER" compose "${PROFILE[@]}" "$@" 9>&-; }
+
+# Last line of a complete pg_dump (followed only by a few trailer lines,
+# e.g. "\unrestrict <key>" since PostgreSQL 16.10/17.6).
+DUMP_END='-- PostgreSQL database dump complete'
+
+# Keep the BACKUP_KEEP most recent exports (the one just made, NEW, always
+# kept); only regular files named like our exports are ever considered.
+prune_backups() {
+  local new="$1" f b
+  local -a others=()
+  for f in "${BACKUP_DIR:?}"/pre-update-*.sql.gz; do
+    b="${f##*/}"
+    [[ "$b" =~ ^pre-update-[A-Za-z0-9._-]+\.sql\.gz$ ]] || continue
+    [ -f "$f" ] && [ ! -L "$f" ] && [ "$b" != "$new" ] || continue
+    others+=("$(stat -c '%Y' -- "$f") $b")
+  done
+  [ "${#others[@]}" -gt 0 ] || return 0
+  printf '%s\n' "${others[@]}" | sort -rn -k1,1 | tail -n +"$BACKUP_KEEP" | cut -d' ' -f2- \
+    | while IFS= read -r b; do
+        [ -n "$b" ] || continue
+        rm -f -- "${BACKUP_DIR:?}/${b:?}" && log "ancienne sauvegarde supprimee : $b"
+      done
+}
+
+# Export the database (pg_dump in the running db container, with the
+# container's own POSTGRES_USER/POSTGRES_DB: no secret is read here) to
+# BACKUP_DIR/pre-update-<fromVersion>-<UTC time>.sql.gz. Any doubt -> fail
+# before `compose up` (which runs the schema migrations).
+backup_db() {
+  local ver name final errf rc tail_lines size stale
+  ver="$FROM_V"
+  [[ "$ver" =~ ^[0-9][0-9.]{0,63}$ ]] || ver=inconnue
+  name="pre-update-$ver-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+  final="${BACKUP_DIR:?}/$name"
+
+  if [ -L "$BACKUP_DIR" ] || { [ -e "$BACKUP_DIR" ] && [ ! -d "$BACKUP_DIR" ]; }; then
+    fail backup "export de la base impossible : $BACKUP_DIR n'est pas un dossier (lien symbolique ?)"
+  fi
+  (umask 077 && mkdir -p -- "$BACKUP_DIR") \
+    || fail backup "export de la base impossible : creation de $BACKUP_DIR"
+  if [ -L "$BACKUP_DIR" ] || [ ! -d "$BACKUP_DIR" ]; then
+    fail backup "export de la base impossible : $BACKUP_DIR n'est pas un dossier (lien symbolique ?)"
+  fi
+  chown 0:0 -- "$BACKUP_DIR" && chmod 0700 -- "$BACKUP_DIR" \
+    || fail backup "export de la base impossible : droits de $BACKUP_DIR"
+
+  # Leftovers of a run killed mid-export (one updater at a time: flock).
+  for stale in "${BACKUP_DIR:?}"/.pre-update.??????; do
+    [ -f "$stale" ] && [ ! -L "$stale" ] && rm -f -- "${stale:?}"
+  done
+  BACKUP_TMP="$(mktemp "$BACKUP_DIR/.pre-update.XXXXXX")" \
+    || { BACKUP_TMP=""; fail backup "export de la base impossible : fichier temporaire"; }
+  chmod 0600 -- "$BACKUP_TMP"
+  errf="$(mktemp "$UPD_DIR/.out.XXXXXX")" || fail backup "export de la base impossible : fichier temporaire"
+  # stderr (pg_dump / docker / gzip messages) goes to the log; stdout (the dump)
+  # only to the gzip file. $POSTGRES_* are expanded INSIDE the container.
+  # shellcheck disable=SC2016
+  timeout -k 30 "$T_BACKUP" "$TB_DOCKER" compose "${PROFILE[@]}" exec -T db \
+    sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' 2>> "$errf" 9>&- \
+    | gzip -c > "$BACKUP_TMP" 2>> "$errf" 9>&-
+  rc=$?
+  cat -- "$errf" >> "$LOG"
+  LAST_ERR="$(grep -v '^[[:space:]]*$' "$errf" | tail -n 1)"
+  rm -f -- "${errf:?}"
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    LAST_ERR="delai depasse (${T_BACKUP}s) : pg_dump"
+    log "$LAST_ERR"
+  fi
+  if [ "$rc" -ne 0 ]; then
+    fail backup "export de la base impossible : ${LAST_ERR:-code $rc}"
+  fi
+  if ! gzip -t -- "$BACKUP_TMP" 2>>"$LOG" 9>&-; then
+    fail backup "export de la base impossible : archive gzip invalide"
+  fi
+  tail_lines="$(gzip -dc -- "$BACKUP_TMP" 2>/dev/null 9>&- | tail -n 20)"
+  if ! grep -qxF -- "$DUMP_END" <<< "$tail_lines"; then
+    fail backup "export de la base impossible : export incomplet (fin de pg_dump absente)"
+  fi
+  tail_lines=""
+  # -T: replace the name itself, never follow a link planted at that name.
+  mv -fT -- "$BACKUP_TMP" "$final" || fail backup "export de la base impossible : renommage"
+  BACKUP_TMP=""
+  size="$(stat -c '%s' -- "$final" 2>/dev/null)"
+  log "sauvegarde : $final (${size:-?} octets)"
+  prune_backups "$name"
+}
 
 health_loop() {
   local hc deadline port bind left
@@ -214,6 +308,9 @@ after_pull() {
 
   step pull
   run_timed "$T_PULL" "$TB_DOCKER" compose "${PROFILE[@]}" pull || fail compose_pull "$LAST_ERR"
+
+  step backup
+  backup_db
 
   step up
   run_timed "$T_UP" "$TB_DOCKER" compose "${PROFILE[@]}" up -d || fail compose_up "$LAST_ERR"
