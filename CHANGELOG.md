@@ -8,6 +8,21 @@ and this project adheres to a custom semantic versioning scheme (see
 
 ## [Unreleased]
 
+### Sécurité — images épinglées par empreinte (2026-11-27)
+
+Correctif de configuration seul : aucune image reconstruite, numéro de
+version inchangé (1.11.536). S'installe par le bouton « Mettre à jour » ;
+les services redémarrent une fois.
+
+- Les cinq images TicketBrainy du `docker-compose.yml` sont désormais
+  désignées par leur empreinte (`:1.11.536@sha256:…`) et plus seulement par
+  leur numéro de version. Une image republiée sous le même numéro ne peut
+  plus être installée : Docker refuse tout contenu dont l'empreinte diffère.
+- Le fichier étant dans un commit signé, la signature des publications
+  (1.11.536) couvre ainsi le contenu des images, pas seulement les scripts.
+- Les images tierces (PostgreSQL, Redis, Keycloak, Caddy…) restent
+  désignées par leur version.
+
 ### Sécurité — Keycloak 26.7.4 → 26.8.2-3 (2026-11-19)
 
 Correctif de configuration seul : aucune image TicketBrainy reconstruite,

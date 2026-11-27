@@ -36,7 +36,7 @@ services:
       - internal
 
   migrate:
-    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.536
+    image: ghcr.io/kr1s57/ticketbrainy-migrate:1.11.536@sha256:10b960a2f39933ed36551c5fee15744b0daeb0c9cd677f2c39a60397db3f60fa
     # v1.10.146: raw-SQL migrations first (CREATE EXTENSION vector +
     # AiKnowledgeChunk table), THEN prisma db push for the rest.
     command: sh -c "cd apps/web && node prisma/run-raw-migrations.mjs && npx prisma db push"
@@ -176,7 +176,8 @@ services:
       - internal
 
   web:
-    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.536
+    # version publiee (lue par les installations <= 1.11.536, ne pas retirer) : ghcr.io/kr1s57/ticketbrainy-web:1.11.536
+    image: ghcr.io/kr1s57/ticketbrainy-web:1.11.536@sha256:5b8f384c3ecb8f489b2e755d233e5772b8b57bcfaa8711f5f46c5f11de56c844
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials (owned by root:root on the host) and drop to
@@ -286,7 +287,7 @@ services:
       - internal
 
   ai-service:
-    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.536
+    image: ghcr.io/kr1s57/ticketbrainy-ai:1.11.536@sha256:028f2dc29758dfa5de3fffae92e2facad413fcb2d4584ef0c51649ea696b0a19
     restart: unless-stopped
     # Start as root so docker-claude-init.sh can read host-mounted
     # Claude credentials and drop to appuser (uid 1001) via su-exec.
@@ -327,7 +328,7 @@ services:
       - internal
 
   mail-service:
-    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.536
+    image: ghcr.io/kr1s57/ticketbrainy-mail:1.11.536@sha256:36904fe2292386704dbebb80064a746a964ae497fc905625177737b956f201d4
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
@@ -352,7 +353,7 @@ services:
       - internal
 
   telegram-bot:
-    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.536
+    image: ghcr.io/kr1s57/ticketbrainy-telegram:1.11.536@sha256:ed0677bfea2ddb5d73fca04f8b907762ef21079a03818e92840ad50fb8af5929
     restart: unless-stopped
     environment:
       TZ: ${TZ:-Europe/Paris}
