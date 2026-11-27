@@ -37,6 +37,28 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.5352] — 2026-11-27
+
+Base de connaissances : blocs de code. Aucun changement de schéma.
+
+### Corrigé
+- **« Améliorer avec IA » abîmait les blocs de commandes** (mode Claude
+  Code CLI). Les marqueurs de bloc de code étaient retirés de la réponse du
+  modèle : le nom du langage (`bash`) restait seul devant chaque commande et
+  les lignes d'un bloc fusionnaient en un seul paragraphe. Les blocs sont
+  désormais conservés tels quels, retours à la ligne et indentation compris.
+  Le défaut touchait toute réponse IA contenant un bloc de code dans ce mode.
+- Les articles déjà reformatés avant cette version restent tels
+  qu'enregistrés : recoller le contenu d'origine puis relancer
+  « Améliorer avec IA ».
+
+### Ajouté
+- **Bouton « Bloc de code »** dans l'éditeur d'article. Sur plusieurs
+  paragraphes sélectionnés, il crée un seul bloc, une ligne par ligne.
+- **Blocs de code sur fond noir**, dans l'éditeur et dans l'article affiché,
+  sans repli des lignes longues (défilement horizontal).
+- **Bouton « Copier »** sur chaque bloc de code de l'article affiché.
+
 ## [1.11.5351] — 2026-11-25
 
 Sauvegarde de la base avant chaque mise à jour lancée depuis l'interface.
