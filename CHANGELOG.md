@@ -37,6 +37,35 @@ numéro de version inchangé. **Mise à jour à faire sans attendre**, avec
 - La base Keycloak est migrée au premier démarrage (retour en 26.7.x
   impossible sans restauration) : faire une sauvegarde avant la mise à jour.
 
+## [1.11.536] — 2026-11-27
+
+Mise à jour depuis l'interface : signature des publications. Aucun
+changement de schéma. S'installe par le bouton « Mettre à jour » ; le
+contrôle s'applique à partir de la mise à jour suivante.
+
+### Sécurité
+- **Le service de mise à jour n'installe plus que du code signé.** Chaque
+  commit du dépôt public est signé (Ed25519). Avant de toucher au dossier
+  d'installation, le service vérifie la signature de chaque nouveau commit ;
+  un commit non signé, ou signé par une clé inconnue, est refusé : rien
+  n'est installé et l'application reste dans sa version actuelle. Un accès
+  en écriture au dépôt public ne suffit donc plus à faire exécuter du code
+  sur une installation.
+- Les clés acceptées sont celles de `scripts/tb-release-signers` **tel
+  qu'enregistré dans la version déjà installée**, jamais dans celle qui est
+  téléchargée. Une clé s'ajoute ou se retire par une publication signée avec
+  une clé encore valide.
+- Prérequis sur l'hôte : git 2.34 ou plus récent et `ssh-keygen` (paquet
+  `openssh-client`). S'ils manquent, la mise à jour par le bouton est
+  refusée avec un message qui le dit.
+- Limites : une mise à jour faite à la main (`git pull`) n'est pas
+  contrôlée ; les images Docker sont désignées par leur numéro de version,
+  pas encore par leur empreinte.
+
+### Ajouté
+- Message « mise à jour refusée : code non signé » dans Réglages → Général
+  → Version, avec le commit en cause.
+
 ## [1.11.5352] — 2026-11-27
 
 Base de connaissances : blocs de code. Aucun changement de schéma.

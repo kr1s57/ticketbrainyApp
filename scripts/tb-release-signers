@@ -1,0 +1,4 @@
+# TicketBrainy — cles autorisees a signer les publications (format "allowed signers" de ssh-keygen).
+# Lue par scripts/tb-updater.sh dans le commit DEJA installe, jamais dans celui qui est telecharge.
+# Ajouter ou retirer une cle = un commit signe par une cle encore presente ici.
+releases@ticketbrainy.com namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIBXVLk8Ocg0U+cbNYH0+a7vLieqnSBCMCfHb0Ihf4Jt

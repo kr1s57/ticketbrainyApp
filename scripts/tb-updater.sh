@@ -7,7 +7,8 @@
 # parameter comes from the web app. Progress goes to updater/status.json
 # (read-only for the web container) and updater/update.log.
 #
-#   tb-updater.sh            run an update (lock, git pull --ff-only, compose pull/up, health)
+#   tb-updater.sh            run an update (lock, git fetch, release signature check,
+#                            fast-forward, compose pull/up, health)
 #   tb-updater.sh --init     write an "idle" status.json and nothing else (installer, boot)
 #   tb-updater.sh --resume OLD STARTED
 #                            internal: re-exec on the freshly pulled version of this script
@@ -17,6 +18,13 @@
 # lock held on fd 9. Every future version of this script MUST keep accepting
 # exactly that call (OLD = 40-hex commit before the pull, STARTED = ISO-8601
 # start time), or updates from older installs will break mid-way.
+#
+# RELEASE SIGNATURE: nothing fetched is merged (nor executed) before every
+# new commit has been verified against scripts/tb-release-signers AS RECORDED
+# IN THE COMMIT ALREADY INSTALLED — never the fetched copy. Each verified
+# commit then supplies the list for the next one, so a key is added or
+# retired by a commit signed with a key that is trusted at that point.
+# Every commit published to the release branch must therefore be signed.
 #
 # Environment (all optional, for tests): TB_DIR, TB_DOCKER, TB_HEALTH_CMD,
 # TB_HEALTH_TIMEOUT, TB_STEP_TIMEOUT_GIT/PULL/BACKUP/UP (seconds), TB_BACKUP_DIR.
@@ -51,6 +59,10 @@ PENDING="$UPD_DIR/.pending-from"
 BACKUP_DIR="${TB_BACKUP_DIR:-$TB_DIR/updater-backups}"
 BACKUP_KEEP=3
 BACKUP_TMP=""
+# Allowed release signers (ssh-keygen "allowed signers" format, namespace
+# "git"), read from git objects only — never from the working tree.
+SIGNERS_PATH='scripts/tb-release-signers'
+SIGNERS_TMP=""
 
 STATE="idle" STEP="" STARTED="" FINISHED="" FROM_V="" TO_V="" ERR="" DETAIL=""
 PROFILE=()
@@ -125,6 +137,7 @@ step() { STEP="$1"; write_status; log "== $1"; }
 
 fail() {
   if [ -n "$BACKUP_TMP" ]; then rm -f -- "${BACKUP_TMP:?}"; BACKUP_TMP=""; fi
+  if [ -n "$SIGNERS_TMP" ]; then rm -f -- "${SIGNERS_TMP:?}"; SIGNERS_TMP=""; fi
   STATE="failed" ERR="$1" DETAIL="$2" FINISHED="$(now)"
   log "ECHEC [$1] $2"
   write_status
@@ -175,6 +188,47 @@ run_timed() {
     log "$LAST_ERR"
   fi
   return "$rc"
+}
+
+# verify_chain BASE TARGET: every commit of BASE..TARGET (first parent, oldest
+# first) must carry an SSH signature made by a key listed in SIGNERS_PATH of
+# the commit before it (BASE for the first one). Any doubt -> fail, before
+# anything is merged. Never returns on failure.
+verify_chain() {
+  local cur="$1" target="$2" list c hdr gv last=""
+  command -v ssh-keygen >/dev/null 2>&1 \
+    || fail signature "verification de la signature impossible : ssh-keygen introuvable sur l'hote (paquet openssh-client)"
+  # SSH signatures need git >= 2.34 (2021); say so instead of a vague refusal.
+  gv="$(git --version 2>/dev/null 9>&- | grep -oE '[0-9]+\.[0-9]+' | head -n 1)"
+  if [[ "$gv" =~ ^([0-9]+)\.([0-9]+)$ ]] && [ $(( BASH_REMATCH[1] * 1000 + BASH_REMATCH[2] )) -lt 2034 ]; then
+    fail signature "verification de la signature impossible : git $gv trop ancien sur l'hote (2.34 minimum)"
+  fi
+  list="$(git_ rev-list --reverse --first-parent "$cur..$target" 2>>"$LOG")" \
+    || fail signature "verification de la signature impossible : liste des commits illisible"
+  [ -n "$list" ] || fail signature "verification de la signature impossible : aucun commit a verifier"
+  SIGNERS_TMP="$(mktemp "$UPD_DIR/.signers.XXXXXX")" \
+    || { SIGNERS_TMP=""; fail signature "verification de la signature impossible : fichier temporaire"; }
+  while IFS= read -r c; do
+    [[ "$c" =~ ^[0-9a-f]{40}$ ]] || fail signature "verification de la signature impossible : commit invalide"
+    if ! git_ show "$cur:$SIGNERS_PATH" > "$SIGNERS_TMP" 2>>"$LOG" || ! grep -q '[^[:space:]]' "$SIGNERS_TMP"; then
+      fail signature "liste des cles de publication absente du commit ${cur:0:12} : mise a jour refusee"
+    fi
+    # Only an SSH signature is ever verified: a PGP/X.509 one would be judged
+    # by root's own keyring, which is not ours to trust.
+    hdr="$(git_ cat-file commit "$c" 2>>"$LOG")" || fail signature "commit ${c:0:12} illisible"
+    if ! grep -qx 'gpgsig -----BEGIN SSH SIGNATURE-----' <<< "${hdr%%$'\n\n'*}"; then
+      fail signature "commit ${c:0:12} non signe : mise a jour refusee"
+    fi
+    if ! run_logged "${GIT[@]}" -c gpg.format=ssh -c gpg.ssh.program=ssh-keygen \
+         -c gpg.ssh.allowedSignersFile="$SIGNERS_TMP" -c gpg.program=/bin/false \
+         -c gpg.x509.program=/bin/false verify-commit "$c"; then
+      fail signature "commit ${c:0:12} : signature refusee, cle de publication inconnue (${LAST_ERR:-voir update.log})"
+    fi
+    cur="$c" last="$c"
+  done <<< "$list"
+  rm -f -- "${SIGNERS_TMP:?}"; SIGNERS_TMP=""
+  [ "$last" = "$target" ] || fail signature "verification de la signature incomplete"
+  log "signature : $(wc -l <<< "$list") commit(s) verifie(s) jusqu'a ${target:0:12}"
 }
 
 compose() { "$TB_DOCKER" compose "${PROFILE[@]}" "$@" 9>&-; }
@@ -352,7 +406,7 @@ take_lock() {
 }
 
 main() {
-  local old dirty
+  local old dirty cur target
   mkdir -p -- "$UPD_DIR" || exit 1
   cd -- "$TB_DIR" || exit 1
   trap 'on_signal TERM' TERM
@@ -421,7 +475,18 @@ main() {
 
   step git
   old="$(pending_base "$(head_sha)")"
-  run_timed "$T_GIT" "${GIT[@]}" pull --ff-only || fail git_pull "$LAST_ERR"
+  # Fetch only; the working tree moves after the signature check, and to
+  # the exact commit that was checked.
+  run_timed "$T_GIT" "${GIT[@]}" fetch || fail git_pull "$LAST_ERR"
+  target="$(git_ rev-parse --verify -q '@{upstream}^{commit}' 2>>"$LOG")" \
+    || fail git_pull "aucune branche distante suivie par la branche courante"
+  cur="$(head_sha)"
+  if [ "$target" != "$cur" ] && ! git_ merge-base --is-ancestor "$target" "$cur" 2>>"$LOG"; then
+    git_ merge-base --is-ancestor "$cur" "$target" 2>>"$LOG" \
+      || fail git_pull "l'historique local a diverge du depot : avance rapide impossible"
+    verify_chain "$cur" "$target"
+    run_timed "$T_GIT" "${GIT[@]}" merge --ff-only "$target" || fail git_pull "$LAST_ERR"
+  fi
 
   if git_ diff --name-only "$old" HEAD 2>>"$LOG" | grep -qxF 'scripts/tb-updater.sh'; then
     log "tb-updater.sh a change : relance sur la nouvelle version"
